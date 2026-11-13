@@ -21,7 +21,7 @@ fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
 }
 
-fn acc(n: u128, service: &str, label: &str) -> Account {
+fn account(n: u128, service: &str, label: &str) -> Account {
     Account::new(id(n), service, label, None)
 }
 
@@ -39,18 +39,19 @@ fn core_with(accounts: Vec<Account>) -> Core {
 }
 
 fn started(accounts: Vec<Account>) -> (Core, Vec<Effect>) {
-    let mut c = core_with(accounts);
-    let fx = c.handle(Input::Started {
+    let mut core = core_with(accounts);
+    let effects = core.handle(Input::Started {
         width: 1000.0,
         height: 600.0,
     });
-    (c, fx)
+    (core, effects)
 }
 
-fn badges(fx: &[Effect]) -> Vec<DockBadge> {
-    fx.iter()
-        .filter_map(|e| {
-            if let Effect::SetDockBadge(b) = e {
+fn badges(effects: &[Effect]) -> Vec<DockBadge> {
+    effects
+        .iter()
+        .filter_map(|effect| {
+            if let Effect::SetDockBadge(b) = effect {
                 Some(*b)
             } else {
                 None
@@ -59,10 +60,11 @@ fn badges(fx: &[Effect]) -> Vec<DockBadge> {
         .collect()
 }
 
-fn notifies(fx: &[Effect]) -> Vec<&NotificationReq> {
-    fx.iter()
-        .filter_map(|e| {
-            if let Effect::Notify(n) = e {
+fn notifies(effects: &[Effect]) -> Vec<&NotificationReq> {
+    effects
+        .iter()
+        .filter_map(|effect| {
+            if let Effect::Notify(n) = effect {
                 Some(n)
             } else {
                 None
@@ -71,12 +73,13 @@ fn notifies(fx: &[Effect]) -> Vec<&NotificationReq> {
         .collect()
 }
 
-fn snap(fx: &[Effect]) -> Snapshot {
-    fx.iter()
+fn last_snapshot(effects: &[Effect]) -> Snapshot {
+    effects
+        .iter()
         .rev()
-        .find_map(|e| {
-            if let Effect::EmitSnapshot(s) = e {
-                Some(s.clone())
+        .find_map(|effect| {
+            if let Effect::EmitSnapshot(snapshot) = effect {
+                Some(snapshot.clone())
             } else {
                 None
             }
@@ -88,10 +91,11 @@ fn raw_notification(body: &str) -> String {
     format!(r#"{{"n":[{{"id":1,"title":"Alice","body":"{body}"}}],"u":null}}"#)
 }
 
-fn views(fx: &[Effect]) -> Vec<(&ViewSpec, bool)> {
-    fx.iter()
-        .filter_map(|e| {
-            if let Effect::CreateView { spec, visible, .. } = e {
+fn views(effects: &[Effect]) -> Vec<(&ViewSpec, bool)> {
+    effects
+        .iter()
+        .filter_map(|effect| {
+            if let Effect::CreateView { spec, visible, .. } = effect {
                 Some((spec, *visible))
             } else {
                 None
@@ -100,24 +104,25 @@ fn views(fx: &[Effect]) -> Vec<(&ViewSpec, bool)> {
         .collect()
 }
 
-fn update_account(c: &mut Core, n: u128, f: impl FnOnce(&mut AccountSettings)) -> Vec<Effect> {
-    let mut settings = c.account(id(n)).unwrap().settings();
+fn update_account(core: &mut Core, n: u128, f: impl FnOnce(&mut AccountSettings)) -> Vec<Effect> {
+    let mut settings = core.account(id(n)).unwrap().settings();
     f(&mut settings);
-    c.handle(Input::Ui(UiCommand::UpdateAccount {
+    core.handle(Input::Ui(UiCommand::UpdateAccount {
         account: id(n),
         settings,
     }))
 }
 
 // ---- feature batch 2 ----
-fn has(fx: &[Effect], e: &Effect) -> bool {
-    fx.contains(e)
+fn has(effects: &[Effect], effect: &Effect) -> bool {
+    effects.contains(effect)
 }
 
-fn destroys(fx: &[Effect]) -> Vec<Uuid> {
-    fx.iter()
-        .filter_map(|e| {
-            if let Effect::Destroy(a) = e {
+fn destroys(effects: &[Effect]) -> Vec<Uuid> {
+    effects
+        .iter()
+        .filter_map(|effect| {
+            if let Effect::Destroy(a) = effect {
                 Some(*a)
             } else {
                 None
@@ -126,10 +131,11 @@ fn destroys(fx: &[Effect]) -> Vec<Uuid> {
         .collect()
 }
 
-fn polls(fx: &[Effect]) -> Vec<Uuid> {
-    fx.iter()
-        .filter_map(|e| {
-            if let Effect::Poll { account, .. } = e {
+fn polls(effects: &[Effect]) -> Vec<Uuid> {
+    effects
+        .iter()
+        .filter_map(|effect| {
+            if let Effect::Poll { account, .. } = effect {
                 Some(*account)
             } else {
                 None
@@ -138,10 +144,11 @@ fn polls(fx: &[Effect]) -> Vec<Uuid> {
         .collect()
 }
 
-fn logs(fx: &[Effect]) -> Vec<&str> {
-    fx.iter()
-        .filter_map(|e| {
-            if let Effect::Log(m) = e {
+fn logs(effects: &[Effect]) -> Vec<&str> {
+    effects
+        .iter()
+        .filter_map(|effect| {
+            if let Effect::Log(m) = effect {
                 Some(m.as_str())
             } else {
                 None
@@ -150,10 +157,11 @@ fn logs(fx: &[Effect]) -> Vec<&str> {
         .collect()
 }
 
-fn menus(fx: &[Effect]) -> Vec<&MenuModel> {
-    fx.iter()
-        .filter_map(|e| {
-            if let Effect::UpdateMenus(m) = e {
+fn menus(effects: &[Effect]) -> Vec<&MenuModel> {
+    effects
+        .iter()
+        .filter_map(|effect| {
+            if let Effect::UpdateMenus(m) = effect {
                 Some(m)
             } else {
                 None
@@ -163,14 +171,14 @@ fn menus(fx: &[Effect]) -> Vec<&MenuModel> {
 }
 
 /// Ticks every 10 s from `from` to `to` (inclusive), collecting all effects.
-fn tick_range(c: &mut Core, from: u64, to: u64) -> Vec<Effect> {
-    let mut fx = vec![];
+fn tick_range(core: &mut Core, from: u64, to: u64) -> Vec<Effect> {
+    let mut effects = vec![];
     let mut t = from;
     while t <= to {
-        fx.extend(c.handle(Input::Tick { now_ms: t }));
+        effects.extend(core.handle(Input::Tick { now_ms: t }));
         t += 10_000;
     }
-    fx
+    effects
 }
 
 fn custom(name: &str, url: &str) -> CustomService {
@@ -185,7 +193,7 @@ fn custom(name: &str, url: &str) -> CustomService {
     }
 }
 
-fn pol(link_target: LinkTarget, allow_media: bool) -> ViewPolicy {
+fn policy_with(link_target: LinkTarget, allow_media: bool) -> ViewPolicy {
     ViewPolicy {
         link_target,
         allow_media,
@@ -193,10 +201,11 @@ fn pol(link_target: LinkTarget, allow_media: bool) -> ViewPolicy {
     }
 }
 
-fn policies(fx: &[Effect]) -> Vec<(Uuid, ViewPolicy)> {
-    fx.iter()
-        .filter_map(|e| {
-            if let Effect::SetViewPolicy { account, policy } = e {
+fn policies(effects: &[Effect]) -> Vec<(Uuid, ViewPolicy)> {
+    effects
+        .iter()
+        .filter_map(|effect| {
+            if let Effect::SetViewPolicy { account, policy } = effect {
                 Some((*account, policy.clone()))
             } else {
                 None
@@ -205,18 +214,18 @@ fn policies(fx: &[Effect]) -> Vec<(Uuid, ViewPolicy)> {
         .collect()
 }
 
-fn set_global_hibernate(c: &mut Core, m: Option<u32>) {
-    let mut settings = c.settings().clone();
+fn set_global_hibernate(core: &mut Core, m: Option<u32>) {
+    let mut settings = core.settings().clone();
     settings.hibernate_after_min = m;
-    c.handle(Input::Ui(UiCommand::UpdateSettings { settings }));
+    core.handle(Input::Ui(UiCommand::UpdateSettings { settings }));
 }
 
 fn svg(tag: &str) -> String {
     format!("data:image/svg+xml;base64,{tag}")
 }
 
-fn fetched(c: &mut Core, n: u128, slug: &str, r: SimpleIconResult) -> Vec<Effect> {
-    c.handle(Input::SimpleIconFetched {
+fn fetched(core: &mut Core, n: u128, slug: &str, r: SimpleIconResult) -> Vec<Effect> {
+    core.handle(Input::SimpleIconFetched {
         account: id(n),
         slug: slug.into(),
         result: r,
@@ -232,9 +241,10 @@ fn user_def(id: &str, url: &str) -> ServiceDef {
     .unwrap()
 }
 
-fn created(fx: &[Effect]) -> Vec<Uuid> {
-    fx.iter()
-        .filter_map(|e| match e {
+fn created(effects: &[Effect]) -> Vec<Uuid> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
             Effect::CreateView { spec, .. } => Some(spec.account),
             _ => None,
         })
@@ -242,18 +252,18 @@ fn created(fx: &[Effect]) -> Vec<Uuid> {
 }
 
 fn two_user_accounts() -> Core {
-    let mut c = core_with(vec![acc(1, "alpha", "A"), acc(2, "beta", "B")]);
-    c.set_user_services(
+    let mut core = core_with(vec![account(1, "alpha", "A"), account(2, "beta", "B")]);
+    core.set_user_services(
         vec![
             user_def("alpha", "https://a.example/"),
             user_def("beta", "https://b.example/"),
         ],
         vec![],
     );
-    let fx = c.handle(Input::Started {
+    let effects = core.handle(Input::Started {
         width: 1000.0,
         height: 600.0,
     });
-    assert_eq!(created(&fx).len(), 2);
-    c
+    assert_eq!(created(&effects).len(), 2);
+    core
 }

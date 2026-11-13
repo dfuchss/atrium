@@ -2,80 +2,94 @@ use super::*;
 
 #[test]
 fn zoom_menu_and_settings() {
-    let (mut c, _) = started(vec![acc(1, "slack", "A")]);
-    let zoom = |fx: &[Effect]| {
-        fx.iter().find_map(|e| {
-            if let Effect::SetZoom { zoom, .. } = e {
+    let (mut core, _) = started(vec![account(1, "slack", "A")]);
+    let zoom = |effects: &[Effect]| {
+        effects.iter().find_map(|effect| {
+            if let Effect::SetZoom { zoom, .. } = effect {
                 Some(*zoom)
             } else {
                 None
             }
         })
     };
-    assert_eq!(zoom(&c.handle(Input::Menu(MenuAction::ZoomIn))), Some(1.1));
-    assert_eq!(zoom(&c.handle(Input::Menu(MenuAction::ZoomOut))), Some(1.0));
-    let fx = c.handle(Input::Menu(MenuAction::ZoomOut));
-    assert_eq!(zoom(&fx), Some(0.9));
-    assert!(
-        fx.iter()
-            .any(|e| matches!(e, Effect::Persist(p) if p.accounts[0].zoom == 0.9))
+    assert_eq!(
+        zoom(&core.handle(Input::Menu(MenuAction::ZoomIn))),
+        Some(1.1)
     );
     assert_eq!(
-        zoom(&c.handle(Input::Menu(MenuAction::ZoomReset))),
+        zoom(&core.handle(Input::Menu(MenuAction::ZoomOut))),
         Some(1.0)
     );
-    assert!(c.handle(Input::Menu(MenuAction::ZoomReset)).is_empty());
-    let fx = update_account(&mut c, 1, |s| s.zoom = 1.3);
-    assert_eq!(zoom(&fx), Some(1.3));
-    assert!(!fx.iter().any(|e| matches!(e, Effect::CreateView { .. })));
-    assert_eq!(zoom(&c.handle(Input::Menu(MenuAction::ZoomIn))), Some(1.5));
-    let fx = update_account(&mut c, 1, |s| s.zoom = 2.0);
-    assert_eq!(zoom(&fx), Some(2.0));
-    assert!(c.handle(Input::Menu(MenuAction::ZoomIn)).is_empty());
+    let effects = core.handle(Input::Menu(MenuAction::ZoomOut));
+    assert_eq!(zoom(&effects), Some(0.9));
+    assert!(effects.iter().any(
+        |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].zoom == 0.9)
+    ));
     assert_eq!(
-        zoom(&update_account(&mut c, 1, |s| s.zoom = f64::NAN)),
+        zoom(&core.handle(Input::Menu(MenuAction::ZoomReset))),
+        Some(1.0)
+    );
+    assert!(core.handle(Input::Menu(MenuAction::ZoomReset)).is_empty());
+    let effects = update_account(&mut core, 1, |settings| settings.zoom = 1.3);
+    assert_eq!(zoom(&effects), Some(1.3));
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::CreateView { .. }))
+    );
+    assert_eq!(
+        zoom(&core.handle(Input::Menu(MenuAction::ZoomIn))),
+        Some(1.5)
+    );
+    let effects = update_account(&mut core, 1, |settings| settings.zoom = 2.0);
+    assert_eq!(zoom(&effects), Some(2.0));
+    assert!(core.handle(Input::Menu(MenuAction::ZoomIn)).is_empty());
+    assert_eq!(
+        zoom(&update_account(&mut core, 1, |settings| settings.zoom = f64::NAN)),
         Some(1.0)
     );
     // a new view gets the persisted zoom
-    update_account(&mut c, 1, |s| s.zoom = 0.8);
-    let fx = update_account(&mut c, 1, |s| s.user_agent = Some("chrome".into()));
-    assert_eq!(zoom(&fx), Some(0.8));
+    update_account(&mut core, 1, |settings| settings.zoom = 0.8);
+    let effects = update_account(&mut core, 1, |settings| {
+        settings.user_agent = Some("chrome".into());
+    });
+    assert_eq!(zoom(&effects), Some(0.8));
 }
 
 #[test]
 fn menu_actions_on_active_account() {
-    let (mut c, _) = started(vec![acc(1, "slack", "A"), acc(2, "slack", "B")]);
-    c.handle(Input::Ui(UiCommand::Select { account: id(2) }));
+    let (mut core, _) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
+    core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
     assert_eq!(
-        c.handle(Input::Menu(MenuAction::Reload)),
+        core.handle(Input::Menu(MenuAction::Reload)),
         vec![Effect::Reload(id(2))]
     );
     assert_eq!(
-        c.handle(Input::Menu(MenuAction::Back)),
+        core.handle(Input::Menu(MenuAction::Back)),
         vec![Effect::Eval {
             account: id(2),
             script: "history.back()".into()
         }]
     );
     assert_eq!(
-        c.handle(Input::Ui(UiCommand::GoForward { account: id(1) })),
+        core.handle(Input::Ui(UiCommand::GoForward { account: id(1) })),
         vec![Effect::Eval {
             account: id(1),
             script: "history.forward()".into()
         }]
     );
     assert_eq!(
-        c.handle(Input::Menu(MenuAction::OpenInBrowser)),
+        core.handle(Input::Menu(MenuAction::OpenInBrowser)),
         vec![Effect::OpenInBrowser {
             account: id(2),
             browser: None
         }]
     );
-    let fx = c.handle(Input::Menu(MenuAction::ToggleDnd));
-    assert!(snap(&fx).settings.dnd);
-    assert!(menus(&fx)[0].dnd);
-    let fx = c.handle(Input::Menu(MenuAction::ToggleDnd));
-    assert!(!snap(&fx).settings.dnd);
+    let effects = core.handle(Input::Menu(MenuAction::ToggleDnd));
+    assert!(last_snapshot(&effects).settings.dnd);
+    assert!(menus(&effects)[0].dnd);
+    let effects = core.handle(Input::Menu(MenuAction::ToggleDnd));
+    assert!(!last_snapshot(&effects).settings.dnd);
     let (mut empty, _) = started(vec![]);
     assert!(matches!(
         empty.handle(Input::Menu(MenuAction::Reload)).as_slice(),
@@ -85,20 +99,20 @@ fn menu_actions_on_active_account() {
 
 #[test]
 fn open_in_browser_and_clear_data() {
-    let (mut c, _) = started(vec![acc(1, "slack", "A"), acc(2, "slack", "B")]);
-    let fx = c.handle(Input::Ui(UiCommand::ClearData { account: id(2) }));
-    assert_eq!(fx.last(), Some(&Effect::ClearData(id(2))));
-    c.handle(Input::Ui(UiCommand::Hibernate { account: id(2) }));
-    let fx = c.handle(Input::Ui(UiCommand::ClearData { account: id(2) }));
+    let (mut core, _) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
+    let effects = core.handle(Input::Ui(UiCommand::ClearData { account: id(2) }));
+    assert_eq!(effects.last(), Some(&Effect::ClearData(id(2))));
+    core.handle(Input::Ui(UiCommand::Hibernate { account: id(2) }));
+    let effects = core.handle(Input::Ui(UiCommand::ClearData { account: id(2) }));
     assert_eq!(
-        fx.last(),
+        effects.last(),
         Some(&Effect::DeleteProfile {
             store_id: *id(2).as_bytes()
         })
     );
-    let fx = c.handle(Input::Ui(UiCommand::OpenInBrowser { account: id(2) }));
+    let effects = core.handle(Input::Ui(UiCommand::OpenInBrowser { account: id(2) }));
     assert_eq!(
-        fx,
+        effects,
         vec![Effect::OpenExternal {
             url: "https://app.slack.com/client".into(),
             browser: None
@@ -108,8 +122,8 @@ fn open_in_browser_and_clear_data() {
 
 #[test]
 fn menus_follow_accounts_unread_and_settings() {
-    let (mut c, fx) = started(vec![acc(1, "discord", "A"), acc(2, "discord", "B")]);
-    let m = menus(&fx)[0].clone();
+    let (mut core, effects) = started(vec![account(1, "discord", "A"), account(2, "discord", "B")]);
+    let m = menus(&effects)[0].clone();
     assert_eq!(
         m.accounts
             .iter()
@@ -119,28 +133,28 @@ fn menus_follow_accounts_unread_and_settings() {
     );
     assert!(m.show_tray && !m.dnd && m.tray_title.is_empty());
     assert!(
-        menus(&c.handle(Input::Tick { now_ms: 1 })).is_empty(),
+        menus(&core.handle(Input::Tick { now_ms: 1 })).is_empty(),
         "unchanged -> not re-emitted"
     );
-    let fx = c.handle(Input::TitleChanged {
+    let effects = core.handle(Input::TitleChanged {
         account: id(2),
         title: "(3) B".into(),
     });
-    let m = menus(&fx)[0];
+    let m = menus(&effects)[0];
     assert_eq!((m.accounts[1].unread, m.tray_title.as_str()), (3, "3"));
-    let fx = c.handle(Input::TitleChanged {
+    let effects = core.handle(Input::TitleChanged {
         account: id(2),
         title: "• B".into(),
     });
-    assert_eq!(menus(&fx)[0].tray_title, "•");
+    assert_eq!(menus(&effects)[0].tray_title, "•");
     let settings = AppSettings {
         show_tray: false,
         ..AppSettings::default()
     };
-    let fx = c.handle(Input::Ui(UiCommand::UpdateSettings { settings }));
-    assert!(!menus(&fx)[0].show_tray);
-    let fx = update_account(&mut c, 1, |s| s.label = "Work".into());
-    assert_eq!(menus(&fx)[0].accounts[0].label, "Work");
+    let effects = core.handle(Input::Ui(UiCommand::UpdateSettings { settings }));
+    assert!(!menus(&effects)[0].show_tray);
+    let effects = update_account(&mut core, 1, |settings| settings.label = "Work".into());
+    assert_eq!(menus(&effects)[0].accounts[0].label, "Work");
     assert!(
         menus(&core_with(vec![]).handle(Input::Tick { now_ms: 1 })).is_empty(),
         "nothing before start"

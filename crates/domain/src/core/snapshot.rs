@@ -22,7 +22,17 @@ impl Core {
                 .iter()
                 .map(|service| self.service_info(service))
                 .collect(),
-            custom_services: self.persisted.custom_services.clone(),
+            // Colors as the catalog uses them: a hand-edited accounts.json must not reach the
+            // UI's style attributes either.
+            custom_services: self
+                .persisted
+                .custom_services
+                .iter()
+                .map(|service| protocol::CustomService {
+                    color: crate::catalog::color_or_default(&service.color),
+                    ..service.clone()
+                })
+                .collect(),
             dialog_open: self.dialog_open,
             settings: self.settings().clone(),
             app: self.app_info.clone(),

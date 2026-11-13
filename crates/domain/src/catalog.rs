@@ -131,6 +131,12 @@ impl Catalog {
         if def.name.trim().is_empty() {
             return Err(parse_err("empty name".into()));
         }
+        if !is_hex_color(&def.color) {
+            return Err(parse_err(format!(
+                "invalid color {:?} (#rgb or #rrggbb expected)",
+                def.color
+            )));
+        }
         let rules = [&def.unread.title_regex, &def.unread.title_indirect_regex];
         for pattern in rules.into_iter().flatten() {
             regex::Regex::new(pattern).map_err(|error| CatalogError::InvalidRegex {
@@ -332,10 +338,7 @@ pub fn normalize_custom(service: &CustomService) -> Result<CustomService, String
     let instance_label = url.contains(PLACEHOLDER).then(|| {
         trimmed_option(service.instance_label.as_deref()).unwrap_or_else(|| "Instance".into())
     });
-    let color = Some(service.color.trim())
-        .filter(|color| !color.is_empty())
-        .unwrap_or(DEFAULT_CUSTOM_COLOR)
-        .to_string();
+    let color = color_or_default(&service.color);
     Ok(CustomService {
         id: service.id.trim().to_string(),
         name,
@@ -345,6 +348,24 @@ pub fn normalize_custom(service: &CustomService) -> Result<CustomService, String
         title_regex,
         user_agent: trimmed_option(service.user_agent.as_deref()),
     })
+}
+
+/// True for a hex color `#` + 3 to 8 hex digits. The UI puts service colors into a style
+/// attribute, so nothing else may get through.
+pub fn is_hex_color(color: &str) -> bool {
+    color.strip_prefix('#').is_some_and(|digits| {
+        (3..=8).contains(&digits.len()) && digits.bytes().all(|digit| digit.is_ascii_hexdigit())
+    })
+}
+
+/// The trimmed `color` if it is a hex color (see [`is_hex_color`]), else [`DEFAULT_CUSTOM_COLOR`].
+pub fn color_or_default(color: &str) -> String {
+    let color = color.trim();
+    if is_hex_color(color) {
+        color.to_string()
+    } else {
+        DEFAULT_CUSTOM_COLOR.to_string()
+    }
 }
 
 /// Trimmed text; empty means none.
@@ -490,10 +511,10 @@ mod tests {
             Err(CatalogError::Parse { .. })
         ));
         assert!(matches!(
-            Catalog::parse("s", "id=''\nname='a'\ncolor='c'\nurl='u'"),
+            Catalog::parse("s", "id=''\nname='a'\ncolor='#000'\nurl='u'"),
             Err(CatalogError::Parse { .. })
         ));
-        let bad = "id='a'\nname='a'\ncolor='c'\nurl='u'\n[unread]\ntitle_regex='('";
+        let bad = "id='a'\nname='a'\ncolor='#000'\nurl='u'\n[unread]\ntitle_regex='('";
         match Catalog::parse("src", bad) {
             Err(CatalogError::InvalidRegex { service, .. }) => assert_eq!(service, "src"),
             other => panic!("{other:?}"),
@@ -664,5 +685,38 @@ mod tests {
         assert!(!host_matches_any(&pats, "notx.com"));
         assert!(host_matches_any(&pats, "exact.org"));
         assert!(!host_matches_any(&pats, "sub.exact.org"));
+    }
+
+    #[test]
+    fn colors_must_be_hex() {
+        for good in ["#000", "#4A154B", "#0dbd8b80"] {
+            assert!(is_hex_color(good), "{good}");
+        }
+        for bad in [
+            "",
+            "#",
+            "#12",
+            "#123456789",
+            "red",
+            "#zzz",
+            "#000;background:url(x)",
+            "000",
+        ] {
+            assert!(!is_hex_color(bad), "{bad}");
+        }
+        let toml =
+            "id='a'\nname='A'\ncolor='red;background:url(https://x.org)'\nurl='https://a.io'";
+        assert!(matches!(
+            Catalog::parse("s", toml),
+            Err(CatalogError::Parse { message, .. }) if message.contains("invalid color")
+        ));
+        let mut service = custom("A", "https://a.io");
+        service.color = " #ABC ".into();
+        assert_eq!(normalize_custom(&service).unwrap().color, "#ABC");
+        service.color = "x\" onclick=\"y".into();
+        assert_eq!(
+            normalize_custom(&service).unwrap().color,
+            DEFAULT_CUSTOM_COLOR
+        );
     }
 }

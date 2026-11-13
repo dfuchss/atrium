@@ -25,15 +25,15 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
         Effect::SetBounds { account, bounds } => {
             ("SetBounds", ports.host.set_bounds(account, bounds))
         }
-        Effect::SetUiBounds(b) => ("SetUiBounds", ports.host.set_ui_bounds(b)),
-        Effect::Show(a) => ("Show", ports.host.show(a)),
-        Effect::Hide(a) => ("Hide", ports.host.hide(a)),
-        Effect::Destroy(a) => ("Destroy", ports.host.destroy(a)),
+        Effect::SetUiBounds(bounds) => ("SetUiBounds", ports.host.set_ui_bounds(bounds)),
+        Effect::Show(account) => ("Show", ports.host.show(account)),
+        Effect::Hide(account) => ("Hide", ports.host.hide(account)),
+        Effect::Destroy(account) => ("Destroy", ports.host.destroy(account)),
         Effect::DeleteProfile { store_id } => {
             ("DeleteProfile", ports.host.delete_profile(store_id))
         }
-        Effect::ClearData(a) => ("ClearData", ports.host.clear_data(a)),
-        Effect::Reload(a) => ("Reload", ports.host.reload(a)),
+        Effect::ClearData(account) => ("ClearData", ports.host.clear_data(account)),
+        Effect::Reload(account) => ("Reload", ports.host.reload(account)),
         Effect::SetViewPolicy { account, policy } => {
             ("SetViewPolicy", ports.host.set_view_policy(account, policy))
         }
@@ -58,8 +58,8 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
         Effect::UpdateMenus(model) => ("UpdateMenus", ports.platform.set_menus(&model)),
         Effect::Poll { account, script } => ("Poll", ports.host.poll(account, &script)),
         Effect::Eval { account, script } => ("Eval", ports.host.eval(account, &script)),
-        Effect::Notify(req) => ("Notify", ports.notifier.notify(&req)),
-        Effect::SetDockBadge(b) => ("SetDockBadge", ports.platform.set_dock_badge(b)),
+        Effect::Notify(request) => ("Notify", ports.notifier.notify(&request)),
+        Effect::SetDockBadge(badge) => ("SetDockBadge", ports.platform.set_dock_badge(badge)),
         Effect::OpenExternal { url, browser } => (
             "OpenExternal",
             open_checked(&url, browser.as_deref(), ports),
@@ -67,19 +67,19 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
         Effect::OpenServicesFolder => ("OpenServicesFolder", ports.platform.open_services_folder()),
         Effect::LoadServices => ("LoadServices", ports.platform.load_services()),
         Effect::FocusWindow => ("FocusWindow", ports.platform.focus_window()),
-        Effect::ApplySystemSettings(s) => (
+        Effect::ApplySystemSettings(settings) => (
             "ApplySystemSettings",
-            ports.platform.apply_system_settings(&s),
+            ports.platform.apply_system_settings(&settings),
         ),
-        Effect::Persist(data) => ("Persist", ports.store.save(&data)),
-        Effect::EmitSnapshot(s) => ("EmitSnapshot", ports.ui.emit_snapshot(&s)),
-        Effect::Log(msg) => {
-            ports.platform.log(&msg);
+        Effect::Persist(persisted) => ("Persist", ports.store.save(&persisted)),
+        Effect::EmitSnapshot(snapshot) => ("EmitSnapshot", ports.ui.emit_snapshot(&snapshot)),
+        Effect::Log(message) => {
+            ports.platform.log(&message);
             return;
         }
     };
-    if let Err(e) = result {
-        ports.platform.log(&format!("{name} failed: {e}"));
+    if let Err(error) = result {
+        ports.platform.log(&format!("{name} failed: {error}"));
     }
 }
 

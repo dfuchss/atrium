@@ -4,8 +4,8 @@
 /// (`file:`, custom app schemes such as `x-apple.systempreferences:`, `javascript:`...) is
 /// dropped, so a page cannot launch local files or other apps through us.
 pub fn opener_url_allowed(url: &str) -> bool {
-    url::Url::parse(url.trim()).is_ok_and(|u| match u.scheme() {
-        "http" | "https" => u.host_str().is_some(),
+    url::Url::parse(url.trim()).is_ok_and(|parsed| match parsed.scheme() {
+        "http" | "https" => parsed.host_str().is_some(),
         "mailto" => true,
         _ => false,
     })

@@ -19,8 +19,11 @@ pub fn read_user_services(dir: &Path) -> (Vec<ServiceDef>, Vec<String>) {
     };
     let mut paths: Vec<_> = entries
         .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|ext| ext == "toml"))
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "toml")
+        })
         .collect();
     paths.sort();
     let (mut files, mut errors) = (vec![], vec![]);
@@ -28,7 +31,7 @@ pub fn read_user_services(dir: &Path) -> (Vec<ServiceDef>, Vec<String>) {
         let source = path.display().to_string();
         match std::fs::read_to_string(&path) {
             Ok(text) => files.push((source, text)),
-            Err(e) => errors.push(format!("cannot read {source}: {e}")),
+            Err(error) => errors.push(format!("cannot read {source}: {error}")),
         }
     }
     let (defs, parse_errors) = Catalog::parse_user_files(&files);
@@ -40,11 +43,18 @@ pub fn read_user_services(dir: &Path) -> (Vec<ServiceDef>, Vec<String>) {
 /// fully commented example.
 pub fn prepare_services_dir(dir: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
-    let has = |wanted: &dyn Fn(&Path) -> bool| {
-        std::fs::read_dir(dir).is_ok_and(|rd| rd.filter_map(Result::ok).any(|e| wanted(&e.path())))
+    let contains = |wanted: &dyn Fn(&Path) -> bool| {
+        std::fs::read_dir(dir).is_ok_and(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .any(|entry| wanted(&entry.path()))
+        })
     };
-    let has_toml = has(&|p| p.extension().is_some_and(|e| e == "toml"));
-    let has_readme = has(&|p| p.file_name().is_some_and(|n| n == README_NAME));
+    let has_toml = contains(&|path| {
+        path.extension()
+            .is_some_and(|extension| extension == "toml")
+    });
+    let has_readme = contains(&|path| path.file_name().is_some_and(|name| name == README_NAME));
     if !has_toml && !has_readme {
         std::fs::write(dir.join(README_NAME), README)?;
         std::fs::write(dir.join(EXAMPLE_NAME), EXAMPLE)?;

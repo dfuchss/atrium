@@ -53,7 +53,13 @@ impl Core {
         let old_specs: Vec<(Uuid, Option<ViewSpec>)> = self
             .loaded_account_ids()
             .into_iter()
-            .map(|id| (id, self.account(id).and_then(|a| self.view_spec(a).ok())))
+            .map(|id| {
+                (
+                    id,
+                    self.account(id)
+                        .and_then(|account| self.view_spec(account).ok()),
+                )
+            })
             .collect();
         let mut effects = log_effects(errors.clone());
         effects.push(Effect::Log(format!(

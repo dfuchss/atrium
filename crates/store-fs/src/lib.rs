@@ -22,39 +22,47 @@ impl FsStore {
     }
 }
 
-fn err(what: &str, e: impl std::fmt::Display) -> PortError {
-    PortError(format!("{what}: {e}"))
+fn port_error(action: &str, error: impl std::fmt::Display) -> PortError {
+    PortError(format!("{action}: {error}"))
 }
 
 impl Store for FsStore {
     fn load(&self) -> PortResult<Persisted> {
         let path = self.file();
         let bytes = match fs::read(&path) {
-            Ok(b) => b,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Persisted::default()),
-            Err(e) => return Err(err("read accounts.json", e)),
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Persisted::default());
+            }
+            Err(error) => return Err(port_error("read accounts.json", error)),
         };
-        if let Ok(p) = serde_json::from_slice(&bytes) {
-            Ok(p)
+        if let Ok(persisted) = serde_json::from_slice(&bytes) {
+            Ok(persisted)
         } else {
-            let secs = SystemTime::now()
+            // Keep the unreadable file for inspection and start empty.
+            let seconds = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .map_or(0, |d| d.as_secs());
-            let target = self.dir.join(format!("accounts.json.corrupt-{secs}"));
-            fs::rename(&path, &target).map_err(|e| err("quarantine corrupt accounts.json", e))?;
+                .map_or(0, |since_epoch| since_epoch.as_secs());
+            let target = self.dir.join(format!("accounts.json.corrupt-{seconds}"));
+            fs::rename(&path, &target)
+                .map_err(|error| port_error("quarantine corrupt accounts.json", error))?;
             Ok(Persisted::default())
         }
     }
 
     fn save(&self, data: &Persisted) -> PortResult {
-        fs::create_dir_all(&self.dir).map_err(|e| err("create dir", e))?;
-        let json = serde_json::to_vec_pretty(data).map_err(|e| err("serialize", e))?;
-        let tmp = self.dir.join("accounts.json.tmp");
-        let mut f = fs::File::create(&tmp).map_err(|e| err("create tmp", e))?;
-        f.write_all(&json).map_err(|e| err("write tmp", e))?;
-        f.sync_all().map_err(|e| err("sync tmp", e))?;
-        drop(f);
-        fs::rename(&tmp, self.file()).map_err(|e| err("rename", e))
+        fs::create_dir_all(&self.dir).map_err(|error| port_error("create dir", error))?;
+        let json =
+            serde_json::to_vec_pretty(data).map_err(|error| port_error("serialize", error))?;
+        let temporary = self.dir.join("accounts.json.tmp");
+        let mut file =
+            fs::File::create(&temporary).map_err(|error| port_error("create tmp", error))?;
+        file.write_all(&json)
+            .map_err(|error| port_error("write tmp", error))?;
+        file.sync_all()
+            .map_err(|error| port_error("sync tmp", error))?;
+        drop(file);
+        fs::rename(&temporary, self.file()).map_err(|error| port_error("rename", error))
     }
 }
 

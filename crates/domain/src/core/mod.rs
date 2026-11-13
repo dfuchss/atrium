@@ -199,14 +199,17 @@ impl Core {
     }
 
     fn account(&self, account_id: Uuid) -> Option<&Account> {
-        self.persisted.accounts.iter().find(|a| a.id == account_id)
+        self.persisted
+            .accounts
+            .iter()
+            .find(|account| account.id == account_id)
     }
 
     fn account_mut(&mut self, account_id: Uuid) -> Option<&mut Account> {
         self.persisted
             .accounts
             .iter_mut()
-            .find(|a| a.id == account_id)
+            .find(|account| account.id == account_id)
     }
 
     /// Position of the account in the sidebar.
@@ -214,7 +217,7 @@ impl Core {
         self.persisted
             .accounts
             .iter()
-            .position(|a| a.id == account_id)
+            .position(|account| account.id == account_id)
     }
 
     fn is_loaded(&self, account_id: Uuid) -> bool {
@@ -226,7 +229,7 @@ impl Core {
         self.persisted
             .accounts
             .iter()
-            .map(|a| a.id)
+            .map(|account| account.id)
             .filter(|&id| self.is_loaded(id))
             .collect()
     }
@@ -244,6 +247,6 @@ fn log_effects(messages: Vec<String>) -> Vec<Effect> {
 /// Trims an optional text setting; empty means unset.
 fn trimmed(value: Option<String>) -> Option<String> {
     value
-        .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty())
+        .map(|text| text.trim().to_string())
+        .filter(|text| !text.is_empty())
 }

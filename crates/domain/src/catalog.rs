@@ -91,8 +91,8 @@ pub enum CatalogError {
 }
 
 impl std::fmt::Display for CatalogError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{self:?}")
     }
 }
 
@@ -111,7 +111,7 @@ impl Catalog {
         for (name, text) in BUILTIN_TOML {
             match Catalog::parse(name, text) {
                 Ok(def) => catalog.insert(def),
-                Err(e) => panic!("invalid built-in service {name}: {e}"),
+                Err(error) => panic!("invalid built-in service {name}: {error}"),
             }
         }
         catalog
@@ -123,7 +123,8 @@ impl Catalog {
             source: source.to_string(),
             message,
         };
-        let def: ServiceDef = toml::from_str(toml_text).map_err(|e| parse_err(e.to_string()))?;
+        let def: ServiceDef =
+            toml::from_str(toml_text).map_err(|error| parse_err(error.to_string()))?;
         if def.id.trim().is_empty() {
             return Err(parse_err("empty id".into()));
         }
@@ -132,9 +133,9 @@ impl Catalog {
         }
         let rules = [&def.unread.title_regex, &def.unread.title_indirect_regex];
         for pattern in rules.into_iter().flatten() {
-            regex::Regex::new(pattern).map_err(|e| CatalogError::InvalidRegex {
+            regex::Regex::new(pattern).map_err(|error| CatalogError::InvalidRegex {
                 service: source.to_string(),
-                message: e.to_string(),
+                message: error.to_string(),
             })?;
         }
         Ok(def)
@@ -147,7 +148,7 @@ impl Catalog {
         for (source, text) in files {
             match Catalog::parse(source, text) {
                 Ok(def) => defs.push(def),
-                Err(e) => errors.push(format!("invalid service definition: {e}")),
+                Err(error) => errors.push(format!("invalid service definition: {error}")),
             }
         }
         (defs, errors)
@@ -155,14 +156,18 @@ impl Catalog {
 
     /// Adds or replaces (same id) a definition.
     pub fn insert(&mut self, def: ServiceDef) {
-        match self.services.iter_mut().find(|s| s.id == def.id) {
+        match self
+            .services
+            .iter_mut()
+            .find(|service| service.id == def.id)
+        {
             Some(existing) => *existing = def,
             None => self.services.push(def),
         }
     }
 
     pub fn get(&self, id: &str) -> Option<&ServiceDef> {
-        self.services.iter().find(|s| s.id == id)
+        self.services.iter().find(|service| service.id == id)
     }
 
     /// In insertion order (built-ins first, in [`BUILTIN_TOML`] order).
@@ -176,12 +181,12 @@ pub const PLACEHOLDER: &str = "{instance}";
 
 /// Trims an instance value and strips a pasted scheme and trailing slashes.
 pub(crate) fn normalize_instance(instance: &str) -> String {
-    let t = instance.trim();
-    let t = t
+    let trimmed = instance.trim();
+    let without_scheme = trimmed
         .strip_prefix("https://")
-        .or_else(|| t.strip_prefix("http://"))
-        .unwrap_or(t);
-    t.trim_end_matches('/').to_string()
+        .or_else(|| trimmed.strip_prefix("http://"))
+        .unwrap_or(trimmed);
+    without_scheme.trim_end_matches('/').to_string()
 }
 
 /// Normalises the "always open in the app" host list: trim, lowercase, strip scheme, credentials,
@@ -190,41 +195,53 @@ pub(crate) fn normalize_instance(instance: &str) -> String {
 pub fn normalize_app_hosts(raw: &[String]) -> (Vec<String>, Vec<String>) {
     let (mut hosts, mut rejected) = (Vec::<String>::new(), Vec::new());
     for entry in raw {
-        let mut s = entry.trim().to_ascii_lowercase();
-        if let Some((_, rest)) = s.split_once("://") {
-            s = rest.to_string();
-        }
-        let end = s.find(['/', '?', '#']).unwrap_or(s.len());
-        s.truncate(end);
-        if let Some((_, host)) = s.rsplit_once('@') {
-            s = host.to_string();
-        }
-        if let Some((host, port)) = s.rsplit_once(':')
-            && port.chars().all(|c| c.is_ascii_digit())
-        {
-            s = host.to_string();
-        }
-        if s.is_empty() {
+        let host = host_of_entry(entry);
+        if host.is_empty() {
+            // A blank line is dropped silently, a URL without host is reported.
             if !entry.trim().is_empty() && entry.contains("://") {
                 rejected.push(entry.trim().to_string());
             }
-            continue;
-        }
-        let base = s.strip_prefix("*.").unwrap_or(&s);
-        let plausible = !base.is_empty()
-            && !base.starts_with(['.', '-'])
-            && !base.ends_with(['.', '-'])
-            && !base.contains("..")
-            && base
-                .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.');
-        if !plausible {
+        } else if !is_plausible_host_pattern(&host) {
             rejected.push(entry.trim().to_string());
-        } else if !hosts.contains(&s) {
-            hosts.push(s);
+        } else if !hosts.contains(&host) {
+            hosts.push(host);
         }
     }
     (hosts, rejected)
+}
+
+/// The lowercase host of a pasted entry: without scheme, path, query, credentials and port.
+fn host_of_entry(entry: &str) -> String {
+    let mut host = entry.trim().to_ascii_lowercase();
+    if let Some((_, rest)) = host.split_once("://") {
+        host = rest.to_string();
+    }
+    let end = host.find(['/', '?', '#']).unwrap_or(host.len());
+    host.truncate(end);
+    if let Some((_, without_credentials)) = host.rsplit_once('@') {
+        host = without_credentials.to_string();
+    }
+    if let Some((without_port, port)) = host.rsplit_once(':')
+        && port.chars().all(|character| character.is_ascii_digit())
+    {
+        host = without_port.to_string();
+    }
+    host
+}
+
+/// A host name or `*.host` pattern: labels of `[a-z0-9-]`, no empty labels or edge dashes.
+fn is_plausible_host_pattern(pattern: &str) -> bool {
+    let base = pattern.strip_prefix("*.").unwrap_or(pattern);
+    !base.is_empty()
+        && !base.starts_with(['.', '-'])
+        && !base.ends_with(['.', '-'])
+        && !base.contains("..")
+        && base.chars().all(|character| {
+            character.is_ascii_lowercase()
+                || character.is_ascii_digit()
+                || character == '-'
+                || character == '.'
+        })
 }
 
 fn matches_host(pattern: &str, host: &str) -> bool {
@@ -239,12 +256,12 @@ impl ServiceDef {
     fn effective_instance(&self, instance: Option<&str>) -> Option<String> {
         instance
             .map(normalize_instance)
-            .filter(|t| !t.is_empty())
+            .filter(|instance| !instance.is_empty())
             .or_else(|| {
                 self.instance_default
                     .as_deref()
                     .map(normalize_instance)
-                    .filter(|t| !t.is_empty())
+                    .filter(|instance| !instance.is_empty())
             })
     }
 
@@ -253,10 +270,10 @@ impl ServiceDef {
     pub fn resolve_url(&self, instance: Option<&str>) -> Result<url::Url, CatalogError> {
         let url = self.url.clone();
         let raw = if url.contains(PLACEHOLDER) {
-            let t = self
+            let instance = self
                 .effective_instance(instance)
                 .ok_or_else(|| CatalogError::MissingInstance(self.id.clone()))?;
-            url.replace(PLACEHOLDER, &t)
+            url.replace(PLACEHOLDER, &instance)
         } else {
             url
         };
@@ -275,13 +292,13 @@ impl ServiceDef {
     pub fn resolve_hosts(&self, instance: Option<&str>) -> Vec<String> {
         let host = self
             .effective_instance(instance)
-            .map(|t| t.split('/').next().unwrap_or("").to_string())
-            .filter(|h| !h.is_empty());
+            .map(|instance| instance.split('/').next().unwrap_or("").to_string())
+            .filter(|host| !host.is_empty());
         self.internal_hosts
             .iter()
-            .filter_map(|h| match (&host, h.contains(PLACEHOLDER)) {
-                (_, false) => Some(h.clone()),
-                (Some(host), true) => Some(h.replace(PLACEHOLDER, host)),
+            .filter_map(|pattern| match (&host, pattern.contains(PLACEHOLDER)) {
+                (_, false) => Some(pattern.clone()),
+                (Some(host), true) => Some(pattern.replace(PLACEHOLDER, host)),
                 (None, true) => None,
             })
             .collect()
@@ -296,49 +313,53 @@ impl ServiceDef {
 /// Validates and normalizes a user-defined service (trimmed fields, `instance_label` only when the
 /// URL has `{instance}`). The URL must be http(s) once `{instance}` is replaced by "example"; the title
 /// regex must compile. The id is kept as is.
-pub fn normalize_custom(c: &CustomService) -> Result<CustomService, String> {
-    let opt = |v: &Option<String>| {
-        v.as_deref()
-            .map(str::trim)
-            .filter(|v| !v.is_empty())
-            .map(String::from)
-    };
-    let name = c.name.trim().to_string();
+pub fn normalize_custom(service: &CustomService) -> Result<CustomService, String> {
+    let name = service.name.trim().to_string();
     if name.is_empty() {
         return Err("custom service: empty name".into());
     }
-    let url = c.url.trim().to_string();
-    let probe = url.replace(PLACEHOLDER, "example");
-    match url::Url::parse(&probe) {
-        Ok(u) if matches!(u.scheme(), "http" | "https") && u.host_str().is_some() => {}
-        _ => {
-            return Err(format!(
-                "custom service {name:?}: invalid URL {url:?} (http/https expected)"
-            ));
-        }
+    let url = service.url.trim().to_string();
+    if !is_web_url_template(&url) {
+        return Err(format!(
+            "custom service {name:?}: invalid URL {url:?} (http/https expected)"
+        ));
     }
-    let title_regex = opt(&c.title_regex);
-    if let Some(re) = &title_regex {
-        regex::Regex::new(re)
-            .map_err(|e| format!("custom service {name:?}: invalid title regex: {e}"))?;
+    let title_regex = trimmed_option(service.title_regex.as_deref());
+    if let Some(pattern) = &title_regex {
+        regex::Regex::new(pattern)
+            .map_err(|error| format!("custom service {name:?}: invalid title regex: {error}"))?;
     }
-    let instance_label = if url.contains(PLACEHOLDER) {
-        Some(opt(&c.instance_label).unwrap_or_else(|| "Instance".into()))
-    } else {
-        None
-    };
-    let color = Some(c.color.trim())
-        .filter(|c| !c.is_empty())
+    let instance_label = url.contains(PLACEHOLDER).then(|| {
+        trimmed_option(service.instance_label.as_deref()).unwrap_or_else(|| "Instance".into())
+    });
+    let color = Some(service.color.trim())
+        .filter(|color| !color.is_empty())
         .unwrap_or(DEFAULT_CUSTOM_COLOR)
         .to_string();
     Ok(CustomService {
-        id: c.id.trim().to_string(),
+        id: service.id.trim().to_string(),
         name,
         url,
         color,
         instance_label,
         title_regex,
-        user_agent: opt(&c.user_agent),
+        user_agent: trimmed_option(service.user_agent.as_deref()),
+    })
+}
+
+/// Trimmed text; empty means none.
+fn trimmed_option(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(String::from)
+}
+
+/// True if the URL is http(s) with a host once `{instance}` is replaced by "example".
+fn is_web_url_template(url: &str) -> bool {
+    let probe = url.replace(PLACEHOLDER, "example");
+    url::Url::parse(&probe).is_ok_and(|parsed| {
+        matches!(parsed.scheme(), "http" | "https") && parsed.host_str().is_some()
     })
 }
 
@@ -346,25 +367,29 @@ impl ServiceDef {
     /// Converts a user-defined service (see [`normalize_custom`]) into a definition:
     /// internal host = the URL's host (may contain `{instance}`), unread from the title
     /// ([`DEFAULT_TITLE_REGEX`] unless set), user agent "safari" unless set.
-    pub fn from_custom(c: &CustomService) -> Result<ServiceDef, String> {
-        let c = normalize_custom(c)?;
-        if c.id.is_empty() {
-            return Err(format!("custom service {:?}: empty id", c.name));
+    pub fn from_custom(service: &CustomService) -> Result<ServiceDef, String> {
+        let custom = normalize_custom(service)?;
+        if custom.id.is_empty() {
+            return Err(format!("custom service {:?}: empty id", custom.name));
         }
-        let host = url_host_pattern(&c.url);
+        let host = url_host_pattern(&custom.url);
         Ok(ServiceDef {
-            id: c.id,
-            name: c.name,
-            color: c.color,
-            url: c.url,
-            instance_label: c.instance_label,
+            id: custom.id,
+            name: custom.name,
+            color: custom.color,
+            url: custom.url,
+            instance_label: custom.instance_label,
             instance_default: None,
-            user_agent: Some(c.user_agent.unwrap_or_else(|| "safari".into())),
+            user_agent: Some(custom.user_agent.unwrap_or_else(|| "safari".into())),
             internal_hosts: host.into_iter().collect(),
             allow_media: false,
             clear_local_storage: Vec::new(),
             unread: UnreadRules {
-                title_regex: Some(c.title_regex.unwrap_or_else(|| DEFAULT_TITLE_REGEX.into())),
+                title_regex: Some(
+                    custom
+                        .title_regex
+                        .unwrap_or_else(|| DEFAULT_TITLE_REGEX.into()),
+                ),
                 title_indirect_regex: None,
                 poll: None,
             },
@@ -374,9 +399,11 @@ impl ServiceDef {
 
 /// Host part of a URL template, textually (so `{instance}` survives): no userinfo, no port.
 fn url_host_pattern(url: &str) -> Option<String> {
-    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-    let host = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
     let host = host.split(':').next().unwrap_or("").to_ascii_lowercase();
     (!host.is_empty()).then_some(host)
 }
@@ -384,9 +411,9 @@ fn url_host_pattern(url: &str) -> Option<String> {
 /// `custom-<slug of name>`, unique among `taken`.
 pub fn custom_service_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
     let mut slug = String::new();
-    for ch in name.trim().to_lowercase().chars() {
-        if ch.is_ascii_alphanumeric() {
-            slug.push(ch);
+    for character in name.trim().to_lowercase().chars() {
+        if character.is_ascii_alphanumeric() {
+            slug.push(character);
         } else if !slug.ends_with('-') && !slug.is_empty() {
             slug.push('-');
         }
@@ -424,7 +451,7 @@ pub fn resolve_user_agent_preset(preset: Option<&str>) -> Option<String> {
 /// domain itself; case-insensitive).
 pub fn host_matches_any(patterns: &[String], host: &str) -> bool {
     let host = host.to_ascii_lowercase();
-    patterns.iter().any(|p| matches_host(p, &host))
+    patterns.iter().any(|pattern| matches_host(pattern, &host))
 }
 
 #[cfg(test)]

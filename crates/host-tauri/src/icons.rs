@@ -12,15 +12,15 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Downloads `url` and returns it as `data:<mime>;base64,...`; only `image/*` responses.
 pub(crate) fn download_icon(url: &str) -> Result<String, String> {
-    download(url).map_err(|e| e.to_string())
+    download(url).map_err(|error| error.to_string())
 }
 
 /// Downloads the Simple Icons glyph `slug` (white SVG).
 pub(crate) fn download_simple_icon(slug: &str) -> SimpleIconResult {
     match download(&simple_icon_url(slug)) {
-        Ok(d) => SimpleIconResult::Found(d),
+        Ok(data_url) => SimpleIconResult::Found(data_url),
         Err(ureq::Error::StatusCode(404)) => SimpleIconResult::NotFound,
-        Err(e) => SimpleIconResult::Failed(e.to_string()),
+        Err(error) => SimpleIconResult::Failed(error.to_string()),
     }
 }
 
@@ -34,10 +34,10 @@ fn download(url: &str) -> Result<String, ureq::Error> {
     let content_type = response
         .headers()
         .get("content-type")
-        .and_then(|v| v.to_str().ok())
+        .and_then(|value| value.to_str().ok())
         .map(String::from);
     let mime = image_mime(content_type.as_deref())
-        .map_err(|e| ureq::Error::Io(std::io::Error::other(e)))?;
+        .map_err(|error| ureq::Error::Io(std::io::Error::other(error)))?;
     let bytes = response
         .body_mut()
         .with_config()

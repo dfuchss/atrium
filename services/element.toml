@@ -13,6 +13,9 @@ allow_media = true
 clear_local_storage = ["react_sdk_session_lock_ping", "react_sdk_session_lock_owner", "react_sdk_session_lock_claimant"]
 
 [unread]
-# Element puts the notification count in brackets, e.g. "Element [3]" (to verify in spike S2)
+# Element's own badge: the count on the first space button (Home) in the space panel, which counts
+# messages while the title counts rooms. No value (panel not rendered yet) falls back to the title.
+poll = """(s=>s&&(b=>({direct:parseInt(b?.textContent)||0,indirect:!!b&&!parseInt(b.textContent)}))(s.querySelector('.mx_SpacePanel_notificationBadge')))(document.querySelector('.mx_SpaceButton'))"""
+# Fallback: the window title counts rooms, e.g. "Element [3]"
 title_regex = '\[(\d+)\]'
 title_indirect_regex = '\*'

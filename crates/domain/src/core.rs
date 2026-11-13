@@ -356,6 +356,10 @@ pub struct Core {
     window: (f64, f64),
     started: bool,
     unread: HashMap<Uuid, Unread>,
+    /// Last unread derived from the window title (fallback when a poll yields no value).
+    title_unread: HashMap<Uuid, Unread>,
+    /// Accounts whose last poll yielded a value (it then wins over the title).
+    poll_active: HashSet<Uuid>,
     rules: HashMap<String, Rules>,
     last_badge: Option<DockBadge>,
     app_info: AppInfo,
@@ -405,6 +409,8 @@ impl Core {
             window: (0.0, 0.0),
             started: false,
             unread: HashMap::new(),
+            title_unread: HashMap::new(),
+            poll_active: HashSet::new(),
             rules: HashMap::new(),
             last_badge: None,
             app_info: AppInfo::default(),
@@ -1268,6 +1274,8 @@ impl Core {
         } else if was_enabled && !settings.enabled {
             fx.extend(self.unload(a));
             self.unread.remove(&a);
+            self.title_unread.remove(&a);
+            self.poll_active.remove(&a);
             if self.active == Some(a) {
                 let idx = self
                     .persisted
@@ -1374,6 +1382,8 @@ impl Core {
         };
         let acc = self.persisted.accounts.remove(idx);
         self.unread.remove(&a);
+        self.title_unread.remove(&a);
+        self.poll_active.remove(&a);
         self.last_active.remove(&a);
         self.icon_attempts.remove(&a);
         let mut fx = self.unload(a);
@@ -1424,13 +1434,10 @@ impl Core {
             return vec![Self::unknown(a)];
         };
         let service = acc.service.clone();
-        if self
-            .catalog
-            .get(&service)
-            .is_none_or(|s| s.unread.poll.is_some())
-        {
+        let Some(svc) = self.catalog.get(&service) else {
             return vec![];
-        }
+        };
+        let has_poll = svc.unread.poll.is_some();
         let rules = self.rules.get(&service);
         let direct = rules
             .and_then(|r| r.direct.as_ref())
@@ -1442,6 +1449,10 @@ impl Core {
             .and_then(|r| r.indirect.as_ref())
             .is_some_and(|re| re.is_match(title));
         let new = Unread { direct, indirect };
+        self.title_unread.insert(a, new);
+        if has_poll && self.poll_active.contains(&a) {
+            return vec![];
+        }
         let mut fx = Vec::new();
         if self.unread.get(&a).copied().unwrap_or_default() != new {
             // Lets the user check the title patterns against what the service really shows.
@@ -1545,8 +1556,28 @@ impl Core {
                 }
                 _ => None,
             };
-            if let Some(new) = new {
-                fx.extend(self.update_unread(a, new));
+            match new {
+                Some(new) => {
+                    self.poll_active.insert(a);
+                    if self.unread.get(&a).copied().unwrap_or_default() != new {
+                        fx.push(Effect::Log(format!(
+                            "[{a}] {service} poll -> unread {}, indirect {}",
+                            new.direct, new.indirect
+                        )));
+                    }
+                    fx.extend(self.update_unread(a, new));
+                }
+                None => {
+                    // No value (element not found): fall back to the title-derived unread.
+                    if self.poll_active.remove(&a) {
+                        fx.push(Effect::Log(format!(
+                            "[{a}] {service} poll -> no value, using title"
+                        )));
+                    }
+                    if let Some(t) = self.title_unread.get(&a).copied() {
+                        fx.extend(self.update_unread(a, t));
+                    }
+                }
             }
         }
         fx
@@ -2157,6 +2188,45 @@ mod tests {
             })
             .is_empty()
         );
+        let fx = c.handle(Input::PollResult {
+            account: id(1),
+            raw: r#"{"n":[],"u":{"direct":0,"indirect":true}}"#.into(),
+        });
+        assert_eq!(badges(&fx), vec![DockBadge::Dot]);
+        // no poll value: the last title value (9) takes over
+        let fx = c.handle(Input::PollResult {
+            account: id(1),
+            raw: r#"{"n":[],"u":null}"#.into(),
+        });
+        assert_eq!(badges(&fx), vec![DockBadge::Count(9)]);
+        // title changes apply while the poll yields nothing
+        let fx = c.handle(Input::TitleChanged {
+            account: id(1),
+            title: "(2) P".into(),
+        });
+        assert_eq!(badges(&fx), vec![DockBadge::Count(2)]);
+        c.handle(Input::PollResult {
+            account: id(1),
+            raw: r#"{"n":[],"u":null}"#.into(),
+        });
+        // a poll value wins again, and later title changes are stored but ignored
+        let fx = c.handle(Input::PollResult {
+            account: id(1),
+            raw: r#"{"n":[],"u":5}"#.into(),
+        });
+        assert_eq!(badges(&fx), vec![DockBadge::Count(5)]);
+        assert!(
+            c.handle(Input::TitleChanged {
+                account: id(1),
+                title: "(7) P".into()
+            })
+            .is_empty()
+        );
+        let fx = c.handle(Input::PollResult {
+            account: id(1),
+            raw: r#"{"n":[],"u":null}"#.into(),
+        });
+        assert_eq!(badges(&fx), vec![DockBadge::Count(7)]);
         let fx = c.handle(Input::PollResult {
             account: id(1),
             raw: r#"{"n":[],"u":{"direct":0,"indirect":true}}"#.into(),

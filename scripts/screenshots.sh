@@ -15,6 +15,8 @@
 #   ATRIUM_SHOTS_TARGET_DIR  cargo target folder for the demo bundle (default target/screenshots,
 #                            so a running debug bundle in target/debug is not replaced)
 #   ATRIUM_SHOTS_SKIP_BUILD  1 = reuse the bundle built by an earlier run
+#   ATRIUM_SHOTS_KEEP_SECONDS  N = no screenshots: keep the demo running for N seconds, then print
+#                            its unread log lines (checks the unread rules against a real Element)
 #   ATRIUM_SHOTS_WINDOW_POSITION  window position "x,y" (default 24,48 on the main display)
 set -euo pipefail
 
@@ -430,6 +432,15 @@ capture() { # $1: output name, $2: UI query, $3: seconds to wait after the start
     magick "$WORK/$name.png" -resize "${MAX_WIDTH}x>" -strip "$OUT/$name.png"
     stop_demo
 }
+
+if [[ -n "${ATRIUM_SHOTS_KEEP_SECONDS:-}" ]]; then
+    log "Running the demo for ${ATRIUM_SHOTS_KEEP_SECONDS}s"
+    start_demo ""
+    sleep "$ATRIUM_SHOTS_KEEP_SECONDS"
+    log "Unread log lines"
+    grep -h -E "unread|poll" "$CONFIG/atrium.log" 2>/dev/null | tail -40 || true
+    exit 0
+fi
 
 mkdir -p "$OUT"
 # The first start logs Ada in; the main shot waits for the sleeping accounts (1 min).

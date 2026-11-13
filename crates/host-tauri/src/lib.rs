@@ -11,13 +11,14 @@
 //! Blocking calls (`add_child`, menu and tray building) wait for the main thread, so the main
 //! thread must never wait on the caller.
 //!
-//! New-window policy: see `links`. Native menus and tray: see `menus`. Quitting: see
-//! [`graceful_quit`].
+//! New-window policy: see `links`. JavaScript dialogs: see `dialogs`. Native menus and tray:
+//! see `menus`. Quitting: see [`graceful_quit`].
 //!
 //! [`WebviewHost`]: domain::ports::WebviewHost
 //! [`Notifier`]: domain::ports::Notifier
 //! [`Platform`]: domain::ports::Platform
 
+mod dialogs;
 mod icons;
 mod links;
 mod logger;
@@ -30,13 +31,14 @@ mod webviews;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use domain::Input;
 use domain::ports::{PortError, PortResult, UiSink};
 use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
 use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
 
+use crate::dialogs::{DialogPolicy, SharedDialogPolicy, TauriDialogHandler, account_names};
 use crate::links::{PopupQuota, ViewPolicies, new_popup_quota};
 use crate::logger::Logger;
 use crate::menus::MenuState;
@@ -68,6 +70,7 @@ pub struct TauriHost<R: Runtime> {
     notifications: Arc<Mutex<NotificationTargets>>,
     logger: Logger,
     policies: ViewPolicies,
+    dialogs: SharedDialogPolicy,
     /// Numbers the labels of popup/app windows.
     popup_counter: Arc<AtomicU64>,
     /// Limits popup/app windows per account.
@@ -90,6 +93,7 @@ impl<R: Runtime> TauriHost<R> {
             feed,
             notifications: Arc::default(),
             policies: Arc::default(),
+            dialogs: Arc::new(Mutex::new(DialogPolicy::new())),
             popup_counter: Arc::default(),
             popup_quota: new_popup_quota(),
             menus: Mutex::default(),
@@ -115,6 +119,22 @@ impl<R: Runtime> TauriHost<R> {
     pub fn with_extra_init_script(mut self, script: String) -> Self {
         self.extra_init_script = Some(script);
         self
+    }
+
+    /// Makes `alert`, `confirm` and `prompt` of the service views show native panels. Call it
+    /// once the sidebar webview exists and before the first service view is created (see
+    /// `macos_dialogs::install`); without it the pages get the default answers.
+    pub fn install_dialogs(&self) {
+        let handler = TauriDialogHandler {
+            policy: self.dialogs.clone(),
+            logger: self.logger.clone(),
+        };
+        match macos_dialogs::install(Arc::new(handler)) {
+            Ok(()) => self.logger.log("JavaScript dialogs installed"),
+            Err(error) => self
+                .logger
+                .log(&format!("JavaScript dialogs unavailable: {error}")),
+        }
     }
 
     /// File the host logger appends to (`<app_log_dir>/atrium.log`), if available.
@@ -146,6 +166,10 @@ impl<R: Runtime> TauriHost<R> {
 
 impl<R: Runtime> UiSink for TauriHost<R> {
     fn emit_snapshot(&self, snapshot: &Snapshot) -> PortResult {
+        self.dialogs
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .set_names(account_names(snapshot));
         self.app
             .emit_to(UI_WEBVIEW, EVENT_SNAPSHOT, snapshot)
             .map_err(port_err)

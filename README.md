@@ -150,7 +150,6 @@ title_regex = '^\((\d+)\)'          # capture group 1 = unread count
 
 - **Passkeys/WebAuthn don't work** inside embedded WebKit views for third-party sites. Apple restricts this to apps with a special browser entitlement. Use password + TOTP or SSO instead.
 - **Some sites don't render in WebKit at all.** If a service stays blank in Safari too, Atrium can't show it either. A Chromium-based engine is on the roadmap.
-- **JavaScript dialogs** (`alert`/`confirm`/`prompt`) inside service pages are not shown yet.
 - **Sleeping services** don't deliver notifications until they are opened again.
 
 ## Architecture
@@ -164,6 +163,7 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 | `crates/host-tauri` | Adapter: implements the ports on Tauri multi-webview (webviews, notifications, dock badge, tray, menus, links). |
 | `crates/store-fs` | Adapter: atomic JSON store (`accounts.json`). |
 | `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting. |
+| `crates/macos-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, added to the system webview's delegate at runtime. The only crate with `unsafe` code. |
 | `app/src-tauri` | Composition root: window, actor thread, Tauri commands. |
 | `app/ui` | Sidebar and settings in [Leptos](https://leptos.dev/) (CSR, built with Trunk). |
 | `services/*.toml` | Built-in service definitions. |

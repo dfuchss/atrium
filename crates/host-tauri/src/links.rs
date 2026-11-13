@@ -7,9 +7,9 @@
 //! - Anything else follows the account's [`LinkTarget`]: the system browser
 //!   (`Deny` + [`Input::ExternalLink`]) or an in-app window of 1100x800.
 //!
-//! Popup/app windows get the same navigation allow-list ([`domain::nav_allowed`]) and media
+//! Popup/app windows get the same navigation allow-list ([`domain::nav_allowed`]), media
 //! permission ([`domain::ViewPolicy::allow_media`], scoped to the service's own hosts by
-//! [`ViewSpec::media_allowed_at`]) as the account's view.
+//! [`ViewSpec::media_allowed_at`]) and JavaScript dialogs (`dialogs`) as the account's view.
 //!
 //! Never `NewWindowResponse::Allow`: wry would create a bare native window without any of
 //! our handlers (seen with Rainbow opening its own site).
@@ -31,6 +31,7 @@ use tauri::webview::{
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
+use crate::dialogs::tag_for_dialogs;
 use crate::logger::now_ms;
 use crate::webviews::popup_labels;
 use crate::{Feed, Logger};
@@ -305,6 +306,7 @@ impl<R: Runtime> LinkPolicy<R> {
                 self.logger.log(&format!(
                     "[{account}] opened window {label} for {shown_url}"
                 ));
+                tag_for_dialogs(window.as_ref(), &self.logger);
                 watch_close(self.app.clone(), label, &self.logger);
                 NewWindowResponse::Create { window }
             }

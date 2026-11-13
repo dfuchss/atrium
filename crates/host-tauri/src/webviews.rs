@@ -16,6 +16,7 @@ use tauri::{
 };
 use uuid::Uuid;
 
+use crate::dialogs::tag_for_dialogs;
 use crate::links::{LinkPolicy, navigation_hook, permission_hook, popup_label_prefix};
 use crate::{Feed, Input, Logger, TauriHost, port_err};
 
@@ -209,7 +210,7 @@ impl<R: Runtime> TauriHost<R> {
             logger: self.logger.clone(),
         });
         let (feed_title, feed_load) = (self.feed.clone(), self.feed.clone());
-        let load_logger = self.logger.clone();
+        let (load_logger, load_dialogs) = (self.logger.clone(), self.dialogs.clone());
         builder
             .on_document_title_changed(move |_, title| {
                 feed_title(Input::TitleChanged { account, title });
@@ -220,6 +221,10 @@ impl<R: Runtime> TauriHost<R> {
                         "[{account}] loaded {}",
                         redact_url(payload.url().as_str())
                     ));
+                    load_dialogs
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .page_loaded(account);
                     feed_load(Input::PageLoaded {
                         account,
                         url: payload.url().to_string(),
@@ -278,6 +283,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
                 LogicalSize::new(bounds.width, bounds.height),
             )
             .map_err(port_err)?;
+        tag_for_dialogs(&webview, &self.logger);
         if !visible {
             webview.hide().map_err(port_err)?;
         }

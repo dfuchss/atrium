@@ -399,6 +399,8 @@ fn setup(
     ));
 
     let (window, size) = build_window_with_sidebar(app, &dev, &persisted.settings.app)?;
+    // Needs the sidebar webview and must precede the service views: see `install_dialogs`.
+    host.install_dialogs();
 
     let mut core = Core::new(Catalog::builtin(), persisted, Box::new(uuid::Uuid::new_v4));
     core.set_user_services(user_defs, user_errors);

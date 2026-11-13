@@ -20,6 +20,6 @@ pub use crate::core::{
 pub use crate::model::{Account, Persisted, Settings};
 pub use crate::security::{nav_allowed, opener_url_allowed};
 
-/// The JavaScript injected into service pages (plus an optional per-account style injector): collects web notifications into a queue
-/// (`window.__msgr`) that Rust drains by polling. Service pages get no Tauri IPC capability.
+/// JavaScript injected into every service page: collects web notifications into a queue
+/// (`window.__msgr`) that Rust drains by polling, as service pages get no Tauri IPC.
 pub const NOTIFY_SHIM: &str = include_str!("../assets/notify-shim.js");

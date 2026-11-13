@@ -6,29 +6,34 @@ use domain::{Input, MenuAccount, MenuAction, MenuModel};
 use protocol::UiCommand;
 use tauri::image::Image;
 use tauri::menu::{
-    AboutMetadataBuilder, CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
+    AboutMetadata, AboutMetadataBuilder, CheckMenuItemBuilder, Menu, MenuBuilder, MenuItem,
+    MenuItemBuilder, Submenu, SubmenuBuilder,
 };
 use tauri::tray::{TrayIcon, TrayIconBuilder};
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
 
-pub const ID_SHOW: &str = "show";
-pub const ID_SETTINGS: &str = "settings";
-pub const ID_DND: &str = "dnd";
-pub const ID_RELOAD: &str = "reload";
-pub const ID_BACK: &str = "back";
-pub const ID_FORWARD: &str = "forward";
-pub const ID_ZOOM_IN: &str = "zoom-in";
-pub const ID_ZOOM_OUT: &str = "zoom-out";
-pub const ID_ZOOM_RESET: &str = "zoom-reset";
-pub const ID_OPEN_BROWSER: &str = "open-in-browser";
+use crate::{Feed, bring_to_front, graceful_quit};
+
+const ID_SHOW: &str = "show";
+const ID_SETTINGS: &str = "settings";
+const ID_DND: &str = "dnd";
+const ID_RELOAD: &str = "reload";
+const ID_BACK: &str = "back";
+const ID_FORWARD: &str = "forward";
+const ID_ZOOM_IN: &str = "zoom-in";
+const ID_ZOOM_OUT: &str = "zoom-out";
+const ID_ZOOM_RESET: &str = "zoom-reset";
+const ID_OPEN_BROWSER: &str = "open-in-browser";
 /// Custom Quit items (app menu, tray): the predefined Quit sends `terminate:`, which ends the
 /// process without a `RunEvent::ExitRequested`, so pages would not be unloaded first.
-/// Handled by [`crate::graceful_quit`], not by [`menu_command`].
-pub const ID_QUIT: &str = "quit";
+/// Handled by [`graceful_quit`], not by [`menu_command`].
+const ID_QUIT: &str = "quit";
 /// Prefix of the account items (app menu "Accounts" and tray), followed by the account id.
-pub const ID_ACCOUNT: &str = "account:";
+const ID_ACCOUNT: &str = "account:";
 const TRAY_ID: &str = "atrium-tray";
+/// Accounts 1 to 9 get the shortcuts Cmd+1 to Cmd+9.
+const ACCOUNT_SHORTCUTS: usize = 9;
 
 /// Monochrome template image (black + alpha); macOS tints it for light/dark menu bars.
 const ABOUT_ICON: &[u8] = include_bytes!("../assets/about-icon.png");
@@ -36,13 +41,13 @@ const TRAY_ICON: &[u8] = include_bytes!("../assets/tray-icon.png");
 
 /// What a menu item does: optionally bring the main window to the front, then feed an input.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MenuCommand {
-    pub show_window: bool,
-    pub input: Option<Input>,
+struct MenuCommand {
+    show_window: bool,
+    input: Option<Input>,
 }
 
 /// Maps a menu item id to its command; None for ids we do not own (predefined items).
-pub fn menu_command(id: &str) -> Option<MenuCommand> {
+fn menu_command(id: &str) -> Option<MenuCommand> {
     let menu = |action| MenuCommand {
         show_window: false,
         input: Some(Input::Menu(action)),
@@ -74,45 +79,89 @@ pub fn menu_command(id: &str) -> Option<MenuCommand> {
     })
 }
 
-fn account_id(a: &MenuAccount) -> String {
-    format!("{ID_ACCOUNT}{}", a.id)
+/// Handles a click on an item of the app menu or the tray menu (main thread): quits for the
+/// Quit items, otherwise shows the window `window_label` if the item asks for it, then feeds
+/// the item's input.
+pub fn handle_menu_event<R: Runtime>(
+    app: &AppHandle<R>,
+    window_label: &str,
+    id: &str,
+    feed: &Feed,
+) {
+    if id == ID_QUIT {
+        graceful_quit(app);
+        return;
+    }
+    let Some(command) = menu_command(id) else {
+        return;
+    };
+    if command.show_window
+        && let Some(window) = app.get_window(window_label)
+    {
+        // Nothing sensible to do if the window cannot come to the front.
+        let _ = bring_to_front(&window);
+    }
+    if let Some(input) = command.input {
+        feed(input);
+    }
+}
+
+fn account_item_id(account: &MenuAccount) -> String {
+    format!("{ID_ACCOUNT}{}", account.id)
 }
 
 /// "Label (n)", or just the label without unread.
-pub fn tray_account_text(a: &MenuAccount) -> String {
-    if a.unread > 0 {
-        format!("{} ({})", a.label, a.unread)
+fn tray_account_text(account: &MenuAccount) -> String {
+    if account.unread > 0 {
+        format!("{} ({})", account.label, account.unread)
     } else {
-        a.label.clone()
+        account.label.clone()
     }
 }
 
 /// What the app menu shows: ids and labels of the enabled accounts.
-pub fn app_menu_key(m: &MenuModel) -> Vec<(Uuid, String)> {
-    m.accounts.iter().map(|a| (a.id, a.label.clone())).collect()
+fn app_menu_key(model: &MenuModel) -> Vec<(Uuid, String)> {
+    model
+        .accounts
+        .iter()
+        .map(|account| (account.id, account.label.clone()))
+        .collect()
 }
 
 /// What the tray menu shows: account texts and the DnD state.
-pub fn tray_menu_key(m: &MenuModel) -> (Vec<(Uuid, String)>, bool) {
+fn tray_menu_key(model: &MenuModel) -> (Vec<(Uuid, String)>, bool) {
     (
-        m.accounts
+        model
+            .accounts
             .iter()
-            .map(|a| (a.id, tray_account_text(a)))
+            .map(|account| (account.id, tray_account_text(account)))
             .collect(),
-        m.dnd,
+        model.dnd,
     )
 }
 
-pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<Menu<R>> {
-    let item = |id: &str, text: &str, accel: &str| {
-        MenuItemBuilder::with_id(id, text)
-            .accelerator(accel)
-            .build(app)
-    };
-    let about = AboutMetadataBuilder::new()
+/// Tray title (unread total); None when empty so no space is reserved.
+fn tray_title(model: &MenuModel) -> Option<String> {
+    Some(model.tray_title.clone()).filter(|title| !title.is_empty())
+}
+
+fn shortcut_item<R: Runtime>(
+    app: &AppHandle<R>,
+    id: &str,
+    text: &str,
+    shortcut: &str,
+) -> tauri::Result<MenuItem<R>> {
+    MenuItemBuilder::with_id(id, text)
+        .accelerator(shortcut)
+        .build(app)
+}
+
+fn about_metadata<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<AboutMetadata<'static>> {
+    let version = app.package_info().version.to_string();
+    Ok(AboutMetadataBuilder::new()
         .name(Some("Atrium"))
-        .version(Some(app.package_info().version.to_string()))
-        .short_version(Some(app.package_info().version.to_string()))
+        .version(Some(version.clone()))
+        .short_version(Some(version))
         .authors(Some(vec!["Dominik Fuchß".to_string()]))
         .comments(Some("All your messengers in one calm place."))
         .copyright(Some("© 2026 Dominik Fuchß"))
@@ -120,20 +169,31 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> taur
         .website(Some(protocol::PROJECT_URL))
         .website_label(Some("github.com/dfuchss/atrium"))
         .icon(Some(Image::from_bytes(ABOUT_ICON)?))
-        .build();
-    let app_menu = SubmenuBuilder::new(app, "Atrium")
-        .about(Some(about))
+        .build())
+}
+
+fn atrium_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    SubmenuBuilder::new(app, "Atrium")
+        .about(Some(about_metadata(app)?))
         .separator()
-        .item(&item(ID_SETTINGS, "Settings…", "CmdOrCtrl+,")?)
+        .item(&shortcut_item(
+            app,
+            ID_SETTINGS,
+            "Settings…",
+            "CmdOrCtrl+,",
+        )?)
         .separator()
         .hide()
         .hide_others()
         .show_all()
         .separator()
-        .item(&item(ID_QUIT, "Quit Atrium", "CmdOrCtrl+Q")?)
-        .build()?;
-    // Without an Edit menu, Cmd+C/V/X/A/Z do not reach the webviews on macOS.
-    let edit = SubmenuBuilder::new(app, "Edit")
+        .item(&shortcut_item(app, ID_QUIT, "Quit Atrium", "CmdOrCtrl+Q")?)
+        .build()
+}
+
+/// Without an Edit menu, Cmd+C/V/X/A/Z do not reach the webviews on macOS.
+fn edit_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    SubmenuBuilder::new(app, "Edit")
         .undo()
         .redo()
         .separator()
@@ -141,60 +201,84 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> taur
         .copy()
         .paste()
         .select_all()
-        .build()?;
-    let view = SubmenuBuilder::new(app, "View")
-        .item(&item(ID_RELOAD, "Reload", "CmdOrCtrl+R")?)
-        .item(&item(ID_BACK, "Back", "CmdOrCtrl+[")?)
-        .item(&item(ID_FORWARD, "Forward", "CmdOrCtrl+]")?)
+        .build()
+}
+
+fn view_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    SubmenuBuilder::new(app, "View")
+        .item(&shortcut_item(app, ID_RELOAD, "Reload", "CmdOrCtrl+R")?)
+        .item(&shortcut_item(app, ID_BACK, "Back", "CmdOrCtrl+[")?)
+        .item(&shortcut_item(app, ID_FORWARD, "Forward", "CmdOrCtrl+]")?)
         .separator()
-        .item(&item(ID_ZOOM_IN, "Zoom In", "CmdOrCtrl+=")?)
-        .item(&item(ID_ZOOM_OUT, "Zoom Out", "CmdOrCtrl+-")?)
-        .item(&item(ID_ZOOM_RESET, "Actual Size", "CmdOrCtrl+0")?)
+        .item(&shortcut_item(app, ID_ZOOM_IN, "Zoom In", "CmdOrCtrl+=")?)
+        .item(&shortcut_item(app, ID_ZOOM_OUT, "Zoom Out", "CmdOrCtrl+-")?)
+        .item(&shortcut_item(
+            app,
+            ID_ZOOM_RESET,
+            "Actual Size",
+            "CmdOrCtrl+0",
+        )?)
         .separator()
-        .item(&item(
+        .item(&shortcut_item(
+            app,
             ID_OPEN_BROWSER,
             "Open Page in Browser",
             "CmdOrCtrl+Shift+O",
         )?)
         .separator()
         .fullscreen()
-        .build()?;
-    let mut accounts = SubmenuBuilder::new(app, "Accounts");
-    for (i, a) in model.accounts.iter().enumerate() {
-        let mut b = MenuItemBuilder::with_id(account_id(a), &a.label);
-        if i < 9 {
-            b = b.accelerator(format!("CmdOrCtrl+{}", i + 1));
+        .build()
+}
+
+fn accounts_submenu<R: Runtime>(
+    app: &AppHandle<R>,
+    model: &MenuModel,
+) -> tauri::Result<Submenu<R>> {
+    let mut submenu = SubmenuBuilder::new(app, "Accounts");
+    for (index, account) in model.accounts.iter().enumerate() {
+        let mut item = MenuItemBuilder::with_id(account_item_id(account), &account.label);
+        if index < ACCOUNT_SHORTCUTS {
+            item = item.accelerator(format!("CmdOrCtrl+{}", index + 1));
         }
-        accounts = accounts.item(&b.build(app)?);
+        submenu = submenu.item(&item.build(app)?);
     }
     if model.accounts.is_empty() {
-        accounts = accounts.item(
+        submenu = submenu.item(
             &MenuItemBuilder::new("No accounts")
                 .enabled(false)
                 .build(app)?,
         );
     }
-    let accounts = accounts.build()?;
-    // Close = performClose: on the key window -> CloseRequested, so the main window follows
-    // close-to-background and popups simply close.
-    let window = SubmenuBuilder::new(app, "Window")
+    submenu.build()
+}
+
+/// Close = performClose: on the key window -> `CloseRequested`, so the main window follows
+/// close-to-background and popups simply close.
+fn window_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    SubmenuBuilder::new(app, "Window")
         .minimize()
         .close_window()
-        .build()?;
-    MenuBuilder::new(app)
-        .items(&[&app_menu, &edit, &view, &accounts, &window])
         .build()
 }
 
-pub fn build_tray_menu<R: Runtime>(
-    app: &AppHandle<R>,
-    model: &MenuModel,
-) -> tauri::Result<Menu<R>> {
+fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<Menu<R>> {
+    MenuBuilder::new(app)
+        .items(&[
+            &atrium_submenu(app)?,
+            &edit_submenu(app)?,
+            &view_submenu(app)?,
+            &accounts_submenu(app, model)?,
+            &window_submenu(app)?,
+        ])
+        .build()
+}
+
+fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<Menu<R>> {
     let mut menu = MenuBuilder::new(app)
         .text(ID_SHOW, "Show Atrium")
         .separator();
-    for a in &model.accounts {
-        menu = menu.text(account_id(a), tray_account_text(a));
+    for account in &model.accounts {
+        menu = menu.text(account_item_id(account), tray_account_text(account));
     }
     if !model.accounts.is_empty() {
         menu = menu.separator();
@@ -209,7 +293,7 @@ pub fn build_tray_menu<R: Runtime>(
         .build()
 }
 
-pub fn build_tray<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<TrayIcon<R>> {
+fn build_tray<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<TrayIcon<R>> {
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(TRAY_ICON)?)
         .icon_as_template(true)
@@ -219,15 +303,10 @@ pub fn build_tray<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::R
         .build(app)
 }
 
-/// Tray title (unread total); None when empty so no space is reserved.
-pub fn tray_title(model: &MenuModel) -> Option<String> {
-    Some(model.tray_title.clone()).filter(|t| !t.is_empty())
-}
-
 /// Live native menu state kept by the host.
 pub(crate) struct MenuState<R: Runtime> {
-    pub last: Option<MenuModel>,
-    pub tray: Option<TrayIcon<R>>,
+    last: Option<MenuModel>,
+    tray: Option<TrayIcon<R>>,
 }
 
 impl<R: Runtime> Default for MenuState<R> {
@@ -241,13 +320,26 @@ impl<R: Runtime> Default for MenuState<R> {
 
 impl<R: Runtime> MenuState<R> {
     /// Applies `model`, rebuilding only what changed.
-    pub fn apply(&mut self, app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<()> {
+    pub(crate) fn apply(&mut self, app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<()> {
         let last = self.last.take();
-        let changed =
-            |key: &dyn Fn(&MenuModel) -> String| last.as_ref().is_none_or(|l| key(l) != key(model));
-        if changed(&|m| format!("{:?}", app_menu_key(m))) {
+        if last
+            .as_ref()
+            .is_none_or(|last| app_menu_key(last) != app_menu_key(model))
+        {
             app.set_menu(build_app_menu(app, model)?)?;
         }
+        self.apply_tray(app, last.as_ref(), model)?;
+        self.last = Some(model.clone());
+        Ok(())
+    }
+
+    /// Creates, shows, updates or hides the tray icon.
+    fn apply_tray(
+        &mut self,
+        app: &AppHandle<R>,
+        last: Option<&MenuModel>,
+        model: &MenuModel,
+    ) -> tauri::Result<()> {
         match (&self.tray, model.show_tray) {
             (None, true) => {
                 let tray = build_tray(app, model)?;
@@ -255,21 +347,20 @@ impl<R: Runtime> MenuState<R> {
                 self.tray = Some(tray);
             }
             (Some(tray), true) => {
-                let was_visible = last.as_ref().is_some_and(|l| l.show_tray);
-                if !was_visible {
+                let shown_before = last.filter(|last| last.show_tray);
+                if shown_before.is_none() {
                     tray.set_visible(true)?;
                 }
-                if !was_visible || changed(&|m| format!("{:?}", tray_menu_key(m))) {
+                if shown_before.is_none_or(|last| tray_menu_key(last) != tray_menu_key(model)) {
                     tray.set_menu(Some(build_tray_menu(app, model)?))?;
                 }
-                if !was_visible || changed(&|m| m.tray_title.clone()) {
+                if shown_before.is_none_or(|last| last.tray_title != model.tray_title) {
                     tray.set_title(tray_title(model))?;
                 }
             }
             (Some(tray), false) => tray.set_visible(false)?,
             (None, false) => {}
         }
-        self.last = Some(model.clone());
         Ok(())
     }
 }
@@ -298,9 +389,9 @@ mod tests {
     #[test]
     fn menu_ids_map_to_inputs() {
         let id = Uuid::from_u128(7);
-        let a = &model(0, false).accounts[0];
+        let account = &model(0, false).accounts[0];
         assert_eq!(
-            menu_command(&account_id(a)),
+            menu_command(&account_item_id(account)),
             Some(MenuCommand {
                 show_window: true,
                 input: Some(Input::Ui(UiCommand::Select { account: id }))

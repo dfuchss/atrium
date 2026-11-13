@@ -8,8 +8,8 @@ use domain::{Catalog, ServiceDef};
 const README: &str = include_str!("../assets/services-README.md");
 const EXAMPLE: &str = include_str!("../assets/example.toml.disabled");
 
-pub const README_NAME: &str = "README.md";
-pub const EXAMPLE_NAME: &str = "example.toml.disabled";
+const README_NAME: &str = "README.md";
+const EXAMPLE_NAME: &str = "example.toml.disabled";
 
 /// Reads all `*.toml` files of `dir` (sorted by name, so later names win) and parses them.
 /// A missing folder is not an error; unreadable files are reported.

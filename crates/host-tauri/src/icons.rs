@@ -7,16 +7,16 @@ use base64::engine::general_purpose::STANDARD;
 use domain::core::{SimpleIconResult, simple_icon_url};
 
 /// Larger responses are rejected.
-pub const MAX_ICON_BYTES: u64 = 512 * 1024;
+pub(crate) const MAX_ICON_BYTES: u64 = 512 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Downloads `url` and returns it as `data:<mime>;base64,...`; only `image/*` responses.
-pub fn download_icon(url: &str) -> Result<String, String> {
+pub(crate) fn download_icon(url: &str) -> Result<String, String> {
     download(url).map_err(|e| e.to_string())
 }
 
 /// Downloads the Simple Icons glyph `slug` (white SVG).
-pub fn download_simple_icon(slug: &str) -> SimpleIconResult {
+pub(crate) fn download_simple_icon(slug: &str) -> SimpleIconResult {
     match download(&simple_icon_url(slug)) {
         Ok(d) => SimpleIconResult::Found(d),
         Err(ureq::Error::StatusCode(404)) => SimpleIconResult::NotFound,
@@ -50,7 +50,7 @@ fn download(url: &str) -> Result<String, ureq::Error> {
 }
 
 /// The MIME type of an `image/*` content type (parameters dropped, lowercased).
-pub fn image_mime(content_type: Option<&str>) -> Result<String, String> {
+pub(crate) fn image_mime(content_type: Option<&str>) -> Result<String, String> {
     let mime = content_type
         .unwrap_or("")
         .split(';')
@@ -65,7 +65,7 @@ pub fn image_mime(content_type: Option<&str>) -> Result<String, String> {
     }
 }
 
-pub fn data_url(mime: &str, bytes: &[u8]) -> String {
+pub(crate) fn data_url(mime: &str, bytes: &[u8]) -> String {
     format!("data:{mime};base64,{}", STANDARD.encode(bytes))
 }
 

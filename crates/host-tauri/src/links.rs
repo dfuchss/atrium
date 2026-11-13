@@ -27,14 +27,14 @@ use uuid::Uuid;
 use crate::{Feed, Logger};
 
 /// Size of windows opened for `LinkTarget::AppWindow`.
-pub const APP_WINDOW_SIZE: (f64, f64) = (1100.0, 800.0);
+pub(crate) const APP_WINDOW_SIZE: (f64, f64) = (1100.0, 800.0);
 
 /// Effective view policy per account, written by the actor (`set_view_policy`), read in the
 /// new-window and permission callbacks. Missing entry = system browser, no media.
-pub type ViewPolicies = Arc<Mutex<HashMap<Uuid, ViewPolicy>>>;
+pub(crate) type ViewPolicies = Arc<Mutex<HashMap<Uuid, ViewPolicy>>>;
 
 /// Current policy of `account` (default: system browser, media denied).
-pub fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
+pub(crate) fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
     policies
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -52,13 +52,13 @@ pub fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
 const CLOSE_HOOK: &str = "(()=>{if(window.__msgrCloseHook)return;window.__msgrCloseHook=1;const c=window.close.bind(window);window.close=function(){window.__msgrClosed=true;try{c()}catch(e){}};})();";
 
 /// Label of an in-app window opened by `account`'s view.
-pub fn popup_label(account: Uuid, n: u64) -> String {
-    format!("popup-{}-{n}", account.simple())
+pub(crate) fn popup_label(account: Uuid, number: u64) -> String {
+    format!("popup-{}-{number}", account.simple())
 }
 
 /// Camera, microphone and screen capture are granted only with `allow_media`, else denied;
 /// everything else gets the engine's default handling.
-pub fn permission_response(kind: &PermissionKind, allow_media: bool) -> PermissionResponse {
+pub(crate) fn permission_response(kind: &PermissionKind, allow_media: bool) -> PermissionResponse {
     match kind {
         PermissionKind::Camera | PermissionKind::Microphone | PermissionKind::DisplayCapture => {
             if allow_media {
@@ -114,17 +114,18 @@ pub(crate) fn permission_hook<R: Runtime>(
     }
 }
 
+/// New-window decisions of one account's view and of the windows it opens.
 pub(crate) struct LinkPolicy<R: Runtime> {
-    pub app: AppHandle<R>,
-    pub spec: Arc<ViewSpec>,
-    pub policies: ViewPolicies,
-    pub counter: Arc<AtomicU64>,
-    pub feed: Feed,
-    pub logger: Logger,
+    pub(crate) app: AppHandle<R>,
+    pub(crate) spec: Arc<ViewSpec>,
+    pub(crate) policies: ViewPolicies,
+    pub(crate) popup_counter: Arc<AtomicU64>,
+    pub(crate) feed: Feed,
+    pub(crate) logger: Logger,
 }
 
 impl<R: Runtime> LinkPolicy<R> {
-    pub fn on_new_window(
+    pub(crate) fn on_new_window(
         self: &Arc<Self>,
         url: Url,
         features: NewWindowFeatures,
@@ -143,7 +144,7 @@ impl<R: Runtime> LinkPolicy<R> {
             return self.open_window(url, features, None);
         }
         let policy = policy_of(&self.policies, account);
-        if url.host_str().is_some_and(|h| policy.is_app_host(h)) {
+        if url.host_str().is_some_and(|host| policy.is_app_host(host)) {
             self.logger.log(&format!(
                 "[{account}] new window {url} ({kind}) -> app window (app host)"
             ));
@@ -178,8 +179,11 @@ impl<R: Runtime> LinkPolicy<R> {
         size: Option<(f64, f64)>,
     ) -> NewWindowResponse<R> {
         let account = self.spec.account;
-        let label = popup_label(account, self.counter.fetch_add(1, Ordering::Relaxed) + 1);
-        let policy = self.clone();
+        let label = popup_label(
+            account,
+            self.popup_counter.fetch_add(1, Ordering::Relaxed) + 1,
+        );
+        let popup_policy = self.clone();
         let blank = Url::parse("about:blank").expect("valid URL");
         let mut builder = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(blank))
             // Requested size/position and, on macOS, the opener's WKWebViewConfiguration, which
@@ -188,7 +192,7 @@ impl<R: Runtime> LinkPolicy<R> {
             .data_store_identifier(self.spec.store_id)
             .title(url.as_str())
             .initialization_script(CLOSE_HOOK)
-            .on_new_window(move |url, features| policy.on_new_window(url, features))
+            .on_new_window(move |url, features| popup_policy.on_new_window(url, features))
             .on_document_title_changed(|window, title| {
                 let _ = window.set_title(&title);
             })
@@ -206,19 +210,20 @@ impl<R: Runtime> LinkPolicy<R> {
         if let Some((width, height)) = size {
             builder = builder.inner_size(width, height).center();
         }
-        if let Some(ua) = &self.spec.user_agent {
-            builder = builder.user_agent(ua);
+        if let Some(user_agent) = &self.spec.user_agent {
+            builder = builder.user_agent(user_agent);
         }
         match builder.build() {
             Ok(window) => {
                 self.logger
                     .log(&format!("[{account}] opened window {label} for {url}"));
-                watch_close(self.app.clone(), label);
+                watch_close(self.app.clone(), label, self.logger.clone());
                 NewWindowResponse::Create { window }
             }
-            Err(e) => {
-                self.logger
-                    .log(&format!("[{account}] cannot open window for {url}: {e}"));
+            Err(error) => {
+                self.logger.log(&format!(
+                    "[{account}] cannot open window for {url}: {error}"
+                ));
                 NewWindowResponse::Deny
             }
         }
@@ -227,7 +232,7 @@ impl<R: Runtime> LinkPolicy<R> {
 
 /// Closes the window `label` once its page called `window.close()` (see [`CLOSE_HOOK`]);
 /// ends when the window is gone.
-fn watch_close<R: Runtime>(app: AppHandle<R>, label: String) {
+fn watch_close<R: Runtime>(app: AppHandle<R>, label: String, logger: Logger) {
     let spawned = std::thread::Builder::new()
         .name(format!("watch-{label}"))
         .spawn(move || {
@@ -244,8 +249,8 @@ fn watch_close<R: Runtime>(app: AppHandle<R>, label: String) {
                 });
             }
         });
-    if let Err(e) = spawned {
-        eprintln!("cannot watch {e}");
+    if let Err(error) = spawned {
+        logger.log(&format!("cannot watch window for window.close(): {error}"));
     }
 }
 

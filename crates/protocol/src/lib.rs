@@ -267,6 +267,10 @@ pub struct AccountSettings {
     /// None = the service default (`allow_media` in the service definition; on for call apps).
     #[serde(default)]
     pub allow_media: Option<bool>,
+    /// Hosts (exact or `*.domain`) whose new-window requests always open as in-app window,
+    /// whatever the link target. Normalised by the core on update.
+    #[serde(default)]
+    pub app_hosts: Vec<String>,
 }
 
 fn yes() -> bool {

@@ -181,6 +181,49 @@ pub(crate) fn normalize_team(team: &str) -> String {
     t.trim_end_matches('/').to_string()
 }
 
+/// Normalises the "always open in the app" host list: trim, lowercase, strip scheme, credentials,
+/// port and path of pasted URLs, drop empty entries and duplicates. Returns the valid patterns
+/// and the rejected raw entries (not a plausible host or `*.host` pattern).
+pub fn normalize_app_hosts(raw: &[String]) -> (Vec<String>, Vec<String>) {
+    let (mut hosts, mut rejected) = (Vec::<String>::new(), Vec::new());
+    for entry in raw {
+        let mut s = entry.trim().to_ascii_lowercase();
+        if let Some((_, rest)) = s.split_once("://") {
+            s = rest.to_string();
+        }
+        let end = s.find(['/', '?', '#']).unwrap_or(s.len());
+        s.truncate(end);
+        if let Some((_, host)) = s.rsplit_once('@') {
+            s = host.to_string();
+        }
+        if let Some((host, port)) = s.rsplit_once(':')
+            && port.chars().all(|c| c.is_ascii_digit())
+        {
+            s = host.to_string();
+        }
+        if s.is_empty() {
+            if !entry.trim().is_empty() && entry.contains("://") {
+                rejected.push(entry.trim().to_string());
+            }
+            continue;
+        }
+        let base = s.strip_prefix("*.").unwrap_or(&s);
+        let plausible = !base.is_empty()
+            && !base.starts_with(['.', '-'])
+            && !base.ends_with(['.', '-'])
+            && !base.contains("..")
+            && base
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.');
+        if !plausible {
+            rejected.push(entry.trim().to_string());
+        } else if !hosts.contains(&s) {
+            hosts.push(s);
+        }
+    }
+    (hosts, rejected)
+}
+
 fn matches_host(pattern: &str, host: &str) -> bool {
     let pattern = pattern.to_ascii_lowercase();
     match pattern.strip_prefix("*.") {
@@ -368,7 +411,9 @@ pub fn resolve_user_agent_preset(preset: Option<&str>) -> Option<String> {
     }
 }
 
-pub(crate) fn host_matches_any(patterns: &[String], host: &str) -> bool {
+/// True if `host` matches one of `patterns` (exact host or `*.domain`, which also matches the
+/// domain itself; case-insensitive).
+pub fn host_matches_any(patterns: &[String], host: &str) -> bool {
     let host = host.to_ascii_lowercase();
     patterns.iter().any(|p| matches_host(p, &host))
 }
@@ -547,6 +592,32 @@ mod tests {
             custom_service_id("a", |id| taken.contains(&id)),
             "custom-a-3"
         );
+    }
+
+    #[test]
+    fn app_host_normalisation() {
+        let (hosts, rejected) = normalize_app_hosts(&[
+            "  IdP.Example.org ".into(),
+            "https://user:pw@login.example.com:8443/path?q=1".into(),
+            "*.MicrosoftOnline.com".into(),
+            "idp.example.org".into(),
+            "".into(),
+            "   ".into(),
+            "bad host".into(),
+            "a*b.com".into(),
+            "**.x.com".into(),
+            "*.".into(),
+            "http://".into(),
+        ]);
+        assert_eq!(
+            hosts,
+            vec![
+                "idp.example.org",
+                "login.example.com",
+                "*.microsoftonline.com"
+            ]
+        );
+        assert_eq!(rejected.len(), 5, "{rejected:?}");
     }
 
     #[test]

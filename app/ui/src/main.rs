@@ -55,6 +55,7 @@ fn demo_snapshot() -> Snapshot {
                 hibernate_after_min: None,
                 custom_css: None,
                 allow_media: None,
+                app_hosts: vec![],
             },
         }
     };
@@ -1364,6 +1365,7 @@ fn EditForm(
             .unwrap_or_default(),
     );
     let css = RwSignal::new(s.custom_css.unwrap_or_default());
+    let app_hosts = RwSignal::new(s.app_hosts.join("\n"));
     let media = RwSignal::new(match s.allow_media {
         None => "",
         Some(true) => "allow",
@@ -1421,6 +1423,12 @@ fn EditForm(
                     "block" => Some(false),
                     _ => None,
                 },
+                app_hosts: app_hosts
+                    .get_untracked()
+                    .lines()
+                    .map(|h| h.trim().to_string())
+                    .filter(|h| !h.is_empty())
+                    .collect(),
             },
         });
         editing.set(None);
@@ -1532,6 +1540,10 @@ fn EditForm(
                         prop:value=move || ua_custom.get() on:input=move |e| ua_custom.set(event_target_value(&e)) use:noac />
                 </Row>
             })}
+            <Row label="Always open in the app" hint="Links that open a new window to these hosts open inside the app with this account's login (e.g. a single-sign-on provider such as idp.example.org, or *.microsoftonline.com). Redirects within the page always stay in the app.">
+                <textarea class="mono" rows="3" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="one host per line"
+                    prop:value=move || app_hosts.get() on:input=move |e| app_hosts.set(event_target_value(&e)) use:noac ></textarea>
+            </Row>
             <Row label="Custom CSS" hint="Injected into every page; changing it reloads the account.">
                 <textarea class="mono" rows="6" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="/* injected into every page */"
                     prop:value=move || css.get() on:input=move |e| css.set(event_target_value(&e)) use:noac ></textarea>

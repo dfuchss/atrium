@@ -58,6 +58,9 @@ pub struct Account {
     /// Cached white glyph of `simple_icon` as `data:image/svg+xml` URL; cleared when the slug changes.
     #[serde(default)]
     pub simple_icon_data: Option<String>,
+    /// Hosts whose new windows always open in the app (normalised).
+    #[serde(default)]
+    pub app_hosts: Vec<String>,
 }
 
 fn yes() -> bool {
@@ -95,6 +98,7 @@ impl Account {
             allow_media: None,
             simple_icon: None,
             simple_icon_data: None,
+            app_hosts: Vec::new(),
         }
     }
 
@@ -120,6 +124,7 @@ impl Account {
             custom_css: self.custom_css.clone(),
             allow_media: self.allow_media,
             simple_icon: self.simple_icon.clone(),
+            app_hosts: self.app_hosts.clone(),
         }
     }
 }
@@ -179,6 +184,7 @@ mod tests {
         );
         assert!(p.custom_services.is_empty());
         assert_eq!(a.allow_media, None);
+        assert!(a.app_hosts.is_empty());
         assert_eq!(
             (a.simple_icon.as_deref(), a.simple_icon_data.as_deref()),
             (None, None)
@@ -212,6 +218,7 @@ mod tests {
         a.hibernate_after_min = Some(10);
         a.custom_css = Some("body{color:red}".into());
         a.favicon = Some("data:image/png;base64,AA==".into());
+        a.app_hosts = vec!["*.example.org".into()];
         a.simple_icon = Some("discord".into());
         a.simple_icon_data = Some("data:image/svg+xml;base64,AA==".into());
         p.custom_services.push(CustomService {

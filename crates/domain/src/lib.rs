@@ -12,6 +12,7 @@ pub mod runtime;
 pub mod security;
 
 pub use crate::catalog::{Catalog, CatalogError, ServiceDef, UnreadRules};
+pub use crate::catalog::{host_matches_any, normalize_app_hosts};
 pub use crate::core::{
     Bounds, Core, DockBadge, Effect, ICON_SCRIPT, Input, MenuAccount, MenuAction, MenuModel,
     NotificationReq, ViewPolicy, ViewSpec, WAKE_GAP_MS, ZOOM_STEPS,

@@ -3,6 +3,7 @@
 //! The decision is synchronous inside wry's new-window callback (main thread):
 //! - `window.open` with an explicit size (`NewWindowFeatures::size()`) is a sign-in popup
 //!   (OAuth/SSO): always an in-app window, so `window.opener` and `postMessage` keep working.
+//! - A URL whose host is in the account's `app_hosts` also opens as in-app window.
 //! - Anything else follows the account's [`LinkTarget`]: the system browser
 //!   (`Deny` + [`Input::ExternalLink`]) or an in-app window of 1100x800.
 //!
@@ -38,10 +39,11 @@ pub fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .get(&account)
-        .copied()
+        .cloned()
         .unwrap_or(ViewPolicy {
             link_target: LinkTarget::SystemBrowser,
             allow_media: false,
+            app_hosts: Vec::new(),
         })
 }
 
@@ -140,7 +142,14 @@ impl<R: Runtime> LinkPolicy<R> {
             ));
             return self.open_window(url, features, None);
         }
-        match policy_of(&self.policies, account).link_target {
+        let policy = policy_of(&self.policies, account);
+        if url.host_str().is_some_and(|h| policy.is_app_host(h)) {
+            self.logger.log(&format!(
+                "[{account}] new window {url} ({kind}) -> app window (app host)"
+            ));
+            return self.open_window(url, features, Some(APP_WINDOW_SIZE));
+        }
+        match policy.link_target {
             LinkTarget::SystemBrowser => {
                 self.logger.log(&format!(
                     "[{account}] new window {url} ({kind}) -> system browser"
@@ -279,14 +288,16 @@ mod tests {
             policy_of(&policies, id),
             ViewPolicy {
                 link_target: LinkTarget::SystemBrowser,
-                allow_media: false
+                allow_media: false,
+                app_hosts: vec![]
             }
         );
         let set = ViewPolicy {
             link_target: LinkTarget::AppWindow,
             allow_media: true,
+            app_hosts: vec!["*.sso.example".into()],
         };
-        policies.lock().unwrap().insert(id, set);
+        policies.lock().unwrap().insert(id, set.clone());
         assert_eq!(policy_of(&policies, id), set);
     }
 }

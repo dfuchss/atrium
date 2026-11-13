@@ -73,12 +73,21 @@ pub enum DockBadge {
 
 /// Per-account decisions the adapter must take synchronously inside native callbacks
 /// (new-window requests, permission requests), so it keeps the latest value per account.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewPolicy {
     /// Where non-popup new windows go.
     pub link_target: LinkTarget,
     /// Grant camera/microphone/screen capture; otherwise such requests are denied.
     pub allow_media: bool,
+    /// Hosts (exact or `*.domain`) whose new windows always open in the app.
+    pub app_hosts: Vec<String>,
+}
+
+impl ViewPolicy {
+    /// True if a new window to `host` must open in the app, whatever the link target.
+    pub fn is_app_host(&self, host: &str) -> bool {
+        crate::catalog::host_matches_any(&self.app_hosts, host)
+    }
 }
 
 /// Native menu commands that act on the active account (or the app).
@@ -733,6 +742,7 @@ impl Core {
         ViewPolicy {
             link_target: acc.link_target.unwrap_or(self.settings().link_target),
             allow_media: acc.allow_media.unwrap_or(service_media),
+            app_hosts: acc.app_hosts.clone(),
         }
     }
 
@@ -1215,6 +1225,7 @@ impl Core {
         let user_agent = trimmed(settings.user_agent);
         let custom_css = settings.custom_css.filter(|c| !c.trim().is_empty());
         let zoom = sanitize_zoom(settings.zoom);
+        let (app_hosts, rejected_hosts) = crate::catalog::normalize_app_hosts(&settings.app_hosts);
         let recreate =
             acc.team != team || acc.user_agent != user_agent || acc.custom_css != custom_css;
         let (was_enabled, old_policy, old_zoom) = (acc.enabled, self.view_policy(acc), acc.zoom);
@@ -1243,6 +1254,7 @@ impl Core {
         acc.hibernate_after_min = settings.hibernate_after_min;
         acc.custom_css = custom_css;
         acc.allow_media = settings.allow_media;
+        acc.app_hosts = app_hosts;
         let new_policy = self.view_policy(self.account(a).expect("checked above"));
 
         let mut fx = vec![];
@@ -1285,6 +1297,11 @@ impl Core {
             }
         }
         fx.extend(slug_fx);
+        for r in rejected_hosts {
+            fx.push(Effect::Log(format!(
+                "update account {a}: ignoring invalid app host {r:?}"
+            )));
+        }
         if slug_changed
             && self.started
             && let Some(slug) = slug
@@ -2494,6 +2511,7 @@ mod tests {
             hibernate_after_min: None,
             custom_css: None,
             allow_media: None,
+            app_hosts: vec![],
         };
         assert_eq!(s.accounts[0].settings, expected);
     }
@@ -2880,6 +2898,7 @@ mod tests {
         ViewPolicy {
             link_target,
             allow_media,
+            app_hosts: vec![],
         }
     }
 
@@ -2887,12 +2906,63 @@ mod tests {
         fx.iter()
             .filter_map(|e| {
                 if let Effect::SetViewPolicy { account, policy } = e {
-                    Some((*account, *policy))
+                    Some((*account, policy.clone()))
                 } else {
                     None
                 }
             })
             .collect()
+    }
+
+    #[test]
+    fn app_hosts_normalised_and_policy_updated_live() {
+        let (mut c, _) = started(vec![acc(1, "slack", "A")]);
+        let fx = update_account(&mut c, 1, |s| {
+            s.app_hosts = vec![
+                " HTTPS://IdP.Example.org:443/login ".into(),
+                "idp.example.org".into(),
+                "*.microsoftonline.com".into(),
+                "no good".into(),
+            ]
+        });
+        let want = vec![
+            "idp.example.org".to_string(),
+            "*.microsoftonline.com".into(),
+        ];
+        let got = policies(&fx);
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].1.app_hosts, want);
+        assert!(
+            !fx.iter()
+                .any(|e| matches!(e, Effect::Destroy(_) | Effect::CreateView { .. }))
+        );
+        assert!(
+            fx.iter()
+                .any(|e| matches!(e, Effect::Log(m) if m.contains("no good")))
+        );
+        assert!(
+            fx.iter()
+                .any(|e| matches!(e, Effect::Persist(p) if p.accounts[0].app_hosts == want))
+        );
+        assert_eq!(snap(&fx).accounts[0].settings.app_hosts, want);
+        // same list again -> no policy effect
+        let fx = update_account(&mut c, 1, |s| s.app_hosts = want.clone());
+        assert!(policies(&fx).is_empty());
+    }
+
+    #[test]
+    fn view_policy_app_host_matching() {
+        let p = ViewPolicy {
+            app_hosts: vec!["idp.example.org".into(), "*.ms.com".into()],
+            ..pol(LinkTarget::SystemBrowser, false)
+        };
+        assert!(p.is_app_host("idp.example.org"));
+        assert!(p.is_app_host("IDP.example.org"));
+        assert!(!p.is_app_host("x.idp.example.org"));
+        assert!(p.is_app_host("ms.com"));
+        assert!(p.is_app_host("login.ms.com"));
+        assert!(!p.is_app_host("notms.com"));
+        assert!(!pol(LinkTarget::AppWindow, false).is_app_host("ms.com"));
     }
 
     #[test]

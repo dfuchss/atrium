@@ -17,6 +17,7 @@ First release.
 - Built-in services for Element / Matrix, Slack, Discord, Rainbow, LinkedIn and Mastodon
 - Custom services created in the settings
 - Element starts reliably after a restart instead of getting stuck on a stale session lock
+- Built-in services for WhatsApp, Microsoft Teams and Bluesky
 - Per-account zoom, user agent, custom CSS, site icon, camera and microphone permission, and enable/disable
 - Reorder accounts by drag and drop, choose the icon size, pick a Simple Icons glyph, and let inactive services sleep to free memory
 - Open and reload the services folder from the settings; sleeping services show a grayscale icon

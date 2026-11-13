@@ -40,6 +40,9 @@ pub const BUILTIN_TOML: &[(&str, &str)] = &[
     ("mastodon", include_str!("../../../services/mastodon.toml")),
     ("discord", include_str!("../../../services/discord.toml")),
     ("rainbow", include_str!("../../../services/rainbow.toml")),
+    ("whatsapp", include_str!("../../../services/whatsapp.toml")),
+    ("teams", include_str!("../../../services/teams.toml")),
+    ("bluesky", include_str!("../../../services/bluesky.toml")),
 ];
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

@@ -1,0 +1,12 @@
+id = "teams"
+name = "Microsoft Teams"
+color = "#5059C9"
+url = "https://teams.microsoft.com/v2/"
+# Teams rejects WKWebView's default UA; it supports desktop Safari.
+user_agent = "safari"
+internal_hosts = ["teams.microsoft.com", "*.teams.microsoft.com", "teams.cloud.microsoft", "*.cloud.microsoft", "login.microsoftonline.com", "*.office.com", "*.office.net", "*.sharepoint.com", "*.live.com"]
+allow_media = true
+
+[unread]
+# Teams prefixes the title with the unread count, e.g. "(3) Chat | Microsoft Teams" (to verify)
+title_regex = '^\((\d+)\)'

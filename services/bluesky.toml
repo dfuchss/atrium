@@ -1,0 +1,10 @@
+id = "bluesky"
+name = "Bluesky"
+color = "#1185FE"
+url = "https://bsky.app/"
+user_agent = "safari"
+internal_hosts = ["bsky.app", "*.bsky.app", "*.bsky.social", "*.bsky.network"]
+
+[unread]
+# Bluesky shows unread notifications/messages in the title, e.g. "(2) Bluesky" (to verify)
+title_regex = '^\((\d+)\)'

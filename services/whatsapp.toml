@@ -1,0 +1,11 @@
+id = "whatsapp"
+name = "WhatsApp"
+color = "#25D366"
+url = "https://web.whatsapp.com/"
+user_agent = "safari"
+internal_hosts = ["web.whatsapp.com", "*.whatsapp.com", "*.whatsapp.net"]
+allow_media = true
+
+[unread]
+# WhatsApp Web shows the number of unread chats in the title, e.g. "(3) WhatsApp"
+title_regex = '^\((\d+)\)'

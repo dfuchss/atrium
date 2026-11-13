@@ -13,6 +13,8 @@ pub const CMD_UI_COMMAND: &str = "ui_command";
 pub const CMD_GET_SNAPSHOT: &str = "get_snapshot";
 pub const EVENT_SNAPSHOT: &str = "snapshot";
 /// Label of the local sidebar webview.
+/// Project page (repository) of Atrium.
+pub const PROJECT_URL: &str = "https://github.com/dfuchss/atrium";
 pub const UI_WEBVIEW: &str = "ui";
 /// Width of the sidebar at the largest icon size (logical px). The actual width depends on
 /// [`AppSettings::icon_size`], see [`IconSize::sidebar_width`].
@@ -133,6 +135,8 @@ pub enum UiCommand {
     OpenServicesFolder,
     /// Expert mode: re-read the TOML files in `<config>/services/` without a restart.
     ReloadServices,
+    /// About tab: open [`PROJECT_URL`] in the browser.
+    OpenProjectPage,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

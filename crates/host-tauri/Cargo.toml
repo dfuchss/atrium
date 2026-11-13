@@ -1,9 +1,11 @@
 [package]
 name = "host-tauri"
-description = "Tauri adapter: implements the domain ports (webviews, notifications, platform, UI sink) on Tauri 2."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
 
 [dependencies]
 domain.workspace = true

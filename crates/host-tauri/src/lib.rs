@@ -68,7 +68,7 @@ struct Notifications {
     targets: HashMap<i32, (Uuid, u64)>,
 }
 
-/// Timestamped logging to stdout and `<app_log_dir>/messengers.log`.
+/// Timestamped logging to stdout and `<app_log_dir>/atrium.log`.
 #[derive(Clone)]
 pub(crate) struct Logger {
     file: Option<Arc<PathBuf>>,
@@ -78,7 +78,7 @@ impl Logger {
     fn new<R: Runtime>(app: &AppHandle<R>) -> Logger {
         let file = app.path().app_log_dir().ok().and_then(|dir| {
             std::fs::create_dir_all(&dir).ok()?;
-            Some(Arc::new(dir.join("messengers.log")))
+            Some(Arc::new(dir.join("atrium.log")))
         });
         Logger { file }
     }
@@ -167,7 +167,7 @@ impl<R: Runtime> TauriHost<R> {
             .map_err(port_err)
     }
 
-    /// File the host logger appends to (`<app_log_dir>/messengers.log`), if available.
+    /// File the host logger appends to (`<app_log_dir>/atrium.log`), if available.
     pub fn log_file(&self) -> Option<PathBuf> {
         self.logger.file.as_deref().cloned()
     }

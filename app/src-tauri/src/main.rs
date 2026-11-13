@@ -135,7 +135,7 @@ fn main() {
             // that decide how the window is created.
             let host = TauriHost::new(app.handle().clone(), MAIN_WINDOW, feed.clone());
             let version = app.package_info().version.to_string();
-            host.log(&format!("---- messengers {version} starting ----"));
+            host.log(&format!("---- Atrium {version} starting ----"));
             let config_dir = app.path().app_config_dir()?;
             let store = FsStore::new(config_dir.clone());
             let persisted = load_persisted(&store, &host);
@@ -153,7 +153,7 @@ fn main() {
             // sidebar color) instead of a lighter strip. Not Overlay: the content view stays
             // below the title bar, so the services' top-edge controls keep working.
             let window = WindowBuilder::new(app, MAIN_WINDOW)
-                .title("Messengers")
+                .title("Atrium")
                 .title_bar_style(TitleBarStyle::Transparent)
                 .hidden_title(true)
                 .inner_size(1280.0, 800.0)
@@ -259,7 +259,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error while building messengers");
+        .expect("error while building Atrium");
     app.run(|app, event| match event {
         // Dock icon click: bring a hidden (closed to background / started hidden) window back.
         RunEvent::Reopen { .. } => show_main_window(app),

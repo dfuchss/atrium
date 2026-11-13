@@ -1080,6 +1080,10 @@ impl Core {
             UiCommand::RemoveCustomService { id } => self.remove_custom_service(&id),
             UiCommand::OpenServicesFolder => vec![Effect::OpenServicesFolder],
             UiCommand::ReloadServices => vec![Effect::LoadServices],
+            UiCommand::OpenProjectPage => vec![Effect::OpenExternal {
+                url: protocol::PROJECT_URL.into(),
+                browser: self.settings().browser.clone(),
+            }],
         }
     }
 
@@ -3091,6 +3095,18 @@ mod tests {
                 .find(|x| x.id == "custom-site")
                 .unwrap()
                 .allow_media
+        );
+    }
+
+    #[test]
+    fn open_project_page_opens_the_repository() {
+        let (mut c, _) = started(vec![]);
+        assert_eq!(
+            c.handle(Input::Ui(UiCommand::OpenProjectPage)),
+            vec![Effect::OpenExternal {
+                url: protocol::PROJECT_URL.into(),
+                browser: None
+            }]
         );
     }
 

@@ -1,9 +1,11 @@
 [package]
 name = "domain"
-description = "Pure core of the messenger aggregator: catalog, state reducer, port traits. No Tauri, no IO."
 edition.workspace = true
 version.workspace = true
 license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
 
 [dependencies]
 protocol.workspace = true

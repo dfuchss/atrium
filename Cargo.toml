@@ -9,6 +9,9 @@ exclude = ["spikes"]
 edition = "2024"
 version = "0.1.0"
 license = "GPL-3.0-or-later"
+repository = "https://github.com/dfuchss/atrium"
+authors = ["Dominik Fuchß"]
+description = "A lightweight messenger aggregator for macOS, built with Rust and Tauri"
 
 [workspace.dependencies]
 protocol = { path = "crates/protocol" }

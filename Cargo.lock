@@ -225,6 +225,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "atrium"
+version = "0.1.0"
+dependencies = [
+ "domain",
+ "host-tauri",
+ "protocol",
+ "store-fs",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "uuid",
+]
+
+[[package]]
+name = "atrium-ui"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "leptos",
+ "protocol",
+ "serde",
+ "serde-wasm-bindgen",
+ "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "attribute-derive"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2598,37 +2629,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "messengers"
-version = "0.1.0"
-dependencies = [
- "domain",
- "host-tauri",
- "protocol",
- "store-fs",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "uuid",
-]
-
-[[package]]
-name = "messengers-ui"
-version = "0.1.0"
-dependencies = [
- "js-sys",
- "leptos",
- "protocol",
- "serde",
- "serde-wasm-bindgen",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]

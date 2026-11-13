@@ -5,7 +5,9 @@
 use domain::{Input, MenuAccount, MenuAction, MenuModel};
 use protocol::UiCommand;
 use tauri::image::Image;
-use tauri::menu::{CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{
+    AboutMetadataBuilder, CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
+};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
@@ -26,9 +28,10 @@ pub const ID_OPEN_BROWSER: &str = "open-in-browser";
 pub const ID_QUIT: &str = "quit";
 /// Prefix of the account items (app menu "Accounts" and tray), followed by the account id.
 pub const ID_ACCOUNT: &str = "account:";
-const TRAY_ID: &str = "messengers-tray";
+const TRAY_ID: &str = "atrium-tray";
 
 /// Monochrome template image (black + alpha); macOS tints it for light/dark menu bars.
+const ABOUT_ICON: &[u8] = include_bytes!("../assets/about-icon.png");
 const TRAY_ICON: &[u8] = include_bytes!("../assets/tray-icon.png");
 
 /// What a menu item does: optionally bring the main window to the front, then feed an input.
@@ -106,8 +109,20 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> taur
             .accelerator(accel)
             .build(app)
     };
-    let app_menu = SubmenuBuilder::new(app, "Messengers")
-        .about(None)
+    let about = AboutMetadataBuilder::new()
+        .name(Some("Atrium"))
+        .version(Some(app.package_info().version.to_string()))
+        .short_version(Some(app.package_info().version.to_string()))
+        .authors(Some(vec!["Dominik Fuchß".to_string()]))
+        .comments(Some("All your messengers in one calm place."))
+        .copyright(Some("© 2026 Dominik Fuchß"))
+        .license(Some("GPL-3.0-or-later"))
+        .website(Some(protocol::PROJECT_URL))
+        .website_label(Some("github.com/dfuchss/atrium"))
+        .icon(Some(Image::from_bytes(ABOUT_ICON)?))
+        .build();
+    let app_menu = SubmenuBuilder::new(app, "Atrium")
+        .about(Some(about))
         .separator()
         .item(&item(ID_SETTINGS, "Settings…", "CmdOrCtrl+,")?)
         .separator()
@@ -115,7 +130,7 @@ pub fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> taur
         .hide_others()
         .show_all()
         .separator()
-        .item(&item(ID_QUIT, "Quit Messengers", "CmdOrCtrl+Q")?)
+        .item(&item(ID_QUIT, "Quit Atrium", "CmdOrCtrl+Q")?)
         .build()?;
     // Without an Edit menu, Cmd+C/V/X/A/Z do not reach the webviews on macOS.
     let edit = SubmenuBuilder::new(app, "Edit")
@@ -176,7 +191,7 @@ pub fn build_tray_menu<R: Runtime>(
     model: &MenuModel,
 ) -> tauri::Result<Menu<R>> {
     let mut menu = MenuBuilder::new(app)
-        .text(ID_SHOW, "Show Messengers")
+        .text(ID_SHOW, "Show Atrium")
         .separator();
     for a in &model.accounts {
         menu = menu.text(account_id(a), tray_account_text(a));
@@ -198,7 +213,7 @@ pub fn build_tray<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::R
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(TRAY_ICON)?)
         .icon_as_template(true)
-        .tooltip("Messengers")
+        .tooltip("Atrium")
         .menu(&build_tray_menu(app, model)?)
         .show_menu_on_left_click(true)
         .build(app)

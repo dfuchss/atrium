@@ -1,6 +1,16 @@
-# Messengers
+# Atrium
 
-A messenger aggregator in Rust (Tauri v2). It shows one window with a sidebar. Each service account runs in its own isolated webview with its own data store, so cookies and storage stay separate per account.
+Atrium is a lightweight messenger aggregator for macOS, built with Rust and Tauri v2. It shows one window with a sidebar. Each service account runs in its own isolated webview with its own data store, so cookies and storage stay separate per account.
+
+Features:
+- One window with a sidebar of service accounts (Slack, Discord, WhatsApp, Teams, Element, Bluesky, Mastodon and more, plus custom sites).
+- Per-account isolated data stores, so several logins per service work side by side.
+- Native notifications, dock badge, menu bar tray icon and Do Not Disturb.
+- Configurable link handling, per-account custom CSS, and user service definitions in TOML.
+
+Atrium is free software under the GNU General Public License v3.0 or later (GPL-3.0-or-later). Copyright (C) 2026 Dominik Fuchß. See `LICENSE`.
+
+Project page: https://github.com/dfuchss/atrium
 
 ## Layout
 
@@ -22,14 +32,16 @@ The other injected scripts are an optional per-account `<style>` injector (custo
 
 ```sh
 export PATH="/opt/homebrew/opt/rustup/bin:$PATH"   # rustup from Homebrew is keg-only
-cargo test --workspace                              # domain + store-fs tests
+cargo test --workspace --exclude atrium-ui                            # domain + store-fs tests
 cd app/src-tauri && cargo tauri dev                 # dev: trunk serve + app
-cd app/src-tauri && cargo tauri build --debug       # bundle: target/debug/bundle/macos/Messengers.app
+cd app/src-tauri && cargo tauri build --debug       # bundle: target/debug/bundle/macos/Atrium.app
 ```
 
 Use the bundled `.app` to test notifications and the dock badge.
 
 Where things are stored:
 - **Config:** `~/Library/Application Support/org.fuchss.messengers/accounts.json`
-- **Log:** `~/Library/Logs/org.fuchss.messengers/messengers.log`
+- **Log:** `~/Library/Logs/org.fuchss.messengers/atrium.log`
 - **Web data, per account:** `~/Library/WebKit/org.fuchss.messengers`
+
+Note: the bundle identifier stays `org.fuchss.messengers` (the app was called "Messengers" before it was renamed to Atrium). The config, log and per-account WebKit login data are keyed by it, so changing it would log you out everywhere.

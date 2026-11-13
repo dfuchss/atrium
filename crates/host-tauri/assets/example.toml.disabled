@@ -31,8 +31,9 @@
 # User-Agent string. Some sites reject the default.
 # user_agent = "safari"
 
-# Hosts that belong to the service (diagnostics and pop-up handling). "*." matches the
-# domain and all subdomains; {instance} is substituted.
+# Hosts that belong to the service (diagnostics and media permission: camera,
+# microphone and screen capture are granted only on these hosts). "*." matches the domain and
+# all subdomains; {instance} is substituted.
 # internal_hosts = ["{instance}", "*.example.org"]
 
 # Grant camera, microphone and screen capture to the service (call apps). Default false.

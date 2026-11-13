@@ -26,8 +26,9 @@ pub struct ViewSpec {
     pub user_agent: Option<String>,
     /// Injected at document start ([`crate::NOTIFY_SHIM`], plus the account's custom CSS).
     pub init_script: String,
-    /// Hosts (`*.` wildcards) of the service itself. Only used for diagnostics: where a new
-    /// window goes is decided by the account's [`LinkTarget`] (see [`Effect::SetViewPolicy`]).
+    /// Hosts (`*.` wildcards) of the service itself, `{instance}` resolved. They scope media
+    /// permission ([`ViewSpec::media_allowed_at`]); where a new window goes is decided by the
+    /// account's [`LinkTarget`] (see [`Effect::SetViewPolicy`]).
     pub internal_hosts: Vec<String>,
 }
 
@@ -42,6 +43,19 @@ impl ViewSpec {
             None => true,
             Some(host) => crate::catalog::host_matches_any(&self.internal_hosts, host),
         }
+    }
+
+    /// Whether camera, microphone or screen capture may be granted while `page` is shown.
+    /// The engine does not tell which origin asks, so the main-frame page must be one of the
+    /// service's own http(s) hosts; anything else (unknown page, foreign site) is denied.
+    pub fn media_allowed_at(&self, allow_media: bool, page: Option<&url::Url>) -> bool {
+        allow_media
+            && page.is_some_and(|page| {
+                matches!(page.scheme(), "http" | "https")
+                    && page.host_str().is_some_and(|host| {
+                        crate::catalog::host_matches_any(&self.internal_hosts, host)
+                    })
+            })
     }
 }
 

@@ -8,7 +8,8 @@
 //!   (`Deny` + [`Input::ExternalLink`]) or an in-app window of 1100x800.
 //!
 //! Popup/app windows get the same navigation allow-list ([`domain::nav_allowed`]) and media
-//! permission ([`domain::ViewPolicy::allow_media`]) as the account's view.
+//! permission ([`domain::ViewPolicy::allow_media`], scoped to the service's own hosts by
+//! [`ViewSpec::media_allowed_at`]) as the account's view.
 //!
 //! Never `NewWindowResponse::Allow`: wry would create a bare native window without any of
 //! our handlers (seen with Rainbow opening its own site).
@@ -56,12 +57,12 @@ pub(crate) fn popup_label(account: Uuid, number: u64) -> String {
     format!("popup-{}-{number}", account.simple())
 }
 
-/// Camera, microphone and screen capture are granted only with `allow_media`, else denied;
+/// Camera, microphone and screen capture are granted only with `media_allowed`, else denied;
 /// everything else gets the engine's default handling.
-pub(crate) fn permission_response(kind: PermissionKind, allow_media: bool) -> PermissionResponse {
+pub(crate) fn permission_response(kind: PermissionKind, media_allowed: bool) -> PermissionResponse {
     match kind {
         PermissionKind::Camera | PermissionKind::Microphone | PermissionKind::DisplayCapture => {
-            if allow_media {
+            if media_allowed {
                 PermissionResponse::Allow
             } else {
                 PermissionResponse::Deny
@@ -98,17 +99,23 @@ pub(crate) fn navigation_hook(
     }
 }
 
-/// Permission hook of service views and their windows (reads the current policy).
+/// Permission hook of service views and their windows (reads the current policy). wry drops
+/// the requesting origin, so media is scoped by the page currently shown in the main frame.
 pub(crate) fn permission_hook<R: Runtime>(
-    account: Uuid,
+    spec: Arc<ViewSpec>,
     policies: ViewPolicies,
     logger: Logger,
     what: &'static str,
 ) -> impl Fn(tauri::Webview<R>, PermissionKind) -> PermissionResponse + Send + Sync + 'static {
-    move |_, kind| {
-        let response = permission_response(kind, policy_of(&policies, account).allow_media);
+    move |webview, kind| {
+        let account = spec.account;
+        let page = webview.url().ok();
+        let host = page.as_ref().and_then(Url::host_str).unwrap_or("-");
+        let media_allowed =
+            spec.media_allowed_at(policy_of(&policies, account).allow_media, page.as_ref());
+        let response = permission_response(kind, media_allowed);
         logger.log(&format!(
-            "[{account}] {what} permission {kind} -> {response:?}"
+            "[{account}] {what} permission {kind} at {host} -> {response:?}"
         ));
         response
     }
@@ -202,7 +209,7 @@ impl<R: Runtime> LinkPolicy<R> {
                 self.feed.clone(),
             ))
             .on_permission_request(permission_hook(
-                account,
+                self.spec.clone(),
                 self.policies.clone(),
                 self.logger.clone(),
                 "popup",

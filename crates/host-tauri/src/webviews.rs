@@ -82,9 +82,10 @@ impl<R: Runtime> TauriHost<R> {
     /// Adds the native hooks of one service view to `builder`.
     fn hook(&self, spec: &ViewSpec, builder: WebviewBuilder<R>) -> WebviewBuilder<R> {
         let account = spec.account;
+        let shared_spec = Arc::new(spec.clone());
         let link_policy = Arc::new(LinkPolicy {
             app: self.app.clone(),
-            spec: Arc::new(spec.clone()),
+            spec: shared_spec.clone(),
             policies: self.policies.clone(),
             popup_counter: self.popup_counter.clone(),
             feed: self.feed.clone(),
@@ -121,7 +122,7 @@ impl<R: Runtime> TauriHost<R> {
                 self.logger.clone(),
             ))
             .on_permission_request(permission_hook(
-                account,
+                shared_spec,
                 self.policies.clone(),
                 self.logger.clone(),
                 "view",

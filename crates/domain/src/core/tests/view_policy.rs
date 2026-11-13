@@ -256,3 +256,43 @@ fn external_links_only_web_and_mail() {
         );
     }
 }
+
+#[test]
+fn media_is_allowed_only_on_internal_hosts() {
+    let spec = ViewSpec {
+        account: id(1),
+        url: url::Url::parse("https://app.slack.com/").unwrap(),
+        store_id: [0; 16],
+        user_agent: None,
+        init_script: String::new(),
+        internal_hosts: vec!["*.slack.com".into(), "kit.example".into()],
+    };
+    let page = |raw: &str| url::Url::parse(raw).unwrap();
+    for internal in [
+        "https://app.slack.com/client",
+        "https://kit.example/a",
+        "http://slack.com/",
+    ] {
+        assert!(
+            spec.media_allowed_at(true, Some(&page(internal))),
+            "{internal}"
+        );
+        assert!(
+            !spec.media_allowed_at(false, Some(&page(internal))),
+            "{internal}"
+        );
+    }
+    for foreign in [
+        "https://evil.example/",
+        "https://slack.com.evil.example/",
+        "about:blank",
+        "data:text/html,x",
+        "blob:https://app.slack.com/1",
+    ] {
+        assert!(
+            !spec.media_allowed_at(true, Some(&page(foreign))),
+            "{foreign}"
+        );
+    }
+    assert!(!spec.media_allowed_at(true, None));
+}

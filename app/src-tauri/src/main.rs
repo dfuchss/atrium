@@ -53,6 +53,8 @@ struct DevHooks {
     init_script: Option<String>,
     /// `ATRIUM_DEV_UI_QUERY`: query string for the sidebar UI, e.g. `dialog=accounts&edit=0`.
     ui_query: Option<String>,
+    /// `ATRIUM_LOG_TITLES=1`: log page titles (diagnosing unread title patterns).
+    log_titles: bool,
 }
 
 impl DevHooks {
@@ -71,6 +73,7 @@ impl DevHooks {
                     .unwrap_or_else(|error| panic!("ATRIUM_DEV_INIT_SCRIPT {path}: {error}"))
             }),
             ui_query: var("ATRIUM_DEV_UI_QUERY"),
+            log_titles: var("ATRIUM_LOG_TITLES").is_some_and(|value| value == "1"),
         }
     }
 
@@ -327,6 +330,7 @@ fn setup(
 
     let mut core = Core::new(Catalog::builtin(), persisted, Box::new(uuid::Uuid::new_v4));
     core.set_user_services(user_defs, user_errors);
+    core.set_log_page_titles(dev.log_titles);
     core.set_app_info(AppInfo {
         version,
         config_dir: config_dir.display().to_string(),

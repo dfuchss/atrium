@@ -71,6 +71,8 @@ pub struct Core {
     favicon_attempts: HashMap<Uuid, u8>,
     /// Problems found while loading (logged on start).
     startup_log: Vec<String>,
+    /// Write page titles into the log (diagnosing unread patterns); off by default.
+    log_page_titles: bool,
 }
 
 impl Core {
@@ -105,9 +107,15 @@ impl Core {
             last_tick_ms: None,
             favicon_attempts: HashMap::new(),
             startup_log: vec![],
+            log_page_titles: false,
         };
         core.startup_log = core.rebuild_catalog();
         core
+    }
+
+    /// Whether title changes are logged with the title itself (it names chats and senders).
+    pub fn set_log_page_titles(&mut self, enabled: bool) {
+        self.log_page_titles = enabled;
     }
 
     /// Read-only app information shown in the snapshot ("About").

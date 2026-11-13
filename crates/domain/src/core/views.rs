@@ -192,7 +192,8 @@ impl Core {
             }]
         } else {
             vec![Effect::Log(format!(
-                "[{account_id}] not opening {url:.200}: scheme not allowed"
+                "[{account_id}] not opening {}: scheme not allowed",
+                crate::security::redact_url(&url)
             ))]
         }
     }

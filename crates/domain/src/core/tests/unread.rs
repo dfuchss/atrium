@@ -288,3 +288,32 @@ fn notification_preview_and_sound() {
         ("Slack: Alice", HIDDEN_PREVIEW_BODY, false)
     );
 }
+
+#[test]
+fn page_titles_are_logged_only_when_enabled() {
+    let (mut core, _) = started(vec![account(1, "discord", "Discord")]);
+    let title_changed = |core: &mut Core, title: &str| {
+        core.handle(Input::TitleChanged {
+            account: id(1),
+            title: title.into(),
+        })
+    };
+    let effects = title_changed(&mut core, "(3) Alice | Secret chat");
+    let lines = logs(&effects);
+    assert!(
+        lines.iter().any(|line| line.contains("unread 3")),
+        "{lines:?}"
+    );
+    assert!(
+        lines.iter().all(|line| !line.contains("Secret")),
+        "{lines:?}"
+    );
+
+    core.set_log_page_titles(true);
+    let effects = title_changed(&mut core, "(4) Alice | Secret chat");
+    assert!(
+        logs(&effects)
+            .iter()
+            .any(|line| line.contains("Secret chat"))
+    );
+}

@@ -4,7 +4,7 @@ use std::sync::PoisonError;
 
 use domain::core::SimpleIconResult;
 use domain::ports::{Platform, PortError, PortResult};
-use domain::{DockBadge, MenuModel};
+use domain::{DockBadge, MenuModel, redact_url};
 use protocol::AppSettings;
 use tauri::{Manager, Runtime};
 use tauri_plugin_autostart::AutoLaunchManager;
@@ -45,7 +45,8 @@ impl<R: Runtime> Platform for TauriHost<R> {
         // With a browser this runs `/usr/bin/open -a <browser> -- <url>` and waits for it.
         let result = self.app.opener().open_url(url, browser).map_err(port_err);
         self.logger.log(&format!(
-            "open external {url} (browser {browser:?}) -> {result:?}"
+            "open external {} (browser {browser:?}) -> {result:?}",
+            redact_url(url)
         ));
         result
     }
@@ -100,13 +101,17 @@ impl<R: Runtime> Platform for TauriHost<R> {
             let data_url = match icons::download_icon(&url) {
                 Ok(data_url) => {
                     logger.log(&format!(
-                        "[{account}] icon {url} ({} bytes as data URL)",
+                        "[{account}] icon {} ({} bytes as data URL)",
+                        redact_url(&url),
                         data_url.len()
                     ));
                     Some(data_url)
                 }
                 Err(error) => {
-                    logger.log(&format!("[{account}] icon {url} failed: {error}"));
+                    logger.log(&format!(
+                        "[{account}] icon {} failed: {error}",
+                        redact_url(&url)
+                    ));
                     None
                 }
             };

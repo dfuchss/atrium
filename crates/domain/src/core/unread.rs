@@ -180,9 +180,14 @@ impl Core {
         }
         let mut effects = vec![];
         if self.unread.of(account_id) != unread {
-            // Lets the user check the title patterns against what the service really shows.
+            // Titles name chats and senders, so they are logged only for diagnosing patterns.
+            let shown_title = if self.log_page_titles {
+                format!(" {title:?}")
+            } else {
+                String::new()
+            };
             effects.push(Effect::Log(format!(
-                "[{account_id}] {service_id} title {title:?} -> unread {}, indirect {}",
+                "[{account_id}] {service_id} title{shown_title} -> unread {}, indirect {}",
                 unread.direct, unread.indirect
             )));
         }

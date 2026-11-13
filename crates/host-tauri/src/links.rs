@@ -19,7 +19,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use domain::{Input, ViewPolicy, ViewSpec, host_matches_any, nav_allowed, window_title};
+use domain::{
+    Input, ViewPolicy, ViewSpec, host_matches_any, nav_allowed, redact_url, window_title,
+};
 use protocol::LinkTarget;
 use tauri::webview::{
     NewWindowFeatures, NewWindowResponse, PageLoadEvent, PageLoadPayload, PermissionKind,
@@ -85,7 +87,10 @@ pub(crate) fn navigation_hook(
     move |url| {
         let allowed = nav_allowed(url);
         if allowed {
-            logger.log(&format!("[{account}] navigation {:.200}", url.as_str()));
+            logger.log_navigation(
+                account,
+                &format!("[{account}] navigation {}", redact_url(url.as_str())),
+            );
         } else if url.scheme() == "mailto" {
             logger.log(&format!("[{account}] mailto link -> mail app"));
             feed(Input::ExternalLink {
@@ -93,10 +98,13 @@ pub(crate) fn navigation_hook(
                 url: url.to_string(),
             });
         } else {
-            logger.log(&format!(
-                "[{account}] navigation DENIED (scheme) {:.200}",
-                url.as_str()
-            ));
+            logger.log_navigation(
+                account,
+                &format!(
+                    "[{account}] navigation DENIED (scheme) {}",
+                    redact_url(url.as_str())
+                ),
+            );
         }
         allowed
     }
@@ -152,6 +160,7 @@ impl<R: Runtime> LinkPolicy<R> {
         features: NewWindowFeatures,
     ) -> NewWindowResponse<R> {
         let account = self.spec.account;
+        let shown_url = redact_url(url.as_str());
         let kind = if self.spec.is_internal(url) {
             "internal"
         } else {
@@ -159,7 +168,7 @@ impl<R: Runtime> LinkPolicy<R> {
         };
         if let Some(size) = features.size() {
             self.logger.log(&format!(
-                "[{account}] new window {url} ({kind}, {}x{}) -> sign-in popup",
+                "[{account}] new window {shown_url} ({kind}, {}x{}) -> sign-in popup",
                 size.width, size.height
             ));
             return self.open_window(url, features, None);
@@ -167,14 +176,14 @@ impl<R: Runtime> LinkPolicy<R> {
         let policy = policy_of(&self.policies, account);
         if url.host_str().is_some_and(|host| policy.is_app_host(host)) {
             self.logger.log(&format!(
-                "[{account}] new window {url} ({kind}) -> app window (app host)"
+                "[{account}] new window {shown_url} ({kind}) -> app window (app host)"
             ));
             return self.open_window(url, features, Some(APP_WINDOW_SIZE));
         }
         match policy.link_target {
             LinkTarget::SystemBrowser => {
                 self.logger.log(&format!(
-                    "[{account}] new window {url} ({kind}) -> system browser"
+                    "[{account}] new window {shown_url} ({kind}) -> system browser"
                 ));
                 (self.feed)(Input::ExternalLink {
                     account,
@@ -184,7 +193,7 @@ impl<R: Runtime> LinkPolicy<R> {
             }
             LinkTarget::AppWindow => {
                 self.logger.log(&format!(
-                    "[{account}] new window {url} ({kind}) -> app window"
+                    "[{account}] new window {shown_url} ({kind}) -> app window"
                 ));
                 self.open_window(url, features, Some(APP_WINDOW_SIZE))
             }
@@ -200,6 +209,7 @@ impl<R: Runtime> LinkPolicy<R> {
         size: Option<(f64, f64)>,
     ) -> NewWindowResponse<R> {
         let account = self.spec.account;
+        let shown_url = redact_url(url.as_str());
         let label = popup_label(
             account,
             self.popup_counter.fetch_add(1, Ordering::Relaxed) + 1,
@@ -239,14 +249,15 @@ impl<R: Runtime> LinkPolicy<R> {
         }
         match builder.build() {
             Ok(window) => {
-                self.logger
-                    .log(&format!("[{account}] opened window {label} for {url}"));
+                self.logger.log(&format!(
+                    "[{account}] opened window {label} for {shown_url}"
+                ));
                 watch_close(self.app.clone(), label, &self.logger);
                 NewWindowResponse::Create { window }
             }
             Err(error) => {
                 self.logger.log(&format!(
-                    "[{account}] cannot open window for {url}: {error}"
+                    "[{account}] cannot open window for {shown_url}: {error}"
                 ));
                 NewWindowResponse::Deny
             }

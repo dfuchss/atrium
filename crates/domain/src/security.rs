@@ -18,6 +18,26 @@ pub fn nav_allowed(url: &url::Url) -> bool {
     matches!(url.scheme(), "https" | "http" | "about" | "blob" | "data")
 }
 
+/// Longest URL path kept by [`redact_url`], in characters.
+const REDACTED_PATH_MAX_CHARS: usize = 200;
+
+/// URL as written to the log: `scheme://host[:port]/path`, without user info, query and
+/// fragment (they carry tokens, search terms and message ids). URLs without a host (`mailto:`,
+/// `data:`, `blob:`) keep only their scheme; unparsable input is not echoed at all.
+pub fn redact_url(raw: &str) -> String {
+    let Ok(url) = url::Url::parse(raw.trim()) else {
+        return "<invalid URL>".into();
+    };
+    let Some(host) = url.host_str() else {
+        return format!("{}:", url.scheme());
+    };
+    let port = url
+        .port()
+        .map_or_else(String::new, |port| format!(":{port}"));
+    let path: String = url.path().chars().take(REDACTED_PATH_MAX_CHARS).collect();
+    format!("{}://{host}{port}{path}", url.scheme())
+}
+
 /// Longest page title shown in a window title, in characters.
 const WINDOW_TITLE_MAX_CHARS: usize = 120;
 
@@ -115,5 +135,20 @@ mod tests {
         let long = "x".repeat(500);
         let title = window_title(&long, &page("https://a.org/"), true);
         assert!(title.ends_with(" — a.org") && title.chars().count() < 140);
+    }
+
+    #[test]
+    fn redacted_urls_keep_only_scheme_host_and_path() {
+        assert_eq!(
+            redact_url("https://user:pw@app.slack.com:8443/client/T1?token=abc#msg-9"),
+            "https://app.slack.com:8443/client/T1"
+        );
+        assert_eq!(redact_url("https://x.org"), "https://x.org/");
+        assert_eq!(redact_url("mailto:alice@example.org?subject=hi"), "mailto:");
+        assert_eq!(redact_url("data:text/html,secret"), "data:");
+        assert_eq!(redact_url("blob:https://x.org/1"), "blob:");
+        assert_eq!(redact_url("not a url ?q=secret"), "<invalid URL>");
+        let long = format!("https://x.org/{}", "a".repeat(500));
+        assert_eq!(redact_url(&long).len(), "https://x.org".len() + 200);
     }
 }

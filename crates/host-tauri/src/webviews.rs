@@ -4,7 +4,7 @@ use std::sync::{Arc, PoisonError};
 use std::time::Duration;
 
 use domain::ports::{PortError, PortResult, WebviewHost};
-use domain::{Bounds, ViewPolicy, ViewSpec};
+use domain::{Bounds, ViewPolicy, ViewSpec, redact_url};
 use protocol::UI_WEBVIEW;
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::{DownloadEvent, PageLoadEvent};
@@ -49,13 +49,15 @@ fn download_hook<R: Runtime>(
                     *destination = dir.join(name);
                 }
                 logger.log(&format!(
-                    "[{account}] download {url} -> {}",
+                    "[{account}] download {} -> {}",
+                    redact_url(url.as_str()),
                     destination.display()
                 ));
             }
             DownloadEvent::Finished { url, path, success } => {
                 logger.log(&format!(
-                    "[{account}] download finished {url} {path:?} ok={success}"
+                    "[{account}] download finished {} {path:?} ok={success}",
+                    redact_url(url.as_str())
                 ));
             }
             _ => {}
@@ -99,7 +101,10 @@ impl<R: Runtime> TauriHost<R> {
             })
             .on_page_load(move |_, payload| {
                 if let PageLoadEvent::Finished = payload.event() {
-                    load_logger.log(&format!("[{account}] loaded {}", payload.url()));
+                    load_logger.log(&format!(
+                        "[{account}] loaded {}",
+                        redact_url(payload.url().as_str())
+                    ));
                     feed_load(Input::PageLoaded {
                         account,
                         url: payload.url().to_string(),
@@ -164,7 +169,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
             "[{}] created view {} ({})",
             spec.account,
             webview.label(),
-            spec.url
+            redact_url(spec.url.as_str())
         ));
         Ok(())
     }

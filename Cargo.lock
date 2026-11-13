@@ -1806,6 +1806,7 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
+ "tempfile",
  "ureq",
  "uuid",
 ]

@@ -13,7 +13,7 @@ use domain::ports::{Platform, Store};
 use domain::runtime::{Ports, StartupLoad, apply};
 use domain::{Catalog, Core, Effect, Input, Persisted};
 use host_tauri::{Feed, TauriHost};
-use protocol::{AppInfo, Snapshot, UI_WEBVIEW, UiCommand};
+use protocol::{AppInfo, AppSettings, Snapshot, UI_WEBVIEW, UiCommand};
 use store_fs::FsStore;
 use tauri::window::{Color, WindowBuilder};
 use tauri::{
@@ -342,6 +342,26 @@ fn spawn_actor(core: Core, inputs: Receiver<Input>, env: ActorEnv) -> std::io::R
     Ok(())
 }
 
+/// Creates the main window, docks the sidebar webview at its full height and returns the
+/// window with its logical size.
+fn build_window_with_sidebar(
+    app: &App,
+    dev: &DevHooks,
+    app_settings: &AppSettings,
+) -> tauri::Result<(Window, LogicalSize<f64>)> {
+    let window = build_main_window(app, dev, app_settings.start_hidden)?;
+    let size = window
+        .inner_size()?
+        .to_logical::<f64>(window.scale_factor()?);
+    add_sidebar(
+        &window,
+        dev,
+        app_settings.icon_size.sidebar_width(),
+        size.height,
+    )?;
+    Ok((window, size))
+}
+
 /// Builds the window, the host and the core, starts the actor and the ticker, and feeds
 /// `Input::Started`. The host only needs the window lazily, so it can log while loading the
 /// settings that decide how the window is created.
@@ -375,16 +395,7 @@ fn setup(
         user_errors.len()
     ));
 
-    let window = build_main_window(app, &dev, persisted.settings.app.start_hidden)?;
-    let size = window
-        .inner_size()?
-        .to_logical::<f64>(window.scale_factor()?);
-    add_sidebar(
-        &window,
-        &dev,
-        persisted.settings.app.icon_size.sidebar_width(),
-        size.height,
-    )?;
+    let (window, size) = build_window_with_sidebar(app, &dev, &persisted.settings.app)?;
 
     let mut core = Core::new(Catalog::builtin(), persisted, Box::new(uuid::Uuid::new_v4));
     core.set_user_services(user_defs, user_errors);

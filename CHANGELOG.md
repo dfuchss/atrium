@@ -33,3 +33,4 @@ First release.
 - Downloads are quarantined, hidden files are refused, and you are notified when a download finishes
 - Removing an account deletes its stored data, retried at the next start if needed
 - Site icons are fetched only over https from the page's or service's own hosts
+- Your account list is stored readable by you only

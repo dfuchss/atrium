@@ -1,7 +1,8 @@
 //! File-based [`domain::ports::Store`]: `<dir>/accounts.json`.
 
-use std::fs;
+use std::fs::{self, OpenOptions, Permissions};
 use std::io::Write;
+use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -35,6 +36,9 @@ impl FsStore {
         self.file().is_file() && !quarantined
     }
 }
+
+/// The file names the user's accounts and workspaces: readable by the user only.
+const ACCOUNTS_FILE_MODE: u32 = 0o600;
 
 /// Name prefix of a corrupt `accounts.json` kept for inspection.
 const CORRUPT_FILE_PREFIX: &str = "accounts.json.corrupt-";
@@ -72,8 +76,16 @@ impl Store for FsStore {
         let json =
             serde_json::to_vec_pretty(data).map_err(|error| port_error("serialize", error))?;
         let temporary = self.dir.join("accounts.json.tmp");
-        let mut file =
-            fs::File::create(&temporary).map_err(|error| port_error("create tmp", error))?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(ACCOUNTS_FILE_MODE)
+            .open(&temporary)
+            .map_err(|error| port_error("create tmp", error))?;
+        // A temporary file left by a crash keeps its old mode on open.
+        file.set_permissions(Permissions::from_mode(ACCOUNTS_FILE_MODE))
+            .map_err(|error| port_error("restrict tmp", error))?;
         file.write_all(&json)
             .map_err(|error| port_error("write tmp", error))?;
         file.sync_all()
@@ -193,6 +205,23 @@ mod tests {
         s.save(&sample()).unwrap();
         assert_eq!(s.load().unwrap(), sample());
         assert!(!d.path().join("nested/accounts.json.tmp").exists());
+    }
+
+    #[test]
+    fn saved_file_is_owner_only() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join("accounts.json.tmp"), "left over").unwrap();
+        fs::set_permissions(
+            d.path().join("accounts.json.tmp"),
+            Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        FsStore::new(d.path()).save(&sample()).unwrap();
+        let mode = fs::metadata(d.path().join("accounts.json"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, ACCOUNTS_FILE_MODE);
     }
 
     #[test]

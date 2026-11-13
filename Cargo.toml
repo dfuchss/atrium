@@ -1,8 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["crates/protocol", "crates/domain", "crates/store-fs", "crates/host-tauri", "app/src-tauri", "app/ui"]
+members = ["crates/protocol", "crates/domain", "crates/store-fs", "crates/host-tauri", "crates/updater", "app/src-tauri", "app/ui"]
 # app/ui is a wasm crate built by Trunk; keep it out of plain `cargo build/test`.
-default-members = ["crates/protocol", "crates/domain", "crates/store-fs", "crates/host-tauri", "app/src-tauri"]
+default-members = ["crates/protocol", "crates/domain", "crates/store-fs", "crates/host-tauri", "crates/updater", "app/src-tauri"]
 
 [workspace.package]
 edition = "2024"
@@ -17,6 +17,7 @@ protocol = { path = "crates/protocol" }
 domain = { path = "crates/domain" }
 store-fs = { path = "crates/store-fs" }
 host-tauri = { path = "crates/host-tauri" }
+updater = { path = "crates/updater" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "1"

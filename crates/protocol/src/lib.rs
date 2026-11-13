@@ -6,8 +6,12 @@
 //!   after every state change. The UI renders the snapshot; it keeps no state of its own
 //!   besides form inputs.
 
+mod update;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+pub use update::*;
 
 pub const CMD_UI_COMMAND: &str = "ui_command";
 pub const CMD_GET_SNAPSHOT: &str = "get_snapshot";

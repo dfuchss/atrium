@@ -1,0 +1,150 @@
+//! The updater's files: `<app data>/updater.json` (settings and the staged release) and the
+//! helper's `<app data>/updates/update-result.json`.
+
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+const SETTINGS_FILE: &str = "updater.json";
+const UPDATES_DIR: &str = "updates";
+const RESULT_FILE: &str = "update-result.json";
+const HELPER_LOG_FILE: &str = "helper.log";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub(crate) struct UpdaterSettings {
+    pub(crate) auto_check: bool,
+    /// Last finished check, ms since the Unix epoch.
+    pub(crate) last_check_ms: u64,
+    /// Version of the update staged next to the install by an earlier run.
+    pub(crate) staged_version: Option<String>,
+}
+
+impl Default for UpdaterSettings {
+    fn default() -> Self {
+        UpdaterSettings {
+            auto_check: true,
+            last_check_ms: 0,
+            staged_version: None,
+        }
+    }
+}
+
+/// What the helper reports about a swap, read on the next start.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct SwapResult {
+    pub(crate) success: bool,
+    pub(crate) version: String,
+    pub(crate) message: String,
+}
+
+/// Paths below the app data folder.
+#[derive(Debug, Clone)]
+pub(crate) struct UpdaterFiles {
+    data_dir: PathBuf,
+}
+
+impl UpdaterFiles {
+    pub(crate) fn new(data_dir: PathBuf) -> UpdaterFiles {
+        UpdaterFiles { data_dir }
+    }
+
+    pub(crate) fn updates_dir(&self) -> PathBuf {
+        self.data_dir.join(UPDATES_DIR)
+    }
+
+    pub(crate) fn result_file(updates_dir: &Path) -> PathBuf {
+        updates_dir.join(RESULT_FILE)
+    }
+
+    pub(crate) fn helper_log(updates_dir: &Path) -> PathBuf {
+        updates_dir.join(HELPER_LOG_FILE)
+    }
+
+    /// Defaults when the file is missing or unreadable.
+    pub(crate) fn load_settings(&self) -> UpdaterSettings {
+        std::fs::read_to_string(self.data_dir.join(SETTINGS_FILE))
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn save_settings(&self, settings: &UpdaterSettings) -> std::io::Result<()> {
+        let json = serde_json::to_string_pretty(settings).map_err(std::io::Error::other)?;
+        write_atomically(&self.data_dir.join(SETTINGS_FILE), &json)
+    }
+
+    /// Reads and removes the helper's result and log of the previous swap, if any.
+    pub(crate) fn take_swap_report(&self) -> Option<(Option<SwapResult>, String)> {
+        let updates = self.updates_dir();
+        let result = std::fs::read_to_string(Self::result_file(&updates)).ok();
+        let log = std::fs::read_to_string(Self::helper_log(&updates)).unwrap_or_default();
+        let _ = std::fs::remove_file(Self::result_file(&updates));
+        let _ = std::fs::remove_file(Self::helper_log(&updates));
+        if result.is_none() && log.is_empty() {
+            return None;
+        }
+        Some((
+            result.and_then(|text| serde_json::from_str(&text).ok()),
+            log,
+        ))
+    }
+}
+
+/// Writes `<path>.tmp` and renames it over `path`, so readers never see half a file.
+pub(crate) fn write_atomically(path: &Path, contents: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut temporary = path.as_os_str().to_os_string();
+    temporary.push(".tmp");
+    std::fs::write(&temporary, contents)?;
+    std::fs::rename(&temporary, path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_round_trip_and_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let files = UpdaterFiles::new(dir.path().to_path_buf());
+        assert_eq!(files.load_settings(), UpdaterSettings::default());
+        let settings = UpdaterSettings {
+            auto_check: false,
+            last_check_ms: 42,
+            staged_version: Some("0.2.0".into()),
+        };
+        files.save_settings(&settings).unwrap();
+        assert_eq!(files.load_settings(), settings);
+        std::fs::write(dir.path().join(SETTINGS_FILE), r#"{"auto_check":false}"#).unwrap();
+        assert!(!files.load_settings().auto_check);
+        std::fs::write(dir.path().join(SETTINGS_FILE), "garbage").unwrap();
+        assert_eq!(files.load_settings(), UpdaterSettings::default());
+    }
+
+    #[test]
+    fn swap_report_is_taken_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let files = UpdaterFiles::new(dir.path().to_path_buf());
+        assert_eq!(files.take_swap_report(), None);
+        let result = SwapResult {
+            success: false,
+            version: "0.2.0".into(),
+            message: "no".into(),
+        };
+        let updates = files.updates_dir();
+        write_atomically(
+            &UpdaterFiles::result_file(&updates),
+            &serde_json::to_string(&result).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(UpdaterFiles::helper_log(&updates), "line\n").unwrap();
+        assert_eq!(
+            files.take_swap_report(),
+            Some((Some(result), "line\n".into()))
+        );
+        assert_eq!(files.take_swap_report(), None);
+    }
+}

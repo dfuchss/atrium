@@ -1,0 +1,22 @@
+[package]
+name = "updater"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ureq = { version = "3.1", default-features = false, features = ["rustls"] }
+sha2 = "0.10"
+plist = "1"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

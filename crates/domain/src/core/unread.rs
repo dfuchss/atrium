@@ -9,9 +9,21 @@ use uuid::Uuid;
 
 use super::{Core, DockBadge, Effect, NotificationReq};
 use crate::catalog::ServiceDef;
+use crate::throttle::RateLimiter;
 
 /// Body of notifications when previews are off.
 pub const HIDDEN_PREVIEW_BODY: &str = "New message";
+
+/// Larger poll results are dropped unread: a page cannot make the core parse megabytes a second.
+const MAX_POLL_RESULT_BYTES: usize = 256 * 1024;
+/// Notifications shown from one poll; the rest of a burst is dropped.
+const NOTIFICATIONS_PER_POLL: usize = 5;
+/// Notifications shown per account and minute.
+const NOTIFICATIONS_PER_MINUTE: usize = 20;
+const MS_PER_MINUTE: u64 = 60_000;
+/// Longest notification title and body taken from a page, in characters.
+const NOTIFICATION_TITLE_MAX_CHARS: usize = 200;
+const NOTIFICATION_BODY_MAX_CHARS: usize = 1000;
 
 /// Unread state of one account.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -58,8 +70,7 @@ impl TitleRules {
     }
 }
 
-/// Unread state of all accounts and where it came from.
-#[derive(Default)]
+/// Unread state of all accounts and where it came from, and the limits of their pages.
 pub(super) struct UnreadTracker {
     /// Effective unread per account.
     current: HashMap<Uuid, Unread>,
@@ -67,6 +78,22 @@ pub(super) struct UnreadTracker {
     from_title: HashMap<Uuid, Unread>,
     /// Accounts whose last poll yielded a value (it then wins over the title).
     polled: HashSet<Uuid>,
+    /// Accounts whose last poll result was unusable; logged once until a poll succeeds again.
+    failing_polls: HashSet<Uuid>,
+    /// Notifications per account and minute.
+    notification_limit: RateLimiter<Uuid>,
+}
+
+impl Default for UnreadTracker {
+    fn default() -> UnreadTracker {
+        UnreadTracker {
+            current: HashMap::new(),
+            from_title: HashMap::new(),
+            polled: HashSet::new(),
+            failing_polls: HashSet::new(),
+            notification_limit: RateLimiter::new(NOTIFICATIONS_PER_MINUTE, MS_PER_MINUTE),
+        }
+    }
 }
 
 impl UnreadTracker {
@@ -78,6 +105,18 @@ impl UnreadTracker {
         self.current.remove(&account_id);
         self.from_title.remove(&account_id);
         self.polled.remove(&account_id);
+        self.failing_polls.remove(&account_id);
+    }
+
+    /// Records a failed poll of `account_id`; returns the log line for its first failure only.
+    fn poll_failed(&mut self, account_id: Uuid, problem: &str) -> Vec<Effect> {
+        if self.failing_polls.insert(account_id) {
+            vec![Effect::Log(format!(
+                "poll result for {account_id}: {problem} (not logged again until a poll succeeds)"
+            ))]
+        } else {
+            vec![]
+        }
     }
 }
 
@@ -151,6 +190,11 @@ fn saturating_count(value: f64) -> u32 {
     value.max(0.0) as u32
 }
 
+/// The first `max_chars` characters of `text`.
+fn truncate_chars(text: &str, max_chars: usize) -> String {
+    text.chars().take(max_chars).collect()
+}
+
 /// Notification title prefix: the service name, plus the label if it differs.
 fn notification_prefix(service_name: &str, label: &str) -> String {
     if label == service_name {
@@ -207,6 +251,10 @@ impl Core {
         };
         let has_poll = service.unread.poll.is_some();
         let prefix = notification_prefix(&service.name, &account.label);
+        if raw.len() > MAX_POLL_RESULT_BYTES {
+            let problem = format!("{} bytes, larger than {MAX_POLL_RESULT_BYTES}", raw.len());
+            return self.unread.poll_failed(account_id, &problem);
+        }
         let poll = match PollResult::decode(raw) {
             Ok(poll) => poll,
             Err(error) => {
@@ -215,6 +263,7 @@ impl Core {
                 ))];
             }
         };
+        self.unread.failing_polls.remove(&account_id);
         let mut effects = if muted {
             vec![]
         } else {
@@ -227,8 +276,10 @@ impl Core {
     }
 
     /// Native notifications for the drained web notifications, unless Do Not Disturb is on.
+    /// A page gets at most [`NOTIFICATIONS_PER_POLL`] per poll and [`NOTIFICATIONS_PER_MINUTE`]
+    /// per minute, with title and body cut to a readable length; the rest is dropped.
     fn notifications(
-        &self,
+        &mut self,
         account_id: Uuid,
         prefix: &str,
         notifications: Vec<PolledNotification>,
@@ -237,22 +288,40 @@ impl Core {
         if settings.dnd {
             return vec![];
         }
-        notifications
+        let (preview, sound) = (settings.notification_preview, settings.notification_sound);
+        let now_ms = self.last_tick_ms.unwrap_or(0);
+        let received = notifications.len();
+        let mut effects: Vec<Effect> = notifications
             .into_iter()
+            .take(NOTIFICATIONS_PER_POLL)
+            .filter(|_| self.unread.notification_limit.allow(account_id, now_ms))
             .map(|notification| {
                 Effect::Notify(NotificationReq {
                     account: account_id,
                     shim_id: Some(notification.id),
-                    title: format!("{prefix}: {}", notification.title),
-                    body: if settings.notification_preview {
-                        notification.body.unwrap_or_default()
+                    title: format!(
+                        "{prefix}: {}",
+                        truncate_chars(&notification.title, NOTIFICATION_TITLE_MAX_CHARS)
+                    ),
+                    body: if preview {
+                        truncate_chars(
+                            notification.body.as_deref().unwrap_or_default(),
+                            NOTIFICATION_BODY_MAX_CHARS,
+                        )
                     } else {
                         HIDDEN_PREVIEW_BODY.to_string()
                     },
-                    sound: settings.notification_sound,
+                    sound,
                 })
             })
-            .collect()
+            .collect();
+        if effects.len() < received {
+            effects.push(Effect::Log(format!(
+                "[{account_id}] dropped {} of {received} notifications (rate limit)",
+                received - effects.len()
+            )));
+        }
+        effects
     }
 
     /// Tells the user that a download of the account landed in the Downloads folder (the

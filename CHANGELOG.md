@@ -23,6 +23,7 @@ First release.
 - Reorder accounts by drag and drop, choose the icon size, pick a Simple Icons glyph, and let inactive services sleep to free memory
 - Open and reload the services folder from the settings; sleeping services show a grayscale icon
 - Native notifications that open the right account, with Do Not Disturb and per-account mute
+- Notifications are capped per account, so no page can flood you
 - Links open in your browser of choice or in an app window that keeps the account's login
 - A per-account list of hosts that always open in the app
 - Popup and app windows show the site's host in their title

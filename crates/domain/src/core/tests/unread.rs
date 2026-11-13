@@ -353,3 +353,80 @@ fn finished_download_notifies_without_page_click() {
     core.handle(Input::Ui(UiCommand::SetDnd { enabled: true }));
     assert!(notifies(&downloaded(&mut core)).is_empty());
 }
+
+/// Poll result with `count` notifications titled `title` and bodied `body`.
+fn poll_with(count: usize, title: &str, body: &str) -> String {
+    let queue: Vec<serde_json::Value> = (1..=count)
+        .map(|shim_id| serde_json::json!({"id": shim_id, "title": title, "body": body}))
+        .collect();
+    serde_json::json!({"n": queue, "u": null}).to_string()
+}
+
+#[test]
+fn notifications_are_capped_per_poll_and_minute() {
+    let (mut core, _) = started(vec![account(1, "discord", "Discord")]);
+    let mut shown = 0;
+    for second in 0..10u64 {
+        core.handle(Input::Tick {
+            now_ms: 1_000 + second * 1_000,
+        });
+        let effects = core.handle(Input::PollResult {
+            account: id(1),
+            raw: poll_with(8, "Alice", "hi"),
+        });
+        let in_this_poll = notifies(&effects).len();
+        assert!(in_this_poll <= 5, "{in_this_poll}");
+        shown += in_this_poll;
+        if in_this_poll < 8 {
+            assert!(logs(&effects).iter().any(|line| line.contains("dropped")));
+        }
+    }
+    assert_eq!(shown, 20);
+    core.handle(Input::Tick { now_ms: 61_000 });
+    let effects = core.handle(Input::PollResult {
+        account: id(1),
+        raw: poll_with(1, "Alice", "hi"),
+    });
+    assert_eq!(
+        notifies(&effects).len(),
+        1,
+        "a minute later the budget is back"
+    );
+}
+
+#[test]
+fn notification_text_is_truncated() {
+    let (mut core, _) = started(vec![account(1, "discord", "Discord")]);
+    let effects = core.handle(Input::PollResult {
+        account: id(1),
+        raw: poll_with(1, &"t".repeat(500), &"b".repeat(5_000)),
+    });
+    let notification = notifies(&effects)[0];
+    assert_eq!(notification.title, format!("Discord: {}", "t".repeat(200)));
+    assert_eq!(notification.body, "b".repeat(1_000));
+}
+
+#[test]
+fn oversized_poll_results_are_dropped_and_logged_once() {
+    let (mut core, _) = started(vec![account(1, "discord", "Discord")]);
+    let oversized = poll_with(1, "Alice", &"x".repeat(300 * 1024));
+    let poll = |core: &mut Core, raw: &str| {
+        core.handle(Input::PollResult {
+            account: id(1),
+            raw: raw.into(),
+        })
+    };
+    let first = poll(&mut core, &oversized);
+    assert!(notifies(&first).is_empty());
+    assert_eq!(logs(&first).len(), 1);
+    assert!(poll(&mut core, &oversized).is_empty(), "logged once");
+    assert_eq!(
+        notifies(&poll(&mut core, &poll_with(1, "Alice", "hi"))).len(),
+        1
+    );
+    assert_eq!(
+        logs(&poll(&mut core, &oversized)).len(),
+        1,
+        "logged again after recovery"
+    );
+}

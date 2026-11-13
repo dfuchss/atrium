@@ -2,11 +2,14 @@
 // via eval_with_callback; the page gets no Tauri IPC access.
 (() => {
   if (window.__msgr) return;
+  // Bounded until the next drain (every second): a page cannot pile up notifications.
+  const MAX_QUEUED = 50;
   const q = [], live = new Map();
   let seq = 0;
   const push = (title, o, obj) => {
     const id = ++seq;
     if (obj) live.set(id, obj);
+    if (q.length >= MAX_QUEUED) live.delete(q.shift().id);
     q.push({ id, title: String(title), body: (o && o.body) || '', tag: (o && o.tag) || null, ts: Date.now() });
   };
   class N extends EventTarget {

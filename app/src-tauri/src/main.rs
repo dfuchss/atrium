@@ -99,8 +99,8 @@ struct Shared {
 }
 
 #[tauri::command]
-fn ui_command(state: State<'_, Shared>, cmd: UiCommand) {
-    (state.feed)(Input::Ui(cmd));
+fn ui_command(state: State<'_, Shared>, command: UiCommand) {
+    (state.feed)(Input::Ui(command));
 }
 
 #[tauri::command]

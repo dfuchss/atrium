@@ -1,4 +1,5 @@
 //! Minimal bridge to `window.__TAURI__` (withGlobalTauri).
+
 use js_sys::{Function, Promise, Reflect};
 use protocol::{CMD_GET_SNAPSHOT, CMD_UI_COMMAND, EVENT_SNAPSHOT, Snapshot, UiCommand};
 use serde::Serialize;
@@ -8,81 +9,80 @@ use wasm_bindgen_futures::JsFuture;
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = ["__TAURI__", "core"], js_name = invoke, catch)]
-    fn invoke_raw(cmd: &str, args: JsValue) -> Result<Promise, JsValue>;
+    fn invoke_raw(command: &str, args: JsValue) -> Result<Promise, JsValue>;
     #[wasm_bindgen(js_namespace = ["__TAURI__", "event"], js_name = listen, catch)]
     fn listen_raw(event: &str, handler: &Function) -> Result<Promise, JsValue>;
 }
 
-pub fn available() -> bool {
+pub(crate) fn available() -> bool {
     web_sys::window()
-        .and_then(|w| Reflect::get(&w, &JsValue::from_str("__TAURI__")).ok())
-        .is_some_and(|v| !v.is_undefined() && !v.is_null())
+        .and_then(|window| Reflect::get(&window, &JsValue::from_str("__TAURI__")).ok())
+        .is_some_and(|tauri| !tauri.is_undefined() && !tauri.is_null())
 }
 
-fn log_err(what: &str, e: &JsValue) {
-    web_sys::console::error_2(&JsValue::from_str(what), e);
+fn log_error(context: &str, error: &JsValue) {
+    web_sys::console::error_2(&JsValue::from_str(context), error);
 }
 
-async fn invoke(cmd: &str, args: JsValue) -> Result<JsValue, JsValue> {
-    JsFuture::from(invoke_raw(cmd, args)?).await
+async fn invoke(command: &str, args: JsValue) -> Result<JsValue, JsValue> {
+    JsFuture::from(invoke_raw(command, args)?).await
 }
 
-/// Send a `UiCommand`; errors are logged to the console.
-pub async fn send(cmd: UiCommand) {
+/// Sends a `UiCommand`; errors are logged to the console.
+pub(crate) async fn send(command: UiCommand) {
     #[derive(Serialize)]
     struct Args {
-        cmd: UiCommand,
+        command: UiCommand,
     }
-    let ser = serde_wasm_bindgen::Serializer::json_compatible();
-    let args = match (Args { cmd }).serialize(&ser) {
-        Ok(a) => a,
-        Err(e) => return log_err("serialize ui_command", &e.into()),
+    let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+    let args = match (Args { command }).serialize(&serializer) {
+        Ok(args) => args,
+        Err(error) => return log_error("serialize ui_command", &error.into()),
     };
-    if let Err(e) = invoke(CMD_UI_COMMAND, args).await {
-        log_err("ui_command failed", &e);
+    if let Err(error) = invoke(CMD_UI_COMMAND, args).await {
+        log_error("ui_command failed", &error);
     }
 }
 
-pub async fn get_snapshot() -> Option<Snapshot> {
-    let v = match invoke(CMD_GET_SNAPSHOT, JsValue::UNDEFINED).await {
-        Ok(v) => v,
-        Err(e) => {
-            log_err("get_snapshot failed", &e);
-            return None;
-        }
-    };
-    parse(v)
-}
-
-fn parse(v: JsValue) -> Option<Snapshot> {
-    match serde_wasm_bindgen::from_value(v) {
-        Ok(s) => Some(s),
-        Err(e) => {
-            log_err("bad snapshot payload", &e.into());
+pub(crate) async fn get_snapshot() -> Option<Snapshot> {
+    match invoke(CMD_GET_SNAPSHOT, JsValue::UNDEFINED).await {
+        Ok(payload) => parse(payload),
+        Err(error) => {
+            log_error("get_snapshot failed", &error);
             None
         }
     }
 }
 
-/// Subscribe to snapshot events for the lifetime of the page.
-pub fn listen_snapshots(on: impl Fn(Snapshot) + 'static) {
-    let handler = Closure::<dyn FnMut(JsValue)>::new(move |e: JsValue| {
-        if let Ok(p) = Reflect::get(&e, &JsValue::from_str("payload"))
-            && let Some(s) = parse(p)
+fn parse(payload: JsValue) -> Option<Snapshot> {
+    match serde_wasm_bindgen::from_value(payload) {
+        Ok(snapshot) => Some(snapshot),
+        Err(error) => {
+            log_error("bad snapshot payload", &error.into());
+            None
+        }
+    }
+}
+
+/// Subscribes to snapshot events for the lifetime of the page.
+pub(crate) fn listen_snapshots(on_snapshot: impl Fn(Snapshot) + 'static) {
+    let handler = Closure::<dyn FnMut(JsValue)>::new(move |event: JsValue| {
+        if let Ok(payload) = Reflect::get(&event, &JsValue::from_str("payload"))
+            && let Some(snapshot) = parse(payload)
         {
-            on(s);
+            on_snapshot(snapshot);
         }
     });
-    let f: Function = handler.as_ref().unchecked_ref::<Function>().clone();
+    let callback: Function = handler.as_ref().unchecked_ref::<Function>().clone();
     handler.forget();
     wasm_bindgen_futures::spawn_local(async move {
-        match listen_raw(EVENT_SNAPSHOT, &f) {
-            Ok(p) => {
-                if let Err(e) = JsFuture::from(p).await {
-                    log_err("listen failed", &e);
+        match listen_raw(EVENT_SNAPSHOT, &callback) {
+            Ok(promise) => {
+                if let Err(error) = JsFuture::from(promise).await {
+                    log_error("listen failed", &error);
                 }
             }
-            Err(e) => log_err("listen failed", &e),
+            Err(error) => log_error("listen failed", &error),
         }
     });
 }

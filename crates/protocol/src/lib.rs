@@ -1,6 +1,6 @@
 //! Contract between the backend and the sidebar UI. Compiles to native and wasm32.
 //!
-//! - UI -> backend: Tauri command [`CMD_UI_COMMAND`] with argument `{ cmd: UiCommand }`.
+//! - UI -> backend: Tauri command [`CMD_UI_COMMAND`] with argument `{ command: UiCommand }`.
 //! - UI initial load: Tauri command [`CMD_GET_SNAPSHOT`] returns a [`Snapshot`].
 //! - backend -> UI: event [`EVENT_SNAPSHOT`] (payload [`Snapshot`]) sent to the `ui` webview
 //!   after every state change. The UI renders the snapshot; it keeps no state of its own
@@ -339,7 +339,7 @@ pub struct AccountView {
     pub settings: AccountSettings,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ServiceInfo {
     pub id: String,
     pub name: String,

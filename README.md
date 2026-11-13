@@ -112,7 +112,7 @@ Copy `Atrium.app` to `/Applications`. The app is not signed. The first time, ope
 
 ### Service definitions (expert mode)
 
-Settings → Custom services → *Open folder* opens `~/Library/Application Support/org.fuchss.atrium/services/`. Every `*.toml` file there defines a service, in the same format as the built-in ones in [`services/`](services). A file with the id of a built-in service overrides it. Click *Reload* to apply changes.
+Settings → Custom services → *Open folder* opens `~/Library/Application Support/org.fuchss.atrium/services/`. Every `*.toml` file there defines a service, in the same format as the built-in ones in [`services/`](services). A file with the id of a built-in service overrides it. The same tab lists the files and edits them in the app: *Edit*, *New definition* (starts from the documented template), *Disable*/*Enable* (renames to `.toml.disabled`) and *Delete*. The editor checks the text with the loader's own rules while you type, shows errors with line and column, refuses to save an invalid file and applies a saved file right away. Edits made outside the app need *Reload*.
 
 ```toml
 id = "forum"
@@ -184,7 +184,7 @@ Debug builds (`cargo tauri dev`, `cargo tauri build --debug`) read these environ
 | `ATRIUM_WINDOW_POSITION=<x>,<y>` | Position of the main window in logical pixels (the main display starts at `0,0`), e.g. to open it on a Retina display. |
 | `ATRIUM_DEV_INIT_SCRIPT=<file>` | JavaScript appended to the init script of every service view (the screenshot script seeds a demo Element session with it). |
 | `ATRIUM_LOG_TITLES=1` | Logs page titles with each unread change, to check a service's `title_regex` against what it really shows. Titles name chats and senders, so this is off otherwise. |
-| `ATRIUM_DEV_UI_QUERY=<query>` | Query string for the sidebar UI. `dialog=<tab>` opens the settings dialog on a tab (`accounts`, `general`, `notifications`, `dock`, `links`, `custom`, `about`), `edit=<index>` opens the edit form of an account, `addcustom=1` the custom service form. |
+| `ATRIUM_DEV_UI_QUERY=<query>` | Query string for the sidebar UI. `dialog=<tab>` opens the settings dialog on a tab (`accounts`, `general`, `notifications`, `dock`, `links`, `custom`, `about`), `edit=<index>` opens the edit form of an account, `addcustom=1` the custom service form, `editservice=<file>` the definition editor (demo files `wiki.toml`, `broken.toml`). |
 
 `scripts/screenshots.sh` takes the README screenshots in `docs/screenshots/` with demo data only. It runs a throwaway Matrix homeserver (tuwunel) and Element web in Docker, seeds demo users and chats, builds a debug bundle with its own bundle id `org.fuchss.atrium.demo` into `target/screenshots`, and starts it with the variables above and a temporary config folder. The own bundle id keeps the demo's WebKit data, logs, caches and WebCrypto Keychain item apart from a regular installation (sharing `org.fuchss.atrium` would make macOS ask for access to its Keychain item). At the end it removes the containers, the temporary folder and everything stored under `org.fuchss.atrium.demo`, including its Keychain item. It needs Docker, ImageMagick (`magick`), free ports 8008 and 8080, and Screen Recording permission for the terminal.
 

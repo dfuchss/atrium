@@ -4,6 +4,8 @@ mod account_form;
 mod accounts;
 mod app_tabs;
 mod custom_services;
+mod service_editor;
+mod service_files;
 
 use leptos::prelude::*;
 use protocol::{AppSettings, Snapshot, UiCommand};
@@ -71,6 +73,9 @@ pub(crate) struct UiState {
     pub(crate) edit_index: RwSignal<Option<usize>>,
     /// Screenshot aid (`?addcustom=1`): open the custom-service add form initially (consumed once).
     pub(crate) add_custom: RwSignal<bool>,
+    /// Screenshot aid (`?editservice=<file>`): service definition file opened in the editor
+    /// initially (consumed once).
+    pub(crate) edit_service: RwSignal<Option<String>>,
 }
 
 pub(crate) fn open_dialog(tab: Tab, focus_add: bool) {

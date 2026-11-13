@@ -5,8 +5,10 @@
 
 mod commands;
 mod demo;
+mod demo_files;
 mod glyphs;
 mod query;
+mod service_api;
 mod settings;
 mod sidebar;
 mod tauri;
@@ -39,7 +41,7 @@ fn connect(set_snapshot: WriteSignal<Snapshot>, open_dialog: bool) {
     }
 }
 
-/// `?dialog=<tab>&edit=<index>&addcustom=1` open the settings dialog in a given state, in the
+/// `?dialog=<tab>&edit=<index>&addcustom=1&editservice=<file>` open the settings dialog in a given state, in the
 /// demo and in the app alike (screenshots without clicks, see README "Development").
 fn initial_ui_state() -> (UiState, bool) {
     let dialog = query_param("dialog");
@@ -52,6 +54,7 @@ fn initial_ui_state() -> (UiState, bool) {
         focus_add: RwSignal::new(false),
         edit_index: RwSignal::new(query_param("edit").and_then(|index| index.parse().ok())),
         add_custom: RwSignal::new(query_param("addcustom").is_some_and(|value| value != "0")),
+        edit_service: RwSignal::new(query_param("editservice").filter(|name| !name.is_empty())),
     };
     (state, dialog.is_some())
 }

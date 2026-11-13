@@ -5,6 +5,7 @@ use protocol::{CustomService, ServiceInfo, Snapshot, UiCommand};
 
 use super::UiState;
 use super::account_form::user_agent_mode;
+use super::service_files::ServiceFiles;
 use crate::commands::send_command;
 use crate::widgets::{ConfirmButton, Row, no_autocorrect, non_empty};
 
@@ -93,33 +94,6 @@ fn CustomServiceRow(
                 on_confirm=move |()| send_command(UiCommand::RemoveCustomService { id: removed_id.clone() })
             />
         </div>
-    }
-}
-
-/// The user's TOML folder, its reload button and the problems of the last load.
-#[component]
-fn ServiceFiles(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    view! {
-        <h2>"Service definition files"</h2>
-        <p class="note">"Edit or add TOML files here for full control (same format as the built-in services). A file with the same id as a built-in service overrides it. Click Reload to apply. Use {instance} in url or internal_hosts for the part that differs per account (e.g. the server host); instance_label sets the field's label and instance_default pre-fills it."</p>
-        <div class="form">
-            <Row label="Folder"><code>{move || snapshot.with(|snapshot| snapshot.app.services_dir.clone())}</code></Row>
-            <Row label="">
-                <div class="actions">
-                    <button class="btn" on:click=move |_| send_command(UiCommand::OpenServicesFolder)>"Open folder"</button>
-                    <button class="btn" on:click=move |_| send_command(UiCommand::ReloadServices)>"Reload"</button>
-                </div>
-            </Row>
-        </div>
-        {move || {
-            let errors = snapshot.with(|snapshot| snapshot.service_errors.clone());
-            (!errors.is_empty()).then(|| view! {
-                <div class="note error">
-                    <For each=move || errors.clone().into_iter().enumerate() key=|(index, error)| (*index, error.clone())
-                        children=|(_, error)| view! { <div><code>{error}</code></div> } />
-                </div>
-            })
-        }}
     }
 }
 

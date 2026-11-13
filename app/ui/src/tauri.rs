@@ -3,6 +3,7 @@
 use js_sys::{Function, Promise, Reflect};
 use protocol::{CMD_GET_SNAPSHOT, CMD_UI_COMMAND, EVENT_SNAPSHOT, Snapshot, UiCommand};
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -42,6 +43,24 @@ pub(crate) async fn send(command: UiCommand) {
     if let Err(error) = invoke(CMD_UI_COMMAND, args).await {
         log_error("ui_command failed", &error);
     }
+}
+
+/// Calls a request/response command of the backend. `Err` carries the backend's message or a
+/// description of the transport failure.
+pub(crate) async fn call<R: DeserializeOwned>(
+    command: &str,
+    arguments: impl Serialize,
+) -> Result<R, String> {
+    let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+    let arguments = arguments
+        .serialize(&serializer)
+        .map_err(|error| error.to_string())?;
+    let payload = invoke(command, arguments).await.map_err(|error| {
+        error
+            .as_string()
+            .unwrap_or_else(|| format!("{command} failed: {error:?}"))
+    })?;
+    serde_wasm_bindgen::from_value(payload).map_err(|error| error.to_string())
 }
 
 pub(crate) async fn get_snapshot() -> Option<Snapshot> {

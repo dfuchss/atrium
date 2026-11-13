@@ -11,6 +11,9 @@ Settings > Custom services; no restart needed.
   previous definition of that service stays active.
 - Accounts of a changed service reload their page on Reload (the login stays).
 
+Settings > Custom services also edits these files in the app (validated while you type,
+applied on save); files changed outside the app need "Reload".
+
 Start from `example.toml.disabled`: copy it to `myservice.toml` and edit it. Every field
 is documented there.
 

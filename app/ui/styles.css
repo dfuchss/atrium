@@ -182,3 +182,8 @@ h3.spaced { margin-top: 22px; }
 .about-name { margin: 0; font-size: 22px; }
 .about-version { color: var(--sub); margin-top: 2px; }
 .about-tagline { margin-top: 6px; }
+.toml-editor { min-height: 320px; white-space: pre; tab-size: 2; }
+.row.file-disabled .names { opacity: .55; }
+.problems .problem { margin-bottom: 6px; }
+.problems .source { display: block; white-space: pre; opacity: .8; }
+.note.ok { color: #16a34a; }

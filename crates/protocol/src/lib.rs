@@ -11,6 +11,15 @@ use uuid::Uuid;
 
 pub const CMD_UI_COMMAND: &str = "ui_command";
 pub const CMD_GET_SNAPSHOT: &str = "get_snapshot";
+/// Service definition editor commands (request/response, they bypass the core): arguments and
+/// results are described on [`ServiceFile`] and [`ServiceProblem`].
+pub const CMD_LIST_SERVICE_FILES: &str = "list_service_files";
+pub const CMD_READ_SERVICE_FILE: &str = "read_service_file";
+pub const CMD_NEW_SERVICE_TEMPLATE: &str = "new_service_template";
+pub const CMD_VALIDATE_SERVICE: &str = "validate_service";
+pub const CMD_SAVE_SERVICE_FILE: &str = "save_service_file";
+pub const CMD_DELETE_SERVICE_FILE: &str = "delete_service_file";
+pub const CMD_SET_SERVICE_FILE_ENABLED: &str = "set_service_file_enabled";
 pub const EVENT_SNAPSHOT: &str = "snapshot";
 /// Label of the local sidebar webview.
 /// Project page (repository) of Atrium.
@@ -137,6 +146,23 @@ pub enum UiCommand {
     ReloadServices,
     /// About tab: open [`PROJECT_URL`] in the browser.
     OpenProjectPage,
+}
+
+/// A file in the services folder: `<name>.toml` (enabled, loaded) or `<name>.toml.disabled`
+/// (ignored). `name` is the file name on disk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServiceFile {
+    pub name: String,
+    pub enabled: bool,
+}
+
+/// A problem of a service definition text; `line` and `column` (1-based) are known when the
+/// TOML parser reports a position.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServiceProblem {
+    pub message: String,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

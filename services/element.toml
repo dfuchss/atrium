@@ -8,6 +8,10 @@ user_agent = "safari"
 internal_hosts = ["{team}", "*.element.io", "*.matrix.org"]
 allow_media = true
 
+# Element's single-instance session lock (SessionLock.ts). This app only ever has one Element page
+# per account, so a lock found at page start is stale (app was quit without unloading the page).
+clear_local_storage = ["react_sdk_session_lock_ping", "react_sdk_session_lock_owner", "react_sdk_session_lock_claimant"]
+
 [unread]
 # Element puts the notification count in brackets, e.g. "Element [3]" (to verify in spike S2)
 title_regex = '\[(\d+)\]'

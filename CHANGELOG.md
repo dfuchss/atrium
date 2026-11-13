@@ -16,6 +16,7 @@ First release.
 - App menu with keyboard shortcuts, launch at login, start hidden and keep running in the background
 - Built-in services for Element / Matrix, Slack, Discord, Rainbow, LinkedIn and Mastodon
 - Custom services created in the settings
+- Element starts reliably after a restart instead of getting stuck on a stale session lock
 - Per-account zoom, user agent, custom CSS, site icon, camera and microphone permission, and enable/disable
 - Reorder accounts by drag and drop, choose the icon size, pick a Simple Icons glyph, and let inactive services sleep to free memory
 - Native notifications that open the right account, with Do Not Disturb and per-account mute

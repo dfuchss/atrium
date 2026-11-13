@@ -715,7 +715,12 @@ impl Core {
             Some(preset) => crate::catalog::resolve_user_agent_preset(Some(preset)),
             None => svc.resolve_user_agent(),
         };
-        let mut init_script = crate::NOTIFY_SHIM.to_string();
+        let mut init_script = String::new();
+        if !svc.clear_local_storage.is_empty() {
+            init_script.push_str(&storage_cleaner(&svc.clear_local_storage));
+            init_script.push('\n');
+        }
+        init_script.push_str(crate::NOTIFY_SHIM);
         if let Some(css) = acc.custom_css.as_deref().filter(|c| !c.trim().is_empty()) {
             init_script.push('\n');
             init_script.push_str(&css_injector(css));
@@ -1722,6 +1727,12 @@ fn sanitize_zoom(zoom: f64) -> f64 {
 
 /// Script that adds `css` as a `<style>` element (at document start, again after
 /// DOMContentLoaded if the page dropped it).
+/// Removes the given `localStorage` keys at document start (before page scripts run).
+fn storage_cleaner(keys: &[String]) -> String {
+    let keys = serde_json::to_string(keys).expect("strings always serialize");
+    format!("(()=>{{try{{for(const k of {keys})localStorage.removeItem(k);}}catch(e){{}}}})();")
+}
+
 fn css_injector(css: &str) -> String {
     let css = serde_json::to_string(css).expect("strings always serialize");
     format!(
@@ -2318,6 +2329,16 @@ mod tests {
         assert_eq!(snap(&fx).active, Some(new));
         let fx = c.handle(Input::Ui(UiCommand::SetDialog { open: false }));
         assert!(fx.contains(&Effect::Show(new)));
+    }
+
+    #[test]
+    fn element_clears_stale_session_lock_before_page_scripts() {
+        let def = Catalog::builtin().get("element").cloned().unwrap();
+        assert!(def.clear_local_storage.iter().any(|k| k == "react_sdk_session_lock_ping"), "{def:?}");
+        let (_, fx) = started(vec![acc(1, "element", "E")]);
+        let script = &views(&fx)[0].0.init_script;
+        assert!(script.starts_with("(()=>{try{for(const k of [\"react_sdk_session_lock_ping\""), "{script:.120}");
+        assert!(script.contains(crate::NOTIFY_SHIM));
     }
 
     fn views(fx: &[Effect]) -> Vec<(&ViewSpec, bool)> {

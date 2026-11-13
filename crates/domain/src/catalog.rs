@@ -59,6 +59,11 @@ pub struct ServiceDef {
     /// Default for granting camera/microphone/screen capture (call apps); accounts can override.
     #[serde(default)]
     pub allow_media: bool,
+    /// `localStorage` keys removed before the page's own scripts run, e.g. stale single-instance
+    /// session locks (Element) left behind when the app was quit without unloading the page.
+    /// Only one page per account exists in this app, so such locks are always stale on load.
+    #[serde(default)]
+    pub clear_local_storage: Vec<String>,
     #[serde(default)]
     pub unread: UnreadRules,
 }
@@ -293,6 +298,7 @@ impl ServiceDef {
             user_agent: Some(c.user_agent.unwrap_or_else(|| "safari".into())),
             internal_hosts: host.into_iter().collect(),
             allow_media: false,
+            clear_local_storage: Vec::new(),
             unread: UnreadRules {
                 title_regex: Some(c.title_regex.unwrap_or_else(|| DEFAULT_TITLE_REGEX.into())),
                 title_indirect_regex: None,

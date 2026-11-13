@@ -122,6 +122,12 @@ impl<R: Runtime> TauriHost<R> {
         self.logger.file()
     }
 
+    /// The host log as a plain function, for parts outside the ports (the updater).
+    pub fn log_sink(&self) -> Arc<dyn Fn(&str) + Send + Sync> {
+        let logger = self.logger.clone();
+        Arc::new(move |message| logger.log(message))
+    }
+
     /// `<config>/services`, the user's service definition files.
     fn services_dir(&self) -> PortResult<PathBuf> {
         let config_dir = match &self.config_dir {

@@ -12,6 +12,7 @@ mod service_api;
 mod settings;
 mod sidebar;
 mod tauri;
+mod update;
 mod widgets;
 
 use leptos::prelude::*;
@@ -77,6 +78,9 @@ fn App() -> impl IntoView {
     connect(set_snapshot, open_dialog);
     provide_context(Dispatch(set_snapshot));
     provide_context(ui_state);
+    let (update_status, set_update_status) = signal(protocol::UpdateStatus::default());
+    update::connect_updates(set_update_status);
+    provide_context(update::UpdateStatusSignal(update_status));
 
     let on_key = window_event_listener(leptos::ev::keydown, move |event| {
         if event.key() == "Escape" && snapshot.with_untracked(|snapshot| snapshot.dialog_open) {

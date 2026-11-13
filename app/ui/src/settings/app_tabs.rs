@@ -5,6 +5,7 @@ use protocol::{DockBadgeMode, IconSize, LinkTarget, Snapshot, UiCommand};
 
 use super::app_toggle;
 use crate::commands::{send_command, update_settings};
+use crate::update::UpdateSection;
 use crate::widgets::{HIBERNATE_MINUTES, Row, minutes_label, no_autocorrect, number_options};
 
 #[component]
@@ -185,5 +186,6 @@ pub(super) fn AboutTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             <Row label="Log file"><code>{move || app.get().log_file}</code></Row>
             <Row label="Services directory"><code>{move || app.get().services_dir}</code></Row>
         </div>
+        <UpdateSection />
     }
 }

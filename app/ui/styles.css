@@ -50,6 +50,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .ico svg { display: block; }
 .tool:hover { background: var(--hover); }
 .tool.on { border-color: var(--danger); }
+/* An update is available: a small accent dot on the settings button. */
+.tool.update { position: relative; }
+.tool.update::after { content: ""; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bg); }
 
 .dialog { position: fixed; inset: 0 0 0 var(--sidebar, 56px); background: var(--panel); overflow-y: auto; padding: 20px 28px;
   user-select: text; z-index: 1; }
@@ -187,3 +191,7 @@ h3.spaced { margin-top: 22px; }
 .problems .problem { margin-bottom: 6px; }
 .problems .source { display: block; white-space: pre; opacity: .8; }
 .note.ok { color: #16a34a; }
+.updates-title { margin-top: 28px; }
+.update-state.ready { color: var(--accent); font-weight: 600; }
+.update-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.update-failure { color: var(--danger); }

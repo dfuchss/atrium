@@ -3,13 +3,14 @@
 use std::time::Duration;
 
 use leptos::prelude::*;
-use protocol::{Snapshot, UiCommand};
+use protocol::{Snapshot, UiCommand, UpdateStatus};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 
 use crate::commands::send_command;
 use crate::glyphs::{ICON_BELL, ICON_BELL_OFF, ICON_GEAR, ICON_PLUS};
 use crate::settings::{Tab, open_dialog};
+use crate::update::UpdateStatusSignal;
 use crate::widgets::{Icon, account_icon};
 
 /// Pointer movement (px) before a press on an icon becomes a drag.
@@ -399,10 +400,19 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
 #[component]
 fn SidebarTools(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     let dnd = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.dnd));
+    let UpdateStatusSignal(update_status) = expect_context::<UpdateStatusSignal>();
+    let has_update = Memo::new(move |_| update_status.with(UpdateStatus::has_update));
     view! {
         <div class="bottom">
             <button class="tool" title="Add account" on:click=move |_| open_dialog(Tab::Accounts, true)><Icon svg=ICON_PLUS /></button>
-            <button class="tool" title="Settings" on:click=move |_| open_dialog(Tab::General, false)><Icon svg=ICON_GEAR /></button>
+            <button
+                class="tool"
+                class:update=move || has_update.get()
+                title=move || if has_update.get() { "Settings \u{2013} update available" } else { "Settings" }
+                on:click=move |_| open_dialog(if has_update.get_untracked() { Tab::About } else { Tab::General }, false)
+            >
+                <Icon svg=ICON_GEAR />
+            </button>
             <button
                 class="tool"
                 class:on=move || dnd.get()

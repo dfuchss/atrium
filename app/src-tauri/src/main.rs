@@ -4,6 +4,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod updates;
+
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -377,6 +379,7 @@ fn setup(
     host.log(&format!("---- Atrium {version} starting ----"));
     let config_dir = config_dir(app, &dev, &host)?;
     let store = FsStore::new(config_dir.clone());
+    updates::start(app, config_dir.clone(), host.log_sink())?;
     let load = load_persisted(&store, &host);
     let read_only = load.is_read_only();
     let persisted = load.into_persisted();
@@ -431,6 +434,10 @@ fn setup(
 }
 
 fn main() {
+    // Started as the update helper (see `updater::helper`): swap the bundle, never open a window.
+    if let Some(exit_code) = updater::helper::run_if_requested() {
+        std::process::exit(exit_code);
+    }
     let context = tauri::generate_context!();
     let (sender, inputs) = mpsc::channel::<Input>();
     let feed: Feed = Arc::new(move |input| {
@@ -461,6 +468,8 @@ fn main() {
             service_files::save_service_file,
             service_files::delete_service_file,
             service_files::set_service_file_enabled,
+            updates::update_command,
+            updates::get_update_status,
         ])
         // App menu and tray menu items (built by the host from the core's menu model).
         .on_menu_event(move |app, event| {
@@ -472,6 +481,8 @@ fn main() {
     app.run(|app, event| match event {
         // Dock icon click: bring a hidden (closed to background / started hidden) window back.
         RunEvent::Reopen { .. } => show_main_window(app),
+        // "Restart and update": the helper swaps the bundle once this process is gone.
+        RunEvent::Exit => updates::launch_pending_helper(app),
         // Any other exit request (e.g. the last window went away) unloads the pages first; the
         // request `graceful_quit` ends with passes. The predefined Quit (`terminate:`, still used
         // by the Dock menu and at logout) skips this event, hence the custom Quit menu items.

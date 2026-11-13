@@ -2,6 +2,9 @@
 
 use js_sys::{Function, Promise, Reflect};
 use protocol::{CMD_GET_SNAPSHOT, CMD_UI_COMMAND, EVENT_SNAPSHOT, Snapshot, UiCommand};
+use protocol::{
+    CMD_GET_UPDATE_STATUS, CMD_UPDATE_COMMAND, EVENT_UPDATE_STATUS, UpdateCommand, UpdateStatus,
+};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use wasm_bindgen::prelude::*;
@@ -102,6 +105,56 @@ pub(crate) fn listen_snapshots(on_snapshot: impl Fn(Snapshot) + 'static) {
                 }
             }
             Err(error) => log_error("listen failed", &error),
+        }
+    });
+}
+
+/// Sends an `UpdateCommand`; errors are logged to the console.
+pub(crate) async fn send_update(command: UpdateCommand) {
+    #[derive(Serialize)]
+    struct Args {
+        command: UpdateCommand,
+    }
+    let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+    let args = match (Args { command }).serialize(&serializer) {
+        Ok(args) => args,
+        Err(error) => return log_error("serialize update_command", &error.into()),
+    };
+    if let Err(error) = invoke(CMD_UPDATE_COMMAND, args).await {
+        log_error("update_command failed", &error);
+    }
+}
+
+pub(crate) async fn get_update_status() -> Option<UpdateStatus> {
+    match invoke(CMD_GET_UPDATE_STATUS, JsValue::UNDEFINED).await {
+        Ok(payload) => serde_wasm_bindgen::from_value(payload)
+            .map_err(|error| log_error("bad update status", &error.into()))
+            .ok(),
+        Err(error) => {
+            log_error("get_update_status failed", &error);
+            None
+        }
+    }
+}
+
+/// Subscribes to update status events for the lifetime of the page.
+pub(crate) fn listen_update_status(on_status: impl Fn(UpdateStatus) + 'static) {
+    let handler = Closure::<dyn FnMut(JsValue)>::new(move |event: JsValue| {
+        if let Ok(payload) = Reflect::get(&event, &JsValue::from_str("payload"))
+            && let Ok(status) = serde_wasm_bindgen::from_value(payload)
+        {
+            on_status(status);
+        }
+    });
+    let callback: Function = handler.as_ref().unchecked_ref::<Function>().clone();
+    handler.forget();
+    wasm_bindgen_futures::spawn_local(async move {
+        let listening = match listen_raw(EVENT_UPDATE_STATUS, &callback) {
+            Ok(promise) => JsFuture::from(promise).await.map(|_| ()),
+            Err(error) => Err(error),
+        };
+        if let Err(error) = listening {
+            log_error("listen failed", &error);
         }
     });
 }

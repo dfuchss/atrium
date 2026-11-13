@@ -53,6 +53,7 @@
 # Regular expression on the page title; a match shows an indirect unread dot.
 # title_indirect_regex = '^\*'
 
-# JavaScript expression evaluated in the page about once a minute. Returns a number (direct
-# unread count) or an object {direct, indirect}. Use it when the title carries no count.
+# JavaScript expression evaluated in the page every second. Returns a number (direct unread
+# count) or an object {direct, indirect}. Use it when the title carries no count. It is code
+# running with the page's rights: only use expressions you understand.
 # poll = "document.querySelectorAll('.unread').length"

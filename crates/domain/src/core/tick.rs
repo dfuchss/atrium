@@ -79,19 +79,28 @@ impl Core {
         idle
     }
 
-    /// One poll per loaded view: drains its notifications and reads the unread expression.
+    /// One poll per loaded view, which drains its notifications, preceded by the evaluation
+    /// of the service's unread expression if it has one.
     fn poll_effects(&self) -> Vec<Effect> {
-        self.persisted
-            .accounts
-            .iter()
-            .filter(|account| self.is_loaded(account.id))
-            .filter_map(|account| {
-                let service = self.catalog.get(&account.service)?;
-                Some(Effect::Poll {
+        let mut effects = vec![];
+        for account in &self.persisted.accounts {
+            let Some(service) = self.catalog.get(&account.service) else {
+                continue;
+            };
+            if !self.is_loaded(account.id) {
+                continue;
+            }
+            if let Some(expression) = &service.unread.poll {
+                effects.push(Effect::Eval {
                     account: account.id,
-                    script: scripts::poll_script(service.unread.poll.as_deref()),
-                })
-            })
-            .collect()
+                    script: scripts::unread_script(expression),
+                });
+            }
+            effects.push(Effect::Poll {
+                account: account.id,
+                script: scripts::POLL_SCRIPT.into(),
+            });
+        }
+        effects
     }
 }

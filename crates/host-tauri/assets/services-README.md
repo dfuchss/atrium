@@ -24,3 +24,7 @@ for a workspace. Each account then asks for it; `instance_label` names the field
 `internal_hosts` also scopes camera, microphone and screen capture: they are granted only
 while the account's page (or its sign-in/app window) shows one of these hosts, and only if
 the account allows media. List every host a call runs on (e.g. a separate meeting domain).
+
+`poll` is JavaScript that runs inside the service page with the page's own rights, every
+second while the account is loaded. Only use expressions you understand; a service file
+from someone else can read everything the page shows.

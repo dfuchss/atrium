@@ -153,15 +153,47 @@ fn title_applies_while_the_poll_yields_nothing() {
 }
 
 #[test]
-fn bad_poll_json_is_logged_and_the_tick_polls_the_expression() {
+fn bad_poll_json_is_logged_once_until_it_recovers() {
     let mut core = core_with_polled_service();
     let effects = polled(&mut core, "not json");
-    assert!(matches!(effects.as_slice(), [Effect::Log(_)]));
+    assert!(matches!(effects.as_slice(), [Effect::Log(line)] if line.contains("bad JSON")));
+    assert!(polled(&mut core, "not json either").is_empty());
+    polled(&mut core, r#"{"n":[],"u":1}"#);
+    assert!(matches!(
+        polled(&mut core, "not json").as_slice(),
+        [Effect::Log(_)]
+    ));
+}
+
+#[test]
+fn the_tick_evaluates_the_expression_apart_from_the_drain() {
+    let mut core = core_with_polled_service();
     let effects = core.handle(Input::Tick { now_ms: 1000 });
-    match &effects[0] {
-        Effect::Poll { script, .. } => assert!(script.contains("u=(1+1)")),
-        effect => panic!("{effect:?}"),
+    match effects.as_slice() {
+        [
+            Effect::Eval { script: unread, .. },
+            Effect::Poll { script: drain, .. },
+            ..,
+        ] => {
+            assert!(unread.contains("m.unread=(\n1+1\n)"), "{unread}");
+            assert_eq!(drain, scripts::POLL_SCRIPT);
+        }
+        other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn a_broken_expression_stays_out_of_the_drain_script() {
+    let broken = "1})();document.title='x';(()=>{(";
+    let script = scripts::unread_script(broken);
+    assert!(
+        script
+            .starts_with("(()=>{const m=window.__msgr;if(!m)return;m.unread=null;try{m.unread=(\n")
+    );
+    assert!(script.ends_with("\n)}catch(e){}})()"));
+    assert!(!scripts::POLL_SCRIPT.contains(broken));
+    // A trailing line comment cannot swallow the closing parenthesis.
+    assert!(scripts::unread_script("1 // count").contains("1 // count\n)"));
 }
 
 #[test]
@@ -172,7 +204,7 @@ fn tick_script_exact_and_unknown_account() {
         effects,
         vec![Effect::Poll {
             account: id(1),
-            script: "(()=>{const m=window.__msgr;let u=null;try{u=(null)}catch(e){}return JSON.stringify({n:m?m.drain():[],u:u});})()".into()
+            script: "(()=>{const m=window.__msgr;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()".into()
         }]
     );
     assert!(matches!(

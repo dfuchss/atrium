@@ -31,12 +31,17 @@ pub(super) fn init_script(service: &ServiceDef, account: &Account) -> String {
     script
 }
 
-/// Drains the shim's notification queue and evaluates the service's unread expression, both
-/// returned as one JSON string.
-pub(super) fn poll_script(unread_expression: Option<&str>) -> String {
-    let expression = unread_expression.unwrap_or("null");
+/// Drains the shim's notification queue and returns it with the value [`unread_script`] left
+/// in the shim, as one JSON string. Fixed text, so it parses whatever a service's expression
+/// looks like, and a value that is no JSON cannot cost the drained notifications.
+pub(super) const POLL_SCRIPT: &str = "(()=>{const m=window.__msgr;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()";
+
+/// Evaluates a service's unread expression into the shim for the next [`POLL_SCRIPT`]. A script
+/// of its own: a syntax error in the expression fails only this evaluation, not the drain.
+/// Not `new Function`, which pages without CSP `unsafe-eval` refuse.
+pub(super) fn unread_script(expression: &str) -> String {
     format!(
-        "(()=>{{const m=window.__msgr;let u=null;try{{u=({expression})}}catch(e){{}}return JSON.stringify({{n:m?m.drain():[],u:u}});}})()"
+        "(()=>{{const m=window.__msgr;if(!m)return;m.unread=null;try{{m.unread=(\n{expression}\n)}}catch(e){{}}}})()"
     )
 }
 

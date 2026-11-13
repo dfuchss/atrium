@@ -257,11 +257,7 @@ impl Core {
         }
         let poll = match PollResult::decode(raw) {
             Ok(poll) => poll,
-            Err(error) => {
-                return vec![Effect::Log(format!(
-                    "poll result for {account_id}: {error}"
-                ))];
-            }
+            Err(error) => return self.unread.poll_failed(account_id, &error),
         };
         self.unread.failing_polls.remove(&account_id);
         let mut effects = if muted {

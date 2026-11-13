@@ -8,9 +8,14 @@ fn page_loaded(core: &mut Core) -> Vec<Effect> {
 }
 
 fn icon_found(core: &mut Core, url: &str) -> Vec<Effect> {
+    icon_found_on(core, url, "https://app.slack.com/client")
+}
+
+fn icon_found_on(core: &mut Core, url: &str, page_url: &str) -> Vec<Effect> {
     core.handle(Input::IconFound {
         account: id(1),
         raw: serde_json::to_string(url).unwrap(),
+        page_url: Some(page_url.into()),
     })
 }
 
@@ -103,12 +108,52 @@ fn icon_data_urls_are_taken_directly_and_bad_results_logged() {
         let effects = core.handle(Input::IconFound {
             account: id(1),
             raw: raw.into(),
+            page_url: None,
         });
         assert!(
             matches!(effects.as_slice(), [Effect::Log(_)]),
             "{raw}: {effects:?}"
         );
     }
+}
+
+#[test]
+fn icons_are_fetched_only_over_https_from_known_hosts() {
+    let (mut core, _) = started(vec![account(1, "slack", "A")]);
+    let fetches = |effects: &[Effect]| matches!(effects, [Effect::FetchIcon { .. }]);
+    // the page's own host, even outside internal_hosts
+    assert!(fetches(&icon_found_on(
+        &mut core,
+        "https://sso.example.org/favicon.ico",
+        "https://sso.example.org/login"
+    )));
+    // a service host while another page is shown
+    assert!(fetches(&icon_found_on(
+        &mut core,
+        "https://a.slack-edge.com/i.png",
+        "https://sso.example.org/"
+    )));
+    for refused in [
+        "http://app.slack.com/favicon.ico",
+        "https://192.168.1.1/admin.png",
+        "https://localhost/icon.png",
+        "https://evil.example/icon.png?track=1",
+    ] {
+        let effects = icon_found(&mut core, refused);
+        assert!(
+            matches!(effects.as_slice(), [Effect::Log(line)] if !line.contains("track")),
+            "{refused}: {effects:?}"
+        );
+    }
+    let effects = core.handle(Input::IconFound {
+        account: id(1),
+        raw: serde_json::to_string("https://sso.example.org/favicon.ico").unwrap(),
+        page_url: None,
+    });
+    assert!(
+        matches!(effects.as_slice(), [Effect::Log(_)]),
+        "unknown page"
+    );
 }
 
 #[test]

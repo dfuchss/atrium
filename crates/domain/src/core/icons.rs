@@ -47,6 +47,17 @@ fn decode_icon_url(raw: &str) -> Option<String> {
     }
 }
 
+/// Whether the app may download `icon` for a page on `page_host`: https only, from the page's
+/// own host or one of the service's `internal_hosts`, so a page cannot make the app fetch
+/// arbitrary (local network) addresses.
+fn icon_url_allowed(icon: &url::Url, page_host: Option<&str>, internal_hosts: &[String]) -> bool {
+    icon.scheme() == "https"
+        && icon.host_str().is_some_and(|host| {
+            page_host.is_some_and(|page_host| page_host.eq_ignore_ascii_case(host))
+                || crate::catalog::host_matches_any(internal_hosts, host)
+        })
+}
+
 impl Core {
     /// Looks for a favicon after a page load until one was fetched.
     pub(super) fn page_loaded(&mut self, account_id: Uuid) -> Vec<Effect> {
@@ -69,10 +80,18 @@ impl Core {
         }]
     }
 
-    pub(super) fn icon_found(&mut self, account_id: Uuid, raw: &str) -> Vec<Effect> {
-        if !self.has_account(account_id) {
+    pub(super) fn icon_found(
+        &mut self,
+        account_id: Uuid,
+        raw: &str,
+        page_url: Option<&str>,
+    ) -> Vec<Effect> {
+        let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
-        }
+        };
+        let internal_hosts = self
+            .view_spec(account)
+            .map_or_default(|spec| spec.internal_hosts);
         let Some(url) = decode_icon_url(raw) else {
             return vec![Effect::Log(format!(
                 "icon of account {account_id}: no icon URL ({raw:.100})"
@@ -81,15 +100,18 @@ impl Core {
         if url.starts_with(IMAGE_DATA_URL_PREFIX) {
             return self.icon_fetched(account_id, Some(url));
         }
+        let page = page_url.and_then(|page| url::Url::parse(page).ok());
+        let page_host = page.as_ref().and_then(url::Url::host_str);
         match url::Url::parse(&url) {
-            Ok(parsed) if matches!(parsed.scheme(), "http" | "https") => {
+            Ok(parsed) if icon_url_allowed(&parsed, page_host, &internal_hosts) => {
                 vec![Effect::FetchIcon {
                     account: account_id,
                     url,
                 }]
             }
             _ => vec![Effect::Log(format!(
-                "icon of account {account_id}: unsupported URL {url:.100}"
+                "icon of account {account_id}: not fetching {} (https on the page's or the service's hosts only)",
+                crate::security::redact_url(&url)
             ))],
         }
     }

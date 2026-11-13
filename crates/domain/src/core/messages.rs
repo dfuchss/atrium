@@ -183,10 +183,12 @@ pub enum Input {
     Tick {
         now_ms: u64,
     },
-    /// Callback of [`Effect::FindIcon`]: JSON encoding of the icon URL (or null).
+    /// Callback of [`Effect::FindIcon`]: JSON encoding of the icon URL (or null), and the
+    /// page shown when it was found (read by the adapter, not reported by the page).
     IconFound {
         account: Uuid,
         raw: String,
+        page_url: Option<String>,
     },
     /// Result of [`Effect::FetchIcon`]: the image as `data:` URL, None on failure.
     IconFetched {

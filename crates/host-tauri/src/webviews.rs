@@ -324,8 +324,18 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
 
     fn find_icon(&self, account: Uuid, script: &str) -> PortResult {
         let feed = self.feed.clone();
-        self.webview(account)?
-            .eval_with_callback(script, move |raw| feed(Input::IconFound { account, raw }))
+        let webview = self.webview(account)?;
+        let page = webview.clone();
+        webview
+            .eval_with_callback(script, move |raw| {
+                // Read here, not reported by the script: the page could fake its own location.
+                let page_url = page.url().ok().map(String::from);
+                feed(Input::IconFound {
+                    account,
+                    raw,
+                    page_url,
+                });
+            })
             .map_err(port_err)
     }
 

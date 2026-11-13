@@ -155,7 +155,11 @@ impl Core {
                 self.window_resized(WindowSize { width, height })
             }
             Input::Tick { now_ms } => self.tick(now_ms),
-            Input::IconFound { account, raw } => self.icon_found(account, &raw),
+            Input::IconFound {
+                account,
+                raw,
+                page_url,
+            } => self.icon_found(account, &raw, page_url.as_deref()),
             Input::IconFetched { account, data_url } => self.icon_fetched(account, data_url),
             Input::SimpleIconFetched {
                 account,

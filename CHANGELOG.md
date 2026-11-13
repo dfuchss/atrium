@@ -32,3 +32,4 @@ First release.
 - A private log: no full URLs or page titles, readable only by you, and rotated
 - Downloads are quarantined, hidden files are refused, and you are notified when a download finishes
 - Removing an account deletes its stored data, retried at the next start if needed
+- Site icons are fetched only over https from the page's or service's own hosts

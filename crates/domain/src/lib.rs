@@ -18,7 +18,7 @@ pub use crate::core::{
     Bounds, Core, DockBadge, Effect, ICON_SCRIPT, Input, MenuAccount, MenuAction, MenuModel,
     NotificationReq, ViewPolicy, ViewSpec, WAKE_GAP_MS, ZOOM_STEPS,
 };
-pub use crate::model::{Account, Persisted, Settings};
+pub use crate::model::{Account, Persisted, Settings, unused_store_ids};
 pub use crate::security::{nav_allowed, opener_url_allowed, redact_url, window_title};
 pub use crate::throttle::RateLimiter;
 

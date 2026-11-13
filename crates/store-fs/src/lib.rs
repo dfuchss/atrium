@@ -20,7 +20,24 @@ impl FsStore {
     fn file(&self) -> PathBuf {
         self.dir.join("accounts.json")
     }
+
+    /// True if `accounts.json` exists and no earlier version was set aside as corrupt: only
+    /// then does it name every account whose web data may still be in use.
+    pub fn lists_all_accounts(&self) -> bool {
+        let quarantined = fs::read_dir(&self.dir).is_ok_and(|entries| {
+            entries.flatten().any(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(CORRUPT_FILE_PREFIX)
+            })
+        });
+        self.file().is_file() && !quarantined
+    }
 }
+
+/// Name prefix of a corrupt `accounts.json` kept for inspection.
+const CORRUPT_FILE_PREFIX: &str = "accounts.json.corrupt-";
 
 fn port_error(action: &str, error: impl std::fmt::Display) -> PortError {
     PortError(format!("{action}: {error}"))
@@ -43,7 +60,7 @@ impl Store for FsStore {
             let seconds = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map_or(0, |since_epoch| since_epoch.as_secs());
-            let target = self.dir.join(format!("accounts.json.corrupt-{seconds}"));
+            let target = self.dir.join(format!("{CORRUPT_FILE_PREFIX}{seconds}"));
             fs::rename(&path, &target)
                 .map_err(|error| port_error("quarantine corrupt accounts.json", error))?;
             Ok(Persisted::default())
@@ -182,6 +199,17 @@ mod tests {
     fn missing_is_default() {
         let d = tempfile::tempdir().unwrap();
         assert_eq!(FsStore::new(d.path()).load().unwrap(), Persisted::default());
+    }
+
+    #[test]
+    fn lists_all_accounts_only_with_an_intact_file() {
+        let d = tempfile::tempdir().unwrap();
+        let s = FsStore::new(d.path());
+        assert!(!s.lists_all_accounts(), "no file yet");
+        s.save(&sample()).unwrap();
+        assert!(s.lists_all_accounts());
+        fs::write(d.path().join("accounts.json.corrupt-1"), "{nope").unwrap();
+        assert!(!s.lists_all_accounts(), "an older file was corrupt");
     }
 
     #[test]

@@ -123,11 +123,32 @@ fn get_snapshot(state: State<'_, Shared>) -> Snapshot {
         .clone()
 }
 
-fn load_persisted(store: &dyn Store, log: &dyn Platform) -> Persisted {
-    store.load().unwrap_or_else(|error| {
-        log.log(&format!("cannot load accounts, starting empty: {error}"));
-        Persisted::default()
-    })
+/// The saved accounts and settings, and whether they were read from the file (not a fallback).
+fn load_persisted(store: &dyn Store, log: &dyn Platform) -> (Persisted, bool) {
+    match store.load() {
+        Ok(persisted) => (persisted, true),
+        Err(error) => {
+            log.log(&format!("cannot load accounts, starting empty: {error}"));
+            (Persisted::default(), false)
+        }
+    }
+}
+
+/// Deletes the web data of accounts that no longer exist, but only against an intact
+/// `accounts.json` of the regular installation: a development config folder shares the
+/// app's data stores without listing its accounts.
+fn remove_unused_data_stores(
+    host: &TauriHost<Wry>,
+    store: &FsStore,
+    dev: &DevHooks,
+    persisted: &Persisted,
+    loaded: bool,
+) {
+    if loaded && dev.config_dir.is_none() && store.lists_all_accounts() {
+        host.remove_unused_data_stores(persisted.accounts.clone());
+    } else {
+        host.log("not removing unused data stores: no complete, intact account list");
+    }
 }
 
 /// Wall clock in ms since the Unix epoch (ticks; a jump > 30 s means the Mac slept).
@@ -306,7 +327,8 @@ fn setup(
     host.log(&format!("---- Atrium {version} starting ----"));
     let config_dir = config_dir(app, &dev, &host)?;
     let store = FsStore::new(config_dir.clone());
-    let persisted = load_persisted(&store, &host);
+    let (persisted, loaded) = load_persisted(&store, &host);
+    remove_unused_data_stores(&host, &store, &dev, &persisted, loaded);
     let services_dir = config_dir.join("services");
     let (user_defs, user_errors) = host_tauri::services::read_user_services(&services_dir);
     host.log(&format!(

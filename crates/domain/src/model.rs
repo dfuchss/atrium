@@ -173,10 +173,35 @@ pub struct Persisted {
     pub custom_services: Vec<CustomService>,
 }
 
+/// The data stores among `existing` that belong to none of `accounts` (left by removed
+/// accounts whose deletion failed).
+pub fn unused_store_ids(existing: &[[u8; 16]], accounts: &[Account]) -> Vec<[u8; 16]> {
+    existing
+        .iter()
+        .filter(|store_id| {
+            !accounts
+                .iter()
+                .any(|account| account.store_id() == **store_id)
+        })
+        .copied()
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use protocol::DockBadgeMode;
+
+    #[test]
+    fn unused_stores_are_those_without_account() {
+        let kept = Account::new(Uuid::from_u128(1), "slack", "S", None);
+        let existing = [kept.store_id(), *Uuid::from_u128(2).as_bytes()];
+        assert_eq!(
+            unused_store_ids(&existing, &[kept]),
+            vec![*Uuid::from_u128(2).as_bytes()]
+        );
+        assert!(unused_store_ids(&[], &[]).is_empty());
+    }
 
     #[test]
     fn loads_old_format() {

@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use domain::ports::{PortError, PortResult, WebviewHost};
-use domain::{Bounds, ViewPolicy, ViewSpec, redact_url};
+use domain::{Account, Bounds, ViewPolicy, ViewSpec, redact_url, unused_store_ids};
 use protocol::UI_WEBVIEW;
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::{DownloadEvent, PageLoadEvent};
@@ -21,6 +21,49 @@ use crate::{Feed, Input, Logger, TauriHost, port_err};
 
 /// Time `WebKit` gets to delete the browsing data before the view reloads.
 const CLEAR_DATA_RELOAD_DELAY: Duration = Duration::from_millis(800);
+
+/// Pauses before retrying a failed data store deletion: right after its view closed, `WebKit`
+/// may still hold the store.
+const REMOVE_STORE_RETRY_DELAYS: [Duration; 3] = [
+    Duration::from_secs(1),
+    Duration::from_secs(5),
+    Duration::from_secs(30),
+];
+
+/// Deletes the data store `store_id`, retrying after [`REMOVE_STORE_RETRY_DELAYS`]. Blocks, so
+/// it runs on a thread of its own, never on the actor or the main thread.
+fn remove_data_store_with_retries<R: Runtime>(
+    app: &AppHandle<R>,
+    store_id: [u8; 16],
+    logger: &Logger,
+) {
+    let store = Uuid::from_bytes(store_id);
+    let mut result = tauri::async_runtime::block_on(app.remove_data_store(store_id));
+    for delay in REMOVE_STORE_RETRY_DELAYS {
+        let Err(error) = &result else {
+            break;
+        };
+        logger.log(&format!(
+            "cannot delete data store {store}: {error}; retrying in {} s",
+            delay.as_secs()
+        ));
+        std::thread::sleep(delay);
+        result = tauri::async_runtime::block_on(app.remove_data_store(store_id));
+    }
+    match result {
+        Ok(()) => logger.log(&format!("deleted data store {store}")),
+        Err(error) => logger.log(&format!(
+            "giving up deleting data store {store}: {error} (removed again at the next start)"
+        )),
+    }
+}
+
+/// Runs `job` on a new thread named `name`; logs if the thread cannot start.
+fn spawn_logged(name: &str, logger: &Logger, job: impl FnOnce() + Send + 'static) {
+    if let Err(error) = std::thread::Builder::new().name(name.into()).spawn(job) {
+        logger.log(&format!("cannot start thread {name}: {error}"));
+    }
+}
 
 /// Label of the service webview of `account`.
 pub(crate) fn view_label(account: Uuid) -> String {
@@ -288,14 +331,37 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
 
     fn delete_profile(&self, store_id: [u8; 16]) -> PortResult {
         let (app, logger) = (self.app.clone(), self.logger.clone());
-        let store = Uuid::from_bytes(store_id);
-        tauri::async_runtime::spawn(async move {
-            match app.remove_data_store(store_id).await {
-                Ok(()) => logger.log(&format!("deleted data store {store}")),
-                Err(error) => logger.log(&format!("cannot delete data store {store}: {error}")),
-            }
+        spawn_logged("remove-store", &self.logger, move || {
+            remove_data_store_with_retries(&app, store_id, &logger);
         });
         Ok(())
+    }
+}
+
+impl<R: Runtime> TauriHost<R> {
+    /// Deletes, in the background, the data stores of this app that belong to none of
+    /// `accounts`. Call it only with the complete account list (see `FsStore::lists_all_accounts`).
+    pub fn remove_unused_data_stores(&self, accounts: Vec<Account>) {
+        let (app, logger) = (self.app.clone(), self.logger.clone());
+        spawn_logged("unused-stores", &self.logger, move || {
+            let existing = match tauri::async_runtime::block_on(app.fetch_data_store_identifiers())
+            {
+                Ok(existing) => existing,
+                Err(error) => {
+                    logger.log(&format!("cannot list data stores: {error}"));
+                    return;
+                }
+            };
+            let unused = unused_store_ids(&existing, &accounts);
+            logger.log(&format!(
+                "{} data stores, {} without account",
+                existing.len(),
+                unused.len()
+            ));
+            for store_id in unused {
+                remove_data_store_with_retries(&app, store_id, &logger);
+            }
+        });
     }
 }
 

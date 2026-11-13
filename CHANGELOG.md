@@ -30,3 +30,4 @@ First release.
 - Camera and microphone are only available to the service's own sites
 - A private log: no full URLs or page titles, readable only by you, and rotated
 - Downloads are quarantined, hidden files are refused, and you are notified when a download finishes
+- Removing an account deletes its stored data, retried at the next start if needed

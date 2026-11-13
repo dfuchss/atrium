@@ -13,15 +13,29 @@ use domain::ports::{Platform, Store};
 use domain::runtime::{Ports, apply};
 use domain::{Catalog, Core, Effect, Input, Persisted};
 use host_tauri::{Feed, TauriHost};
-use protocol::{AppInfo, SIDEBAR_WIDTH, Snapshot, UI_WEBVIEW, UiCommand};
+use protocol::{AppInfo, Snapshot, UI_WEBVIEW, UiCommand};
 use store_fs::FsStore;
-use tauri::window::WindowBuilder;
+use tauri::window::{Color, WindowBuilder};
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, RunEvent, State, WebviewBuilder, WebviewUrl, WindowEvent, Wry,
+    AppHandle, LogicalPosition, LogicalSize, Manager, RunEvent, State, Theme, TitleBarStyle,
+    WebviewBuilder, WebviewUrl, WindowEvent, Wry,
 };
 use tauri_plugin_autostart::MacosLauncher;
 
 const MAIN_WINDOW: &str = "main";
+
+/// Sidebar background (`--bg` in `app/ui/styles.css`), shown through the transparent title bar.
+const SIDEBAR_BG_DARK: Color = Color(0x1b, 0x1c, 0x1f, 0xff);
+const SIDEBAR_BG_LIGHT: Color = Color(0xf1, 0xf2, 0xf4, 0xff);
+
+/// Window background for `theme`: the transparent title bar shows it, so it matches the sidebar.
+fn window_background(theme: Theme) -> Color {
+    if theme == Theme::Dark {
+        SIDEBAR_BG_DARK
+    } else {
+        SIDEBAR_BG_LIGHT
+    }
+}
 
 /// State shared with the Tauri commands.
 struct Shared {
@@ -37,7 +51,11 @@ fn ui_command(state: State<'_, Shared>, cmd: UiCommand) {
 
 #[tauri::command]
 fn get_snapshot(state: State<'_, Shared>) -> Snapshot {
-    state.snapshot.lock().unwrap_or_else(PoisonError::into_inner).clone()
+    state
+        .snapshot
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
 }
 
 fn load_persisted(store: &dyn Store, log: &dyn Platform) -> Persisted {
@@ -49,14 +67,18 @@ fn load_persisted(store: &dyn Store, log: &dyn Platform) -> Persisted {
 
 /// Wall clock in ms since the Unix epoch (ticks; a jump > 30 s means the Mac slept).
 fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
 }
 
 /// Built-in services plus user definitions from `<config>/services/*.toml` (overriding by id).
 /// The core adds the custom services stored in `accounts.json` on top.
 fn load_catalog(config_dir: &Path, log: &dyn Platform) -> Catalog {
     let mut catalog = Catalog::builtin();
-    let Ok(entries) = std::fs::read_dir(config_dir.join("services")) else { return catalog };
+    let Ok(entries) = std::fs::read_dir(config_dir.join("services")) else {
+        return catalog;
+    };
     let mut paths: Vec<_> = entries
         .filter_map(Result::ok)
         .map(|e| e.path())
@@ -87,7 +109,13 @@ fn run_actor(
     store: FsStore,
     cache: Arc<Mutex<Snapshot>>,
 ) {
-    let ports = Ports { host: &host, notifier: &host, platform: &host, ui: &host, store: &store };
+    let ports = Ports {
+        host: &host,
+        notifier: &host,
+        platform: &host,
+        ui: &host,
+        store: &store,
+    };
     for input in inputs {
         for effect in core.handle(input) {
             if let Effect::EmitSnapshot(snapshot) = &effect {
@@ -119,8 +147,14 @@ fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
-        .manage(Shared { feed: feed.clone(), snapshot: cache.clone() })
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .manage(Shared {
+            feed: feed.clone(),
+            snapshot: cache.clone(),
+        })
         .invoke_handler(tauri::generate_handler![ui_command, get_snapshot])
         // App menu and tray menu items (built by the host from the core's menu model).
         .on_menu_event(move |app, event| {
@@ -143,24 +177,40 @@ fn main() {
                 catalog.services().len()
             ));
 
+            // Transparent title bar without a title: it shows the window background (the
+            // sidebar color) instead of a lighter strip. Not Overlay: the content view stays
+            // below the title bar, so the services' top-edge controls keep working.
             let window = WindowBuilder::new(app, MAIN_WINDOW)
                 .title("Messengers")
+                .title_bar_style(TitleBarStyle::Transparent)
+                .hidden_title(true)
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(600.0, 400.0)
                 .visible(!persisted.settings.app.start_hidden)
                 .build()?;
-            let size = window.inner_size()?.to_logical::<f64>(window.scale_factor()?);
+            window.set_background_color(Some(window_background(
+                window.theme().unwrap_or(Theme::Light),
+            )))?;
+            let size = window
+                .inner_size()?
+                .to_logical::<f64>(window.scale_factor()?);
             window.add_child(
                 WebviewBuilder::new(UI_WEBVIEW, WebviewUrl::App("index.html".into())),
                 LogicalPosition::new(0.0, 0.0),
-                LogicalSize::new(SIDEBAR_WIDTH, size.height),
+                LogicalSize::new(
+                    persisted.settings.app.icon_size.sidebar_width(),
+                    size.height,
+                ),
             )?;
 
             let mut core = Core::new(catalog, persisted, Box::new(uuid::Uuid::new_v4));
             core.set_app_info(AppInfo {
                 version,
                 config_dir: config_dir.display().to_string(),
-                log_file: host.log_file().map(|p| p.display().to_string()).unwrap_or_default(),
+                log_file: host
+                    .log_file()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default(),
             });
             *cache.lock().unwrap_or_else(PoisonError::into_inner) = core.snapshot();
             let settings_cache = cache.clone();
@@ -171,51 +221,81 @@ fn main() {
                 .name("core".into())
                 .spawn(move || run_actor(core, rx, host, store, cache))?;
             let tick = feed.clone();
-            std::thread::Builder::new().name("ticker".into()).spawn(move || {
-                loop {
-                    std::thread::sleep(Duration::from_secs(1));
-                    tick(Input::Tick { now_ms: now_ms() });
-                }
-            })?;
+            std::thread::Builder::new()
+                .name("ticker".into())
+                .spawn(move || {
+                    loop {
+                        std::thread::sleep(Duration::from_secs(1));
+                        tick(Input::Tick { now_ms: now_ms() });
+                    }
+                })?;
 
             let (resize, event_window) = (feed.clone(), window.clone());
             // Registered on the main window only: popup and app windows opened by services
             // are normal windows that really close.
             window.on_window_event(move |event| match event {
-                // Closing the window (red button, Cmd+W) only hides it when the settings say
-                // so; Cmd+Q terminates the app without a CloseRequested.
+                // Closing the window (red button, Cmd+W) hides it or quits, as the settings say;
+                // Quit (Cmd+Q) is a menu item (see `host_tauri::graceful_quit`).
                 WindowEvent::CloseRequested { api, .. } => {
-                    let to_background =
-                        settings_cache.lock().unwrap_or_else(PoisonError::into_inner).settings.close_to_background;
-                    if to_background && event_window.label() == MAIN_WINDOW {
-                        api.prevent_close();
+                    let to_background = settings_cache
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .settings
+                        .close_to_background;
+                    api.prevent_close();
+                    if to_background {
                         let _ = event_window.hide();
+                    } else {
+                        // Keep the window (and its service views) until the pages are unloaded.
+                        host_tauri::graceful_quit(event_window.app_handle());
                     }
+                }
+                WindowEvent::ThemeChanged(theme) => {
+                    let _ = event_window.set_background_color(Some(window_background(*theme)));
                 }
                 WindowEvent::Resized(size) => {
                     // A Resized event reports the new physical size; the scale factor is
                     // unchanged (ScaleFactorChanged carries its own).
                     if let Ok(scale) = event_window.scale_factor() {
                         let size = size.to_logical::<f64>(scale);
-                        resize(Input::WindowResized { width: size.width, height: size.height });
+                        resize(Input::WindowResized {
+                            width: size.width,
+                            height: size.height,
+                        });
                     }
                 }
-                WindowEvent::ScaleFactorChanged { scale_factor, new_inner_size, .. } => {
+                WindowEvent::ScaleFactorChanged {
+                    scale_factor,
+                    new_inner_size,
+                    ..
+                } => {
                     let size = new_inner_size.to_logical::<f64>(*scale_factor);
-                    resize(Input::WindowResized { width: size.width, height: size.height });
+                    resize(Input::WindowResized {
+                        width: size.width,
+                        height: size.height,
+                    });
                 }
                 _ => {}
             });
 
-            feed(Input::Started { width: size.width, height: size.height });
+            feed(Input::Started {
+                width: size.width,
+                height: size.height,
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while building messengers");
-    app.run(|app, event| {
+    app.run(|app, event| match event {
         // Dock icon click: bring a hidden (closed to background / started hidden) window back.
-        if let RunEvent::Reopen { .. } = event {
-            show_main_window(app);
+        RunEvent::Reopen { .. } => show_main_window(app),
+        // Any other exit request (e.g. the last window went away) unloads the pages first; the
+        // request `graceful_quit` ends with passes. The predefined Quit (`terminate:`, still used
+        // by the Dock menu and at logout) skips this event, hence the custom Quit menu items.
+        RunEvent::ExitRequested { api, .. } if !host_tauri::is_quitting() => {
+            api.prevent_exit();
+            host_tauri::graceful_quit(app);
         }
+        _ => {}
     });
 }

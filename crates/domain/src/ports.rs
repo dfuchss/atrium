@@ -62,6 +62,9 @@ pub trait Platform: Send + Sync {
     fn focus_window(&self) -> PortResult;
     /// Downloads an icon in the background; the adapter later sends `Input::IconFetched`.
     fn fetch_icon(&self, account: Uuid, url: &str) -> PortResult;
+    /// Downloads the Simple Icons glyph `slug` in the background; the adapter later sends
+    /// `Input::SimpleIconFetched`.
+    fn fetch_simple_icon(&self, account: Uuid, slug: &str) -> PortResult;
     /// Updates the app menu and the tray (menu bar) icon; must cope with unchanged parts.
     fn set_menus(&self, model: &MenuModel) -> PortResult;
     fn log(&self, message: &str);

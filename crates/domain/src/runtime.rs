@@ -2,9 +2,9 @@
 //! by [`crate::Core::handle`]; errors are logged via [`Platform::log`] and never stop the loop.
 
 use crate::core::Effect;
+use crate::ports::{Notifier, Platform, Store, UiSink, WebviewHost};
 use crate::ports::{PortError, PortResult};
 use crate::security::opener_url_allowed;
-use crate::ports::{Notifier, Platform, Store, UiSink, WebviewHost};
 
 pub struct Ports<'a> {
     pub host: &'a dyn WebviewHost,
@@ -16,31 +16,58 @@ pub struct Ports<'a> {
 
 pub fn apply(effect: Effect, ports: &Ports<'_>) {
     let (name, result) = match effect {
-        Effect::CreateView { spec, bounds, visible } => ("CreateView", ports.host.create(&spec, bounds, visible)),
-        Effect::SetBounds { account, bounds } => ("SetBounds", ports.host.set_bounds(account, bounds)),
+        Effect::CreateView {
+            spec,
+            bounds,
+            visible,
+        } => ("CreateView", ports.host.create(&spec, bounds, visible)),
+        Effect::SetBounds { account, bounds } => {
+            ("SetBounds", ports.host.set_bounds(account, bounds))
+        }
         Effect::SetUiBounds(b) => ("SetUiBounds", ports.host.set_ui_bounds(b)),
         Effect::Show(a) => ("Show", ports.host.show(a)),
         Effect::Hide(a) => ("Hide", ports.host.hide(a)),
         Effect::Destroy(a) => ("Destroy", ports.host.destroy(a)),
-        Effect::DeleteProfile { store_id } => ("DeleteProfile", ports.host.delete_profile(store_id)),
+        Effect::DeleteProfile { store_id } => {
+            ("DeleteProfile", ports.host.delete_profile(store_id))
+        }
         Effect::ClearData(a) => ("ClearData", ports.host.clear_data(a)),
         Effect::Reload(a) => ("Reload", ports.host.reload(a)),
-        Effect::SetViewPolicy { account, policy } => ("SetViewPolicy", ports.host.set_view_policy(account, policy)),
+        Effect::SetViewPolicy { account, policy } => {
+            ("SetViewPolicy", ports.host.set_view_policy(account, policy))
+        }
         Effect::SetZoom { account, zoom } => ("SetZoom", ports.host.set_zoom(account, zoom)),
-        Effect::FindIcon { account, script } => ("FindIcon", ports.host.find_icon(account, &script)),
-        Effect::FetchIcon { account, url } => ("FetchIcon", ports.platform.fetch_icon(account, &url)),
+        Effect::FindIcon { account, script } => {
+            ("FindIcon", ports.host.find_icon(account, &script))
+        }
+        Effect::FetchIcon { account, url } => {
+            ("FetchIcon", ports.platform.fetch_icon(account, &url))
+        }
+        Effect::FetchSimpleIcon { account, slug } => (
+            "FetchSimpleIcon",
+            ports.platform.fetch_simple_icon(account, &slug),
+        ),
         Effect::OpenInBrowser { account, browser } => (
             "OpenInBrowser",
-            ports.host.current_url(account).and_then(|url| open_checked(&url, browser.as_deref(), ports)),
+            ports
+                .host
+                .current_url(account)
+                .and_then(|url| open_checked(&url, browser.as_deref(), ports)),
         ),
         Effect::UpdateMenus(model) => ("UpdateMenus", ports.platform.set_menus(&model)),
         Effect::Poll { account, script } => ("Poll", ports.host.poll(account, &script)),
         Effect::Eval { account, script } => ("Eval", ports.host.eval(account, &script)),
         Effect::Notify(req) => ("Notify", ports.notifier.notify(&req)),
         Effect::SetDockBadge(b) => ("SetDockBadge", ports.platform.set_dock_badge(b)),
-        Effect::OpenExternal { url, browser } => ("OpenExternal", open_checked(&url, browser.as_deref(), ports)),
+        Effect::OpenExternal { url, browser } => (
+            "OpenExternal",
+            open_checked(&url, browser.as_deref(), ports),
+        ),
         Effect::FocusWindow => ("FocusWindow", ports.platform.focus_window()),
-        Effect::ApplySystemSettings(s) => ("ApplySystemSettings", ports.platform.apply_system_settings(&s)),
+        Effect::ApplySystemSettings(s) => (
+            "ApplySystemSettings",
+            ports.platform.apply_system_settings(&s),
+        ),
         Effect::Persist(data) => ("Persist", ports.store.save(&data)),
         Effect::EmitSnapshot(s) => ("EmitSnapshot", ports.ui.emit_snapshot(&s)),
         Effect::Log(msg) => {
@@ -57,7 +84,9 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
 /// URLs read from a view, as for `OpenInBrowser`, are checked here).
 fn open_checked(url: &str, browser: Option<&str>, ports: &Ports<'_>) -> PortResult {
     if !opener_url_allowed(url) {
-        return Err(PortError(format!("not opening {url:.200}: scheme not allowed")));
+        return Err(PortError(format!(
+            "not opening {url:.200}: scheme not allowed"
+        )));
     }
     ports.platform.open_external(url, browser)
 }
@@ -152,6 +181,9 @@ mod tests {
         fn fetch_icon(&self, _: Uuid, _: &str) -> PortResult {
             Ok(())
         }
+        fn fetch_simple_icon(&self, _: Uuid, _: &str) -> PortResult {
+            Ok(())
+        }
         fn set_menus(&self, _: &MenuModel) -> PortResult {
             Ok(())
         }
@@ -176,10 +208,32 @@ mod tests {
     }
 
     fn open_in_browser(url: &str) -> (Vec<String>, Vec<String>) {
-        let f = Fake { url: url.into(), opened: Mutex::default(), logs: Mutex::default() };
-        let ports = Ports { host: &f, notifier: &f, platform: &f, ui: &f, store: &f };
-        apply(Effect::OpenInBrowser { account: Uuid::nil(), browser: None }, &ports);
-        apply(Effect::OpenExternal { url: url.into(), browser: None }, &ports);
+        let f = Fake {
+            url: url.into(),
+            opened: Mutex::default(),
+            logs: Mutex::default(),
+        };
+        let ports = Ports {
+            host: &f,
+            notifier: &f,
+            platform: &f,
+            ui: &f,
+            store: &f,
+        };
+        apply(
+            Effect::OpenInBrowser {
+                account: Uuid::nil(),
+                browser: None,
+            },
+            &ports,
+        );
+        apply(
+            Effect::OpenExternal {
+                url: url.into(),
+                browser: None,
+            },
+            &ports,
+        );
         (f.opened.into_inner().unwrap(), f.logs.into_inner().unwrap())
     }
 
@@ -191,6 +245,9 @@ mod tests {
         let (opened, logs) = open_in_browser("file:///etc/hosts");
         assert!(opened.is_empty());
         assert_eq!(logs.len(), 2);
-        assert!(logs[0].starts_with("OpenInBrowser failed: not opening file:"), "{logs:?}");
+        assert!(
+            logs[0].starts_with("OpenInBrowser failed: not opening file:"),
+            "{logs:?}"
+        );
     }
 }

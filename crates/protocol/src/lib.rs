@@ -14,46 +14,120 @@ pub const CMD_GET_SNAPSHOT: &str = "get_snapshot";
 pub const EVENT_SNAPSHOT: &str = "snapshot";
 /// Label of the local sidebar webview.
 pub const UI_WEBVIEW: &str = "ui";
-/// Width of the sidebar in logical pixels; service views start right of it.
+/// Width of the sidebar at the largest icon size (logical px). The actual width depends on
+/// [`AppSettings::icon_size`], see [`IconSize::sidebar_width`].
 pub const SIDEBAR_WIDTH: f64 = 72.0;
+
+/// Size of the account icons in the sidebar; the sidebar width follows it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IconSize {
+    #[default]
+    Small,
+    Medium,
+    Large,
+}
+
+impl IconSize {
+    /// Edge length of an account icon in logical px.
+    pub fn icon_px(self) -> f64 {
+        match self {
+            IconSize::Small => 32.0,
+            IconSize::Medium => 38.0,
+            IconSize::Large => 44.0,
+        }
+    }
+
+    /// Width of the sidebar webview in logical px; service views start right of it.
+    pub fn sidebar_width(self) -> f64 {
+        match self {
+            IconSize::Small => 56.0,
+            IconSize::Medium => 64.0,
+            IconSize::Large => SIDEBAR_WIDTH,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UiCommand {
     /// Show this account's view.
-    Select { account: Uuid },
+    Select {
+        account: Uuid,
+    },
     /// `team` fills the `{team}` placeholder of the service URL (workspace, instance host...).
-    AddAccount { service: String, label: String, team: Option<String> },
-    RemoveAccount { account: Uuid },
-    SetMuted { account: Uuid, muted: bool },
+    AddAccount {
+        service: String,
+        label: String,
+        team: Option<String>,
+    },
+    RemoveAccount {
+        account: Uuid,
+    },
+    SetMuted {
+        account: Uuid,
+        muted: bool,
+    },
     /// Move the account up (negative) or down (positive) in the sidebar.
-    Move { account: Uuid, delta: i32 },
-    Reload { account: Uuid },
+    Move {
+        account: Uuid,
+        delta: i32,
+    },
+    Reload {
+        account: Uuid,
+    },
     /// The manage/add dialog covers the whole window: service views are hidden while it is open.
-    SetDialog { open: bool },
+    SetDialog {
+        open: bool,
+    },
     /// Do not disturb: suppresses all native notifications (quick toggle of `AppSettings::dnd`).
-    SetDnd { enabled: bool },
+    SetDnd {
+        enabled: bool,
+    },
     /// Replace the app settings (settings dialog "General", "Notifications", "Links").
-    UpdateSettings { settings: AppSettings },
+    UpdateSettings {
+        settings: AppSettings,
+    },
     /// Replace one account's settings. A changed `team` or `user_agent` recreates the view
     /// (same data store, so the login normally survives).
-    UpdateAccount { account: Uuid, settings: AccountSettings },
+    UpdateAccount {
+        account: Uuid,
+        settings: AccountSettings,
+    },
     /// History navigation in the account's view.
-    GoBack { account: Uuid },
-    GoForward { account: Uuid },
+    GoBack {
+        account: Uuid,
+    },
+    GoForward {
+        account: Uuid,
+    },
     /// Open the page currently shown in the account's view in the browser.
-    OpenInBrowser { account: Uuid },
+    OpenInBrowser {
+        account: Uuid,
+    },
     /// Delete cookies/storage/cache of the account (logs it out) and reload.
-    ClearData { account: Uuid },
+    ClearData {
+        account: Uuid,
+    },
     /// Unload the view now to save memory; selecting the account loads it again.
-    Hibernate { account: Uuid },
+    Hibernate {
+        account: Uuid,
+    },
     /// Fetch the site's favicon again.
-    RefreshIcon { account: Uuid },
+    RefreshIcon {
+        account: Uuid,
+    },
     /// User-defined service ("custom app / site"); `id` is assigned by the backend when empty.
-    AddCustomService { service: CustomService },
-    UpdateCustomService { service: CustomService },
+    AddCustomService {
+        service: CustomService,
+    },
+    UpdateCustomService {
+        service: CustomService,
+    },
     /// Fails (logged, no change) while accounts still use the service.
-    RemoveCustomService { id: String },
+    RemoveCustomService {
+        id: String,
+    },
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -94,6 +168,12 @@ pub struct AppSettings {
     pub show_tray: bool,
     /// Reload all loaded services after the Mac wakes from sleep (stale connections).
     pub reload_after_wake: bool,
+    /// Size of the sidebar icons (and thereby the sidebar width).
+    pub icon_size: IconSize,
+    /// Put background accounts to sleep (unload their view) after this many minutes without
+    /// being shown; None = never. Accounts can override it (`AccountSettings::hibernate_after_min`).
+    /// Sleeping accounts get no notifications or unread updates until they are opened again.
+    pub hibernate_after_min: Option<u32>,
 }
 
 impl Default for AppSettings {
@@ -110,6 +190,8 @@ impl Default for AppSettings {
             link_target: LinkTarget::SystemBrowser,
             show_tray: true,
             reload_after_wake: true,
+            icon_size: IconSize::Small,
+            hibernate_after_min: None,
         }
     }
 }
@@ -160,10 +242,15 @@ pub struct AccountSettings {
     /// Custom sidebar icon: `data:` URL (uploaded image) or https URL; None = site favicon.
     #[serde(default)]
     pub custom_icon: Option<String>,
+    /// Simple Icons slug (simpleicons.org, e.g. "discord"): a monochrome brand glyph drawn on the
+    /// service color. Used when no `custom_icon` is set; None = site favicon.
+    #[serde(default)]
+    pub simple_icon: Option<String>,
     /// Page zoom factor, 1.0 = 100 %.
     #[serde(default = "one")]
     pub zoom: f64,
-    /// Unload the view after this many minutes in the background; None = never.
+    /// Unload the view after this many minutes in the background.
+    /// None = use `AppSettings::hibernate_after_min`; Some(0) = never for this account.
     #[serde(default)]
     pub hibernate_after_min: Option<u32>,
     /// CSS injected into every page of this account (e.g. a dark theme or hiding clutter).
@@ -227,6 +314,9 @@ pub struct AccountView {
     /// Image for the sidebar icon (custom icon, else cached favicon) as `data:`/https URL;
     /// None = draw `initials` on `color`.
     pub icon: Option<String>,
+    /// `icon` is a monochrome glyph (Simple Icons, white): draw it padded on `color` instead of
+    /// filling the icon box.
+    pub icon_glyph: bool,
     /// The view is currently unloaded (hibernated or disabled).
     pub hibernated: bool,
     pub settings: AccountSettings,

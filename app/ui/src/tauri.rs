@@ -1,6 +1,6 @@
 //! Minimal bridge to `window.__TAURI__` (withGlobalTauri).
 use js_sys::{Function, Promise, Reflect};
-use protocol::{Snapshot, UiCommand, CMD_GET_SNAPSHOT, CMD_UI_COMMAND, EVENT_SNAPSHOT};
+use protocol::{CMD_GET_SNAPSHOT, CMD_UI_COMMAND, EVENT_SNAPSHOT, Snapshot, UiCommand};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;

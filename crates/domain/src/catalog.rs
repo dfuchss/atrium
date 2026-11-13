@@ -111,7 +111,10 @@ impl Catalog {
 
     /// Parses one TOML definition and validates its regexes. `source` names it in errors.
     pub fn parse(source: &str, toml_text: &str) -> Result<ServiceDef, CatalogError> {
-        let parse_err = |message: String| CatalogError::Parse { source: source.to_string(), message };
+        let parse_err = |message: String| CatalogError::Parse {
+            source: source.to_string(),
+            message,
+        };
         let def: ServiceDef = toml::from_str(toml_text).map_err(|e| parse_err(e.to_string()))?;
         if def.id.trim().is_empty() {
             return Err(parse_err("empty id".into()));
@@ -150,7 +153,10 @@ impl Catalog {
 /// Trims a team value and strips a pasted scheme and trailing slashes.
 pub(crate) fn normalize_team(team: &str) -> String {
     let t = team.trim();
-    let t = t.strip_prefix("https://").or_else(|| t.strip_prefix("http://")).unwrap_or(t);
+    let t = t
+        .strip_prefix("https://")
+        .or_else(|| t.strip_prefix("http://"))
+        .unwrap_or(t);
     t.trim_end_matches('/').to_string()
 }
 
@@ -166,19 +172,29 @@ impl ServiceDef {
     fn effective_team(&self, team: Option<&str>) -> Option<String> {
         team.map(normalize_team)
             .filter(|t| !t.is_empty())
-            .or_else(|| self.team_default.as_deref().map(normalize_team).filter(|t| !t.is_empty()))
+            .or_else(|| {
+                self.team_default
+                    .as_deref()
+                    .map(normalize_team)
+                    .filter(|t| !t.is_empty())
+            })
     }
 
     /// URL with `{team}` replaced. Errors if the URL needs a team and none (and no default) is given,
     /// or if the result is not a valid http(s) URL.
     pub fn resolve_url(&self, team: Option<&str>) -> Result<url::Url, CatalogError> {
         let raw = if self.url.contains("{team}") {
-            let t = self.effective_team(team).ok_or_else(|| CatalogError::MissingTeam(self.id.clone()))?;
+            let t = self
+                .effective_team(team)
+                .ok_or_else(|| CatalogError::MissingTeam(self.id.clone()))?;
             self.url.replace("{team}", &t)
         } else {
             self.url.clone()
         };
-        let invalid = || CatalogError::InvalidUrl { service: self.id.clone(), url: raw.clone() };
+        let invalid = || CatalogError::InvalidUrl {
+            service: self.id.clone(),
+            url: raw.clone(),
+        };
         let parsed = url::Url::parse(&raw).map_err(|_| invalid())?;
         match parsed.scheme() {
             "http" | "https" => Ok(parsed),
@@ -212,7 +228,12 @@ impl ServiceDef {
 /// URL has `{team}`). The URL must be http(s) once `{team}` is replaced by "example"; the title
 /// regex must compile. The id is kept as is.
 pub fn normalize_custom(c: &CustomService) -> Result<CustomService, String> {
-    let opt = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(String::from);
+    let opt = |v: &Option<String>| {
+        v.as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(String::from)
+    };
     let name = c.name.trim().to_string();
     if name.is_empty() {
         return Err("custom service: empty name".into());
@@ -221,14 +242,26 @@ pub fn normalize_custom(c: &CustomService) -> Result<CustomService, String> {
     let probe = url.replace("{team}", "example");
     match url::Url::parse(&probe) {
         Ok(u) if matches!(u.scheme(), "http" | "https") && u.host_str().is_some() => {}
-        _ => return Err(format!("custom service {name:?}: invalid URL {url:?} (http/https expected)")),
+        _ => {
+            return Err(format!(
+                "custom service {name:?}: invalid URL {url:?} (http/https expected)"
+            ));
+        }
     }
     let title_regex = opt(&c.title_regex);
     if let Some(re) = &title_regex {
-        regex::Regex::new(re).map_err(|e| format!("custom service {name:?}: invalid title regex: {e}"))?;
+        regex::Regex::new(re)
+            .map_err(|e| format!("custom service {name:?}: invalid title regex: {e}"))?;
     }
-    let team_label = if url.contains("{team}") { Some(opt(&c.team_label).unwrap_or_else(|| "Team".into())) } else { None };
-    let color = Some(c.color.trim()).filter(|c| !c.is_empty()).unwrap_or(DEFAULT_CUSTOM_COLOR).to_string();
+    let team_label = if url.contains("{team}") {
+        Some(opt(&c.team_label).unwrap_or_else(|| "Team".into()))
+    } else {
+        None
+    };
+    let color = Some(c.color.trim())
+        .filter(|c| !c.is_empty())
+        .unwrap_or(DEFAULT_CUSTOM_COLOR)
+        .to_string();
     Ok(CustomService {
         id: c.id.trim().to_string(),
         name,
@@ -289,11 +322,17 @@ pub fn custom_service_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
         }
     }
     let slug = slug.trim_end_matches('-');
-    let base = format!("{CUSTOM_PREFIX}{}", if slug.is_empty() { "service" } else { slug });
+    let base = format!(
+        "{CUSTOM_PREFIX}{}",
+        if slug.is_empty() { "service" } else { slug }
+    );
     if !taken(&base) {
         return base;
     }
-    (2..).map(|n| format!("{base}-{n}")).find(|id| !taken(id)).expect("unbounded")
+    (2..)
+        .map(|n| format!("{base}-{n}"))
+        .find(|id| !taken(id))
+        .expect("unbounded")
 }
 
 /// Resolves a user agent preset: "safari"/"chrome" -> constant, "default"/None -> None
@@ -329,14 +368,24 @@ mod tests {
         assert_eq!(c.services().len(), BUILTIN_TOML.len());
         assert_eq!(c.services()[0].id, "element");
         assert!(c.get("slack").is_some());
-        for (id, media) in [("slack", true), ("discord", true), ("element", true), ("rainbow", true), ("linkedin", false), ("mastodon", false)] {
+        for (id, media) in [
+            ("slack", true),
+            ("discord", true),
+            ("element", true),
+            ("rainbow", true),
+            ("linkedin", false),
+            ("mastodon", false),
+        ] {
             assert_eq!(c.get(id).unwrap().allow_media, media, "{id}");
         }
     }
 
     #[test]
     fn parse_errors() {
-        assert!(matches!(Catalog::parse("s", "garbage ="), Err(CatalogError::Parse { .. })));
+        assert!(matches!(
+            Catalog::parse("s", "garbage ="),
+            Err(CatalogError::Parse { .. })
+        ));
         assert!(matches!(
             Catalog::parse("s", "id=''\nname='a'\ncolor='c'\nurl='u'"),
             Err(CatalogError::Parse { .. })
@@ -361,10 +410,18 @@ mod tests {
     #[test]
     fn team_substitution() {
         let d = def("https://{team}/", Some("mastodon.social"));
-        assert_eq!(d.resolve_url(None).unwrap().as_str(), "https://mastodon.social/");
-        assert_eq!(d.resolve_url(Some("fosstodon.org")).unwrap().host_str(), Some("fosstodon.org"));
         assert_eq!(
-            d.resolve_url(Some("  https://chat.example.org/ ")).unwrap().as_str(),
+            d.resolve_url(None).unwrap().as_str(),
+            "https://mastodon.social/"
+        );
+        assert_eq!(
+            d.resolve_url(Some("fosstodon.org")).unwrap().host_str(),
+            Some("fosstodon.org")
+        );
+        assert_eq!(
+            d.resolve_url(Some("  https://chat.example.org/ "))
+                .unwrap()
+                .as_str(),
             "https://chat.example.org/"
         );
     }
@@ -372,16 +429,25 @@ mod tests {
     #[test]
     fn missing_team_and_bad_url() {
         let d = def("https://{team}/", None);
-        assert_eq!(d.resolve_url(None), Err(CatalogError::MissingTeam("t".into())));
+        assert_eq!(
+            d.resolve_url(None),
+            Err(CatalogError::MissingTeam("t".into()))
+        );
         let d = def("ftp://x/", None);
-        assert!(matches!(d.resolve_url(None), Err(CatalogError::InvalidUrl { .. })));
+        assert!(matches!(
+            d.resolve_url(None),
+            Err(CatalogError::InvalidUrl { .. })
+        ));
     }
 
     #[test]
     fn hosts_and_user_agent() {
         let mut d = def("https://{team}/", None);
         d.internal_hosts = vec!["{team}".into(), "*.a.io".into()];
-        assert_eq!(d.resolve_hosts(Some("https://h.example.org/path")), vec!["h.example.org", "*.a.io"]);
+        assert_eq!(
+            d.resolve_hosts(Some("https://h.example.org/path")),
+            vec!["h.example.org", "*.a.io"]
+        );
         assert_eq!(d.resolve_hosts(None), vec!["*.a.io"]);
         assert_eq!(d.resolve_user_agent(), None);
         d.user_agent = Some("chrome".into());
@@ -404,21 +470,34 @@ mod tests {
 
     #[test]
     fn custom_service_conversion() {
-        let d = ServiceDef::from_custom(&custom(" Chat ", " https://user@{team}.chat.io:8443/app?x=1 ")).unwrap();
-        assert_eq!((d.id.as_str(), d.name.as_str(), d.color.as_str()), ("custom-x", "Chat", DEFAULT_CUSTOM_COLOR));
+        let d = ServiceDef::from_custom(&custom(
+            " Chat ",
+            " https://user@{team}.chat.io:8443/app?x=1 ",
+        ))
+        .unwrap();
+        assert_eq!(
+            (d.id.as_str(), d.name.as_str(), d.color.as_str()),
+            ("custom-x", "Chat", DEFAULT_CUSTOM_COLOR)
+        );
         assert_eq!(d.internal_hosts, vec!["{team}.chat.io"]);
         assert_eq!(d.team_label.as_deref(), Some("Team"));
         assert_eq!(d.unread.title_regex.as_deref(), Some(DEFAULT_TITLE_REGEX));
         assert_eq!(d.resolve_user_agent().as_deref(), Some(UA_SAFARI));
         assert!(!d.allow_media, "custom services default to no media");
         assert_eq!(d.resolve_hosts(Some("kit")), vec!["kit.chat.io"]);
-        assert_eq!(d.resolve_url(Some("kit")).unwrap().as_str(), "https://user@kit.chat.io:8443/app?x=1");
+        assert_eq!(
+            d.resolve_url(Some("kit")).unwrap().as_str(),
+            "https://user@kit.chat.io:8443/app?x=1"
+        );
         let mut c = custom("Plain", "http://Example.org");
         c.team_label = Some("Ignored".into());
         c.title_regex = Some(r"^\[(\d+)\]".into());
         c.user_agent = Some("chrome".into());
         let d = ServiceDef::from_custom(&c).unwrap();
-        assert_eq!((&d.team_label, &d.internal_hosts), (&None, &vec!["example.org".to_string()]));
+        assert_eq!(
+            (&d.team_label, &d.internal_hosts),
+            (&None, &vec!["example.org".to_string()])
+        );
         assert_eq!(d.unread.title_regex.as_deref(), Some(r"^\[(\d+)\]"));
         assert_eq!(d.resolve_user_agent().as_deref(), Some(UA_CHROME));
     }
@@ -442,7 +521,10 @@ mod tests {
         assert_eq!(custom_service_id(" My Chat! ", |_| false), "custom-my-chat");
         assert_eq!(custom_service_id("ÄÖ", |_| false), "custom-service");
         let taken = ["custom-a", "custom-a-2"];
-        assert_eq!(custom_service_id("a", |id| taken.contains(&id)), "custom-a-3");
+        assert_eq!(
+            custom_service_id("a", |id| taken.contains(&id)),
+            "custom-a-3"
+        );
     }
 
     #[test]

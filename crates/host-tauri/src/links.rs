@@ -39,7 +39,10 @@ pub fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
         .unwrap_or_else(PoisonError::into_inner)
         .get(&account)
         .copied()
-        .unwrap_or(ViewPolicy { link_target: LinkTarget::SystemBrowser, allow_media: false })
+        .unwrap_or(ViewPolicy {
+            link_target: LinkTarget::SystemBrowser,
+            allow_media: false,
+        })
 }
 
 /// wry does not implement WebKit's `webViewDidClose`, so a popup's own `window.close()` (end of
@@ -56,7 +59,11 @@ pub fn popup_label(account: Uuid, n: u64) -> String {
 pub fn permission_response(kind: &PermissionKind, allow_media: bool) -> PermissionResponse {
     match kind {
         PermissionKind::Camera | PermissionKind::Microphone | PermissionKind::DisplayCapture => {
-            if allow_media { PermissionResponse::Allow } else { PermissionResponse::Deny }
+            if allow_media {
+                PermissionResponse::Allow
+            } else {
+                PermissionResponse::Deny
+            }
         }
         _ => PermissionResponse::Default,
     }
@@ -64,16 +71,26 @@ pub fn permission_response(kind: &PermissionKind, allow_media: bool) -> Permissi
 
 /// Navigation hook of service views and their windows: [`nav_allowed`], denials are logged.
 /// `mailto:` is never loaded in the view but handed to the core as an external link (mail app).
-pub(crate) fn navigation_hook(account: Uuid, logger: Logger, feed: Feed) -> impl Fn(&Url) -> bool + Send + 'static {
+pub(crate) fn navigation_hook(
+    account: Uuid,
+    logger: Logger,
+    feed: Feed,
+) -> impl Fn(&Url) -> bool + Send + 'static {
     move |url| {
         let allowed = nav_allowed(url);
         if allowed {
             logger.log(&format!("[{account}] navigation {:.200}", url.as_str()));
         } else if url.scheme() == "mailto" {
             logger.log(&format!("[{account}] mailto link -> mail app"));
-            feed(Input::ExternalLink { account, url: url.to_string() });
+            feed(Input::ExternalLink {
+                account,
+                url: url.to_string(),
+            });
         } else {
-            logger.log(&format!("[{account}] navigation DENIED (scheme) {:.200}", url.as_str()));
+            logger.log(&format!(
+                "[{account}] navigation DENIED (scheme) {:.200}",
+                url.as_str()
+            ));
         }
         allowed
     }
@@ -88,7 +105,9 @@ pub(crate) fn permission_hook<R: Runtime>(
 ) -> impl Fn(tauri::Webview<R>, PermissionKind) -> PermissionResponse + Send + Sync + 'static {
     move |_, kind| {
         let response = permission_response(&kind, policy_of(&policies, account).allow_media);
-        logger.log(&format!("[{account}] {what} permission {kind} -> {response:?}"));
+        logger.log(&format!(
+            "[{account}] {what} permission {kind} -> {response:?}"
+        ));
         response
     }
 }
@@ -103,9 +122,17 @@ pub(crate) struct LinkPolicy<R: Runtime> {
 }
 
 impl<R: Runtime> LinkPolicy<R> {
-    pub fn on_new_window(self: &Arc<Self>, url: Url, features: NewWindowFeatures) -> NewWindowResponse<R> {
+    pub fn on_new_window(
+        self: &Arc<Self>,
+        url: Url,
+        features: NewWindowFeatures,
+    ) -> NewWindowResponse<R> {
         let account = self.spec.account;
-        let kind = if self.spec.is_internal(&url) { "internal" } else { "external" };
+        let kind = if self.spec.is_internal(&url) {
+            "internal"
+        } else {
+            "external"
+        };
         if let Some(size) = features.size() {
             self.logger.log(&format!(
                 "[{account}] new window {url} ({kind}, {}x{}) -> sign-in popup",
@@ -115,12 +142,19 @@ impl<R: Runtime> LinkPolicy<R> {
         }
         match policy_of(&self.policies, account).link_target {
             LinkTarget::SystemBrowser => {
-                self.logger.log(&format!("[{account}] new window {url} ({kind}) -> system browser"));
-                (self.feed)(Input::ExternalLink { account, url: url.to_string() });
+                self.logger.log(&format!(
+                    "[{account}] new window {url} ({kind}) -> system browser"
+                ));
+                (self.feed)(Input::ExternalLink {
+                    account,
+                    url: url.to_string(),
+                });
                 NewWindowResponse::Deny
             }
             LinkTarget::AppWindow => {
-                self.logger.log(&format!("[{account}] new window {url} ({kind}) -> app window"));
+                self.logger.log(&format!(
+                    "[{account}] new window {url} ({kind}) -> app window"
+                ));
                 self.open_window(url, features, Some(APP_WINDOW_SIZE))
             }
         }
@@ -149,8 +183,17 @@ impl<R: Runtime> LinkPolicy<R> {
             .on_document_title_changed(|window, title| {
                 let _ = window.set_title(&title);
             })
-            .on_navigation(navigation_hook(account, self.logger.clone(), self.feed.clone()))
-            .on_permission_request(permission_hook(account, self.policies.clone(), self.logger.clone(), "popup"));
+            .on_navigation(navigation_hook(
+                account,
+                self.logger.clone(),
+                self.feed.clone(),
+            ))
+            .on_permission_request(permission_hook(
+                account,
+                self.policies.clone(),
+                self.logger.clone(),
+                "popup",
+            ));
         if let Some((width, height)) = size {
             builder = builder.inner_size(width, height).center();
         }
@@ -159,12 +202,14 @@ impl<R: Runtime> LinkPolicy<R> {
         }
         match builder.build() {
             Ok(window) => {
-                self.logger.log(&format!("[{account}] opened window {label} for {url}"));
+                self.logger
+                    .log(&format!("[{account}] opened window {label} for {url}"));
                 watch_close(self.app.clone(), label);
                 NewWindowResponse::Create { window }
             }
             Err(e) => {
-                self.logger.log(&format!("[{account}] cannot open window for {url}: {e}"));
+                self.logger
+                    .log(&format!("[{account}] cannot open window for {url}: {e}"));
                 NewWindowResponse::Deny
             }
         }
@@ -174,18 +219,22 @@ impl<R: Runtime> LinkPolicy<R> {
 /// Closes the window `label` once its page called `window.close()` (see [`CLOSE_HOOK`]);
 /// ends when the window is gone.
 fn watch_close<R: Runtime>(app: AppHandle<R>, label: String) {
-    let spawned = std::thread::Builder::new().name(format!("watch-{label}")).spawn(move || {
-        loop {
-            std::thread::sleep(Duration::from_millis(500));
-            let Some(window) = app.get_webview_window(&label) else { break };
-            let target = window.clone();
-            let _ = window.eval_with_callback("!!window.__msgrClosed", move |raw| {
-                if raw == "true" {
-                    let _ = target.close();
-                }
-            });
-        }
-    });
+    let spawned = std::thread::Builder::new()
+        .name(format!("watch-{label}"))
+        .spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_millis(500));
+                let Some(window) = app.get_webview_window(&label) else {
+                    break;
+                };
+                let target = window.clone();
+                let _ = window.eval_with_callback("!!window.__msgrClosed", move |raw| {
+                    if raw == "true" {
+                        let _ = target.close();
+                    }
+                });
+            }
+        });
     if let Err(e) = spawned {
         eprintln!("cannot watch {e}");
     }
@@ -198,20 +247,45 @@ mod tests {
     #[test]
     fn labels_and_permissions() {
         let id = Uuid::from_u128(0xab);
-        assert_eq!(popup_label(id, 3), "popup-000000000000000000000000000000ab-3");
-        for kind in [PermissionKind::Camera, PermissionKind::Microphone, PermissionKind::DisplayCapture] {
-            assert!(matches!(permission_response(&kind, true), PermissionResponse::Allow));
-            assert!(matches!(permission_response(&kind, false), PermissionResponse::Deny));
+        assert_eq!(
+            popup_label(id, 3),
+            "popup-000000000000000000000000000000ab-3"
+        );
+        for kind in [
+            PermissionKind::Camera,
+            PermissionKind::Microphone,
+            PermissionKind::DisplayCapture,
+        ] {
+            assert!(matches!(
+                permission_response(&kind, true),
+                PermissionResponse::Allow
+            ));
+            assert!(matches!(
+                permission_response(&kind, false),
+                PermissionResponse::Deny
+            ));
         }
-        assert!(matches!(permission_response(&PermissionKind::Geolocation, true), PermissionResponse::Default));
+        assert!(matches!(
+            permission_response(&PermissionKind::Geolocation, true),
+            PermissionResponse::Default
+        ));
     }
 
     #[test]
     fn policy_defaults_and_updates() {
         let policies = ViewPolicies::default();
         let id = Uuid::from_u128(1);
-        assert_eq!(policy_of(&policies, id), ViewPolicy { link_target: LinkTarget::SystemBrowser, allow_media: false });
-        let set = ViewPolicy { link_target: LinkTarget::AppWindow, allow_media: true };
+        assert_eq!(
+            policy_of(&policies, id),
+            ViewPolicy {
+                link_target: LinkTarget::SystemBrowser,
+                allow_media: false
+            }
+        );
+        let set = ViewPolicy {
+            link_target: LinkTarget::AppWindow,
+            allow_media: true,
+        };
         policies.lock().unwrap().insert(id, set);
         assert_eq!(policy_of(&policies, id), set);
     }

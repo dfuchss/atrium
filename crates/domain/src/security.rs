@@ -24,7 +24,12 @@ mod tests {
 
     #[test]
     fn opener_schemes() {
-        for ok in ["https://x.org/a?b", "http://localhost:8080/", "mailto:a@b.org", " https://x.org "] {
+        for ok in [
+            "https://x.org/a?b",
+            "http://localhost:8080/",
+            "mailto:a@b.org",
+            " https://x.org ",
+        ] {
             assert!(opener_url_allowed(ok), "{ok}");
         }
         for bad in [
@@ -46,7 +51,14 @@ mod tests {
     #[test]
     fn navigation_schemes() {
         let u = |s: &str| url::Url::parse(s).unwrap();
-        for ok in ["https://app.slack.com/", "http://x.org", "about:blank", "about:srcdoc", "blob:https://x.org/1", "data:text/html,x"] {
+        for ok in [
+            "https://app.slack.com/",
+            "http://x.org",
+            "about:blank",
+            "about:srcdoc",
+            "blob:https://x.org/1",
+            "data:text/html,x",
+        ] {
             assert!(nav_allowed(&u(ok)), "{ok}");
         }
         for bad in [

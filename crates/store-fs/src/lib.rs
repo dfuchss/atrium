@@ -37,9 +37,13 @@ impl Store for FsStore {
         match serde_json::from_slice(&bytes) {
             Ok(p) => Ok(p),
             Err(_) => {
-                let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+                let secs = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
                 let target = self.dir.join(format!("accounts.json.corrupt-{secs}"));
-                fs::rename(&path, &target).map_err(|e| err("quarantine corrupt accounts.json", e))?;
+                fs::rename(&path, &target)
+                    .map_err(|e| err("quarantine corrupt accounts.json", e))?;
                 Ok(Persisted::default())
             }
         }
@@ -73,7 +77,11 @@ mod tests {
                 ..Account::new(id, "slack", "KIT", Some("x".into()))
             }],
             settings: Settings {
-                app: AppSettings { dnd: true, browser: Some("Firefox".into()), ..AppSettings::default() },
+                app: AppSettings {
+                    dnd: true,
+                    browser: Some("Firefox".into()),
+                    ..AppSettings::default()
+                },
                 active: Some(id),
             },
             custom_services: vec![],
@@ -88,12 +96,24 @@ mod tests {
         let p = FsStore::new(d.path()).load().unwrap();
         let id = uuid_like();
         let expected = Persisted {
-            accounts: vec![Account { muted: true, ..Account::new(id, "slack", "KIT", Some("x".into())) }],
-            settings: Settings { app: AppSettings { dnd: true, ..AppSettings::default() }, active: Some(id) },
+            accounts: vec![Account {
+                muted: true,
+                ..Account::new(id, "slack", "KIT", Some("x".into()))
+            }],
+            settings: Settings {
+                app: AppSettings {
+                    dnd: true,
+                    ..AppSettings::default()
+                },
+                active: Some(id),
+            },
             custom_services: vec![],
         };
         assert_eq!(p, expected);
-        assert!(d.path().join("accounts.json").exists(), "old file must not be quarantined");
+        assert!(
+            d.path().join("accounts.json").exists(),
+            "old file must not be quarantined"
+        );
     }
 
     /// File written by the previous version (per-account settings, no batch-2 fields).
@@ -113,15 +133,30 @@ mod tests {
         fs::write(d.path().join("accounts.json"), prev).unwrap();
         let p = FsStore::new(d.path()).load().unwrap();
         let a = &p.accounts[0];
-        assert_eq!((a.label.as_str(), a.show_badge, a.user_agent.as_deref()), ("Work", false, Some("chrome")));
-        assert!(a.enabled && a.link_target.is_none() && a.custom_icon.is_none() && a.favicon.is_none());
-        assert_eq!((a.zoom, a.hibernate_after_min, a.custom_css.as_deref()), (1.0, None, None));
+        assert_eq!(
+            (a.label.as_str(), a.show_badge, a.user_agent.as_deref()),
+            ("Work", false, Some("chrome"))
+        );
+        assert!(
+            a.enabled && a.link_target.is_none() && a.custom_icon.is_none() && a.favicon.is_none()
+        );
+        assert_eq!(
+            (a.zoom, a.hibernate_after_min, a.custom_css.as_deref()),
+            (1.0, None, None)
+        );
         let app = &p.settings.app;
-        assert!(!app.notification_preview && app.launch_at_login && app.browser.as_deref() == Some("Firefox"));
+        assert!(
+            !app.notification_preview
+                && app.launch_at_login
+                && app.browser.as_deref() == Some("Firefox")
+        );
         assert_eq!(app.link_target, protocol::LinkTarget::SystemBrowser);
         assert!(app.show_tray && app.reload_after_wake);
         assert!(p.custom_services.is_empty());
-        assert!(d.path().join("accounts.json").exists(), "previous file must not be quarantined");
+        assert!(
+            d.path().join("accounts.json").exists(),
+            "previous file must not be quarantined"
+        );
     }
 
     fn uuid_like() -> uuid::Uuid {
@@ -151,9 +186,12 @@ mod tests {
         let s = FsStore::new(d.path());
         assert_eq!(s.load().unwrap(), Persisted::default());
         assert!(!d.path().join("accounts.json").exists());
-        let found = fs::read_dir(d.path())
-            .unwrap()
-            .any(|e| e.unwrap().file_name().to_string_lossy().starts_with("accounts.json.corrupt-"));
+        let found = fs::read_dir(d.path()).unwrap().any(|e| {
+            e.unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with("accounts.json.corrupt-")
+        });
         assert!(found);
         s.save(&sample()).unwrap();
         assert_eq!(s.load().unwrap(), sample());

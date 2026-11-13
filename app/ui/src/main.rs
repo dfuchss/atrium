@@ -1,19 +1,33 @@
 mod tauri;
 
 use leptos::prelude::*;
-use protocol::{AccountSettings, AccountView, AppInfo, AppSettings, CustomService, DockBadgeMode, LinkTarget, ServiceInfo, Snapshot, UiCommand};
-use uuid::Uuid;
+use protocol::{
+    AccountSettings, AccountView, AppInfo, AppSettings, CustomService, DockBadgeMode, IconSize,
+    LinkTarget, ServiceInfo, Snapshot, UiCommand,
+};
 use std::time::Duration;
-use wasm_bindgen::{prelude::Closure, JsCast};
+use uuid::Uuid;
+use wasm_bindgen::{JsCast, prelude::Closure};
 
 fn send(cmd: UiCommand) {
     leptos::task::spawn_local(tauri::send(cmd));
 }
 
+/// Inline white glyph standing in for a Simple Icons download in the demo.
+const DEMO_GLYPH: &str = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='white' d='M12 2 2 7v10l10 5 10-5V7zm0 4a6 6 0 1 1 0 12 6 6 0 0 1 0-12z'/></svg>";
 const DEMO_ICON: &str = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23e11d48'/><circle cx='16' cy='16' r='8' fill='white'/></svg>";
 
 fn demo_snapshot() -> Snapshot {
-    let acc = |n: u128, service: &str, name: &str, label: &str, color: &str, ini: &str, unread, indirect, muted, team_label: Option<&str>| {
+    let acc = |n: u128,
+               service: &str,
+               name: &str,
+               label: &str,
+               color: &str,
+               ini: &str,
+               unread,
+               indirect,
+               muted,
+               team_label: Option<&str>| {
         AccountView {
             id: Uuid::from_u128(n),
             service: service.into(),
@@ -24,6 +38,7 @@ fn demo_snapshot() -> Snapshot {
             indirect,
             team_label: team_label.map(Into::into),
             icon: None,
+            icon_glyph: false,
             hibernated: false,
             settings: AccountSettings {
                 label: label.into(),
@@ -35,6 +50,7 @@ fn demo_snapshot() -> Snapshot {
                 enabled: true,
                 link_target: None,
                 custom_icon: None,
+                simple_icon: None,
                 zoom: 1.0,
                 hibernate_after_min: None,
                 custom_css: None,
@@ -43,14 +59,63 @@ fn demo_snapshot() -> Snapshot {
         }
     };
     let mut accounts = vec![
-            acc(1, "slack", "Slack", "KIT", "#4A154B", "S", 3, false, false, Some("Workspace")),
-            acc(2, "element", "Element", "Home", "#0DBD8B", "E", 0, true, false, Some("Instance")),
-            acc(3, "discord", "Discord", "Friends", "#5865F2", "D", 120, false, true, None),
-            acc(4, "slack", "Slack", "Work", "#4A154B", "SW", 0, false, false, Some("Workspace")),
-            acc(5, "custom-wiki", "Wiki", "Team wiki", "#0F766E", "W", 0, false, false, None),
-        ];
+        acc(
+            1,
+            "slack",
+            "Slack",
+            "KIT",
+            "#4A154B",
+            "S",
+            3,
+            false,
+            false,
+            Some("Workspace"),
+        ),
+        acc(
+            2,
+            "element",
+            "Element",
+            "Home",
+            "#0DBD8B",
+            "E",
+            0,
+            true,
+            false,
+            Some("Instance"),
+        ),
+        acc(
+            3, "discord", "Discord", "Friends", "#5865F2", "D", 120, false, true, None,
+        ),
+        acc(
+            4,
+            "slack",
+            "Slack",
+            "Work",
+            "#4A154B",
+            "SW",
+            0,
+            false,
+            false,
+            Some("Workspace"),
+        ),
+        acc(
+            5,
+            "custom-wiki",
+            "Wiki",
+            "Team wiki",
+            "#0F766E",
+            "W",
+            0,
+            false,
+            false,
+            None,
+        ),
+    ];
     accounts[0].icon = Some(DEMO_ICON.into());
     accounts[0].settings.custom_icon = Some(DEMO_ICON.into());
+    accounts[2].icon = Some(DEMO_GLYPH.into());
+    accounts[2].icon_glyph = true;
+    accounts[2].settings.simple_icon = Some("discord".into());
     accounts[1].hibernated = true;
     accounts[1].settings.hibernate_after_min = Some(15);
     accounts[3].settings.enabled = false;
@@ -68,11 +133,66 @@ fn demo_snapshot() -> Snapshot {
         accounts,
         active: Some(Uuid::from_u128(1)),
         services: vec![
-            ServiceInfo { id: "slack".into(), name: "Slack".into(), color: "#4A154B".into(), team_label: Some("Workspace".into()), team_default: None, custom: false, allow_media: false, url: "https://{team}.slack.com/".into(), title_regex: Some(r"^\((\d+)\)".into()), user_agent: None },
-            ServiceInfo { id: "element".into(), name: "Element".into(), color: "#0DBD8B".into(), team_label: Some("Instance".into()), team_default: Some("app.element.io".into()), custom: false, allow_media: false, url: "https://{team}/".into(), title_regex: Some(r"^\[(\d+)\]".into()), user_agent: Some("chrome".into()) },
-            ServiceInfo { id: "mastodon".into(), name: "Mastodon".into(), color: "#6364FF".into(), team_label: Some("Instance".into()), team_default: Some("mastodon.social".into()), custom: false, allow_media: false, url: "https://{team}/".into(), title_regex: None, user_agent: Some("Mozilla/5.0 (Macintosh) Mastodon".into()) },
-            ServiceInfo { id: "discord".into(), name: "Discord".into(), color: "#5865F2".into(), team_label: None, team_default: None, custom: false, allow_media: false, url: "https://discord.com/app".into(), title_regex: None, user_agent: None },
-            ServiceInfo { id: "custom-wiki".into(), name: "Wiki".into(), color: "#0f766e".into(), team_label: Some("Host".into()), team_default: None, custom: true, allow_media: false, url: "https://{team}/".into(), title_regex: None, user_agent: None },
+            ServiceInfo {
+                id: "slack".into(),
+                name: "Slack".into(),
+                color: "#4A154B".into(),
+                team_label: Some("Workspace".into()),
+                team_default: None,
+                custom: false,
+                allow_media: false,
+                url: "https://{team}.slack.com/".into(),
+                title_regex: Some(r"^\((\d+)\)".into()),
+                user_agent: None,
+            },
+            ServiceInfo {
+                id: "element".into(),
+                name: "Element".into(),
+                color: "#0DBD8B".into(),
+                team_label: Some("Instance".into()),
+                team_default: Some("app.element.io".into()),
+                custom: false,
+                allow_media: false,
+                url: "https://{team}/".into(),
+                title_regex: Some(r"^\[(\d+)\]".into()),
+                user_agent: Some("chrome".into()),
+            },
+            ServiceInfo {
+                id: "mastodon".into(),
+                name: "Mastodon".into(),
+                color: "#6364FF".into(),
+                team_label: Some("Instance".into()),
+                team_default: Some("mastodon.social".into()),
+                custom: false,
+                allow_media: false,
+                url: "https://{team}/".into(),
+                title_regex: None,
+                user_agent: Some("Mozilla/5.0 (Macintosh) Mastodon".into()),
+            },
+            ServiceInfo {
+                id: "discord".into(),
+                name: "Discord".into(),
+                color: "#5865F2".into(),
+                team_label: None,
+                team_default: None,
+                custom: false,
+                allow_media: false,
+                url: "https://discord.com/app".into(),
+                title_regex: None,
+                user_agent: None,
+            },
+            ServiceInfo {
+                id: "custom-wiki".into(),
+                name: "Wiki".into(),
+                color: "#0f766e".into(),
+                team_label: Some("Host".into()),
+                team_default: None,
+                custom: true,
+                allow_media: false,
+                url: "https://{team}/".into(),
+                title_regex: None,
+                user_agent: None,
+            },
         ],
         custom_services: vec![custom],
         dialog_open: false,
@@ -86,7 +206,9 @@ fn demo_snapshot() -> Snapshot {
 }
 
 fn query_params() -> Vec<(String, String)> {
-    let search = web_sys::window().and_then(|w| w.location().search().ok()).unwrap_or_default();
+    let search = web_sys::window()
+        .and_then(|w| w.location().search().ok())
+        .unwrap_or_default();
     search
         .trim_start_matches('?')
         .split('&')
@@ -99,7 +221,10 @@ fn query_params() -> Vec<(String, String)> {
 }
 
 fn query_param(key: &str) -> Option<String> {
-    query_params().into_iter().find(|(k, _)| k == key).map(|(_, v)| v)
+    query_params()
+        .into_iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v)
 }
 
 /// `?demo` wins over a present `window.__TAURI__`.
@@ -124,7 +249,15 @@ enum Tab {
 }
 
 impl Tab {
-    const ALL: [Tab; 7] = [Tab::Accounts, Tab::Custom, Tab::General, Tab::Notifications, Tab::Dock, Tab::Links, Tab::About];
+    const ALL: [Tab; 7] = [
+        Tab::Accounts,
+        Tab::Custom,
+        Tab::General,
+        Tab::Notifications,
+        Tab::Dock,
+        Tab::Links,
+        Tab::About,
+    ];
     fn from_id(id: &str) -> Option<Tab> {
         Some(match id {
             "accounts" => Tab::Accounts,
@@ -191,7 +324,12 @@ fn App() -> impl IntoView {
     }
 
     provide_context(Dispatch(set_snap));
-    provide_context(UiState { tab: RwSignal::new(tab), focus_add: RwSignal::new(false), edit_idx: RwSignal::new(edit_idx), add_custom: RwSignal::new(add_custom) });
+    provide_context(UiState {
+        tab: RwSignal::new(tab),
+        focus_add: RwSignal::new(false),
+        edit_idx: RwSignal::new(edit_idx),
+        add_custom: RwSignal::new(add_custom),
+    });
 
     let on_key = window_event_listener(leptos::ev::keydown, move |e| {
         if e.key() == "Escape" && snap.with_untracked(|s| s.dialog_open) {
@@ -202,11 +340,24 @@ fn App() -> impl IntoView {
 
     // Only notifies when the dialog flag actually flips, not on every snapshot.
     let dialog_open = Memo::new(move |_| snap.with(|s| s.dialog_open));
+    let vars = Memo::new(move |_| {
+        snap.with(|s| {
+            let i = s.settings.icon_size;
+            format!(
+                "--icon: {}px; --sidebar: {}px; --gap: {}px;",
+                i.icon_px(),
+                i.sidebar_width(),
+                (i.icon_px() * 0.25).round()
+            )
+        })
+    });
     view! {
-        <Sidebar snap=snap />
-        <Show when=move || dialog_open.get()>
-            <SettingsDialog snap=snap />
-        </Show>
+        <div class="root" style=move || vars.get()>
+            <Sidebar snap=snap />
+            <Show when=move || dialog_open.get()>
+                <SettingsDialog snap=snap />
+            </Show>
+        </div>
     }
 }
 
@@ -267,9 +418,9 @@ fn dispatch(set: WriteSignal<Snapshot>, cmd: UiCommand) {
         UiCommand::Move { account, delta } => {
             if let Some(i) = s.accounts.iter().position(|a| a.id == account) {
                 let j = i as i64 + delta as i64;
-                if (0..s.accounts.len() as i64).contains(&j) {
-                    s.accounts.swap(i, j as usize);
-                }
+                let j = j.clamp(0, s.accounts.len() as i64 - 1) as usize;
+                let a = s.accounts.remove(i);
+                s.accounts.insert(j, a);
             }
         }
         _ => {}
@@ -294,38 +445,270 @@ fn open_dialog(tab: Tab, focus_add: bool) {
     cmd(UiCommand::SetDialog { open: true });
 }
 
+/// Pointer-drag bookkeeping, measured once at pointerdown so snapshots cannot disturb it.
+#[derive(Clone)]
+struct Pending {
+    id: Uuid,
+    pointer: i32,
+    y0: f64,
+    source: usize,
+    centers: Vec<f64>,
+    active: bool,
+    dead: bool,
+}
+
+/// Visible drag state that drives the per-icon transforms.
+#[derive(Clone, Copy, PartialEq)]
+struct Drag {
+    id: Uuid,
+    source: usize,
+    target: usize,
+    dy: f64,
+    pitch: f64,
+}
+
+fn drag_style(d: Option<Drag>, id: Uuid, idx: usize) -> String {
+    let Some(d) = d else { return String::new() };
+    if d.id == id {
+        return format!(
+            "transform: translateY({}px) scale(1.08); transition: none; z-index: 10;",
+            d.dy
+        );
+    }
+    let shift = if d.source < d.target && idx > d.source && idx <= d.target {
+        -d.pitch
+    } else if d.source > d.target && idx >= d.target && idx < d.source {
+        d.pitch
+    } else {
+        0.0
+    };
+    format!("transform: translateY({shift}px);")
+}
+
 #[component]
 fn Sidebar(snap: ReadSignal<Snapshot>) -> impl IntoView {
     let dnd = Memo::new(move |_| snap.with(|s| s.settings.dnd));
+    let drag: RwSignal<Option<Drag>> = RwSignal::new(None);
+    let pending: StoredValue<Option<Pending>> = StoredValue::new(None);
+    let suppress = StoredValue::new(false);
+    // Rendered order; frozen while a drag is active, resynced from the snapshot afterwards.
+    let order: RwSignal<Vec<Uuid>> = RwSignal::new(Vec::new());
+    let snap_ids = move || snap.with(|s| s.accounts.iter().map(|a| a.id).collect::<Vec<_>>());
+    Effect::new(move |_| {
+        let ids = snap_ids();
+        if drag.get_untracked().is_none() && order.with_untracked(|o| *o != ids) {
+            order.set(ids);
+        }
+    });
+
+    let finish = move |send_move: bool| {
+        let d = drag.get_untracked();
+        drag.set(None);
+        let mut next = snap_ids();
+        if let Some(d) = d {
+            if send_move && d.target != d.source {
+                // Optimistic local reorder; the next snapshot carries the same order.
+                next = order.get_untracked();
+                if let Some(i) = next.iter().position(|x| *x == d.id) {
+                    let x = next.remove(i);
+                    next.insert(d.target.min(next.len()), x);
+                }
+            }
+            suppress.set_value(true);
+            // Backstop in case no click follows.
+            set_timeout(move || suppress.set_value(false), Duration::from_millis(50));
+            if send_move && d.target != d.source {
+                cmd(UiCommand::Move {
+                    account: d.id,
+                    delta: d.target as i32 - d.source as i32,
+                });
+            }
+        }
+        order.set(next);
+    };
+    let list_ref = NodeRef::<leptos::html::Div>::new();
+    let on_down = move |e: web_sys::PointerEvent| {
+        if e.button() != 0 || !e.is_primary() {
+            return;
+        }
+        e.prevent_default();
+        let Some(container) = list_ref
+            .get_untracked()
+            .map(|d| d.unchecked_into::<web_sys::Element>())
+        else {
+            return;
+        };
+        let Some(hit) = e
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+            .and_then(|t| t.closest(".acct").ok().flatten())
+        else {
+            return;
+        };
+        let kids = container.children();
+        let mut centers = Vec::new();
+        let mut source = None;
+        for i in 0..kids.length() {
+            let Some(k) = kids.item(i) else { continue };
+            let r = k.get_bounding_client_rect();
+            if k == hit {
+                source = Some(centers.len());
+            }
+            centers.push(r.top() + r.height() / 2.0);
+        }
+        let (Some(source), Some(id)) = (
+            source,
+            hit.get_attribute("data-id")
+                .and_then(|v| v.parse::<Uuid>().ok()),
+        ) else {
+            return;
+        };
+        pending.set_value(Some(Pending {
+            id,
+            pointer: e.pointer_id(),
+            y0: e.client_y() as f64,
+            source,
+            centers,
+            active: false,
+            dead: false,
+        }));
+    };
+    let on_move = move |e: web_sys::PointerEvent| {
+        let Some(mut p) = pending.get_value() else {
+            return;
+        };
+        if p.dead || e.pointer_id() != p.pointer {
+            return;
+        }
+        let dy = e.client_y() as f64 - p.y0;
+        if !p.active {
+            if dy.abs() <= 4.0 {
+                return;
+            }
+            p.active = true;
+            if let Some(c) = list_ref.get_untracked() {
+                let _ = c.set_pointer_capture(p.pointer);
+            }
+            pending.set_value(Some(p.clone()));
+        }
+        let c = &p.centers;
+        let here = c[p.source];
+        let dy = dy.clamp(c[0] - here, c[c.len() - 1] - here);
+        let target = c
+            .iter()
+            .enumerate()
+            .min_by(|a, b| {
+                (a.1 - (here + dy))
+                    .abs()
+                    .total_cmp(&(b.1 - (here + dy)).abs())
+            })
+            .map_or(p.source, |(i, _)| i);
+        let pitch = if c.len() > 1 {
+            (c[c.len() - 1] - c[0]) / (c.len() - 1) as f64
+        } else {
+            0.0
+        };
+        drag.set(Some(Drag {
+            id: p.id,
+            source: p.source,
+            target,
+            dy,
+            pitch,
+        }));
+    };
+    let on_up = move |e: web_sys::PointerEvent| {
+        let Some(p) = pending.get_value() else { return };
+        if e.pointer_id() != p.pointer {
+            return;
+        }
+        pending.set_value(None);
+        if let Some(c) = list_ref.get_untracked() {
+            let _ = c.release_pointer_capture(p.pointer);
+        }
+        if p.active {
+            if p.dead {
+                suppress.set_value(true);
+                set_timeout(move || suppress.set_value(false), Duration::from_millis(50));
+            } else {
+                finish(true);
+            }
+        }
+    };
+    let on_cancel = move |_: web_sys::PointerEvent| {
+        pending.set_value(None);
+        finish(false);
+    };
+    let on_lost = move |_: web_sys::PointerEvent| {
+        if pending.get_value().is_some_and(|p| p.active) {
+            pending.set_value(None);
+            finish(false);
+        }
+    };
+    window_event_listener(leptos::ev::keydown, move |e| {
+        if e.key() == "Escape"
+            && let Some(mut p) = pending.get_value()
+            && p.active
+            && !p.dead
+        {
+            p.dead = true;
+            pending.set_value(Some(p));
+            finish(false);
+        }
+    });
     view! {
         <nav class="sidebar">
-            <div class="accounts">
+            <div
+                class="accounts"
+                node_ref=list_ref
+                class:dragging=move || drag.get().is_some()
+                on:pointerdown=on_down
+                on:pointermove=on_move
+                on:pointerup=on_up
+                on:pointercancel=on_cancel
+                on:lostpointercapture=on_lost
+                on:dragstart=|e: web_sys::DragEvent| e.prevent_default()
+            >
                 <For
-                    each=move || snap.with(|s| s.accounts.clone())
-                    key=|a| (a.id, a.unread, a.indirect, a.settings.muted, a.settings.show_badge, a.color.clone(), a.initials.clone(), a.settings.label.clone(), a.service_name.clone(), a.icon.clone(), a.hibernated, a.settings.enabled)
-                    children=move |a| {
-                        let id = a.id;
+                    each=move || order.get()
+                    key=|id| *id
+                    children=move |id| {
+                        let acct = Memo::new(move |_| snap.with(|s| s.accounts.iter().find(|a| a.id == id).cloned()));
                         let active = move || snap.with(|s| s.active == Some(id));
-                        let title = format!("{} \u{2013} {}", a.service_name, a.settings.label);
-                        let show_badge = a.settings.show_badge;
-                        let muted = a.settings.muted;
-                        let enabled = a.settings.enabled;
-                        let hibernated = enabled && a.hibernated;
                         view! {
                             <button
                                 class="acct"
                                 class:active=active
-                                class:muted=muted
-                                class:disabled=!enabled
-                                class:hibernated=hibernated
-                                title=title
-                                on:click=move |_| cmd(UiCommand::Select { account: id })
+                                class:muted=move || acct.get().is_some_and(|a| a.settings.muted)
+                                class:disabled=move || acct.get().is_some_and(|a| !a.settings.enabled)
+                                class:hibernated=move || acct.get().is_some_and(|a| a.settings.enabled && a.hibernated)
+                                title=move || acct.get().map(|a| format!("{} \u{2013} {}", a.service_name, a.settings.label)).unwrap_or_default()
+                                data-id=id.to_string()
+                                draggable="false"
+                                class:dragged=move || drag.get().is_some_and(|d| d.id == id)
+                                style=move || {
+                                    let idx = order.with(|o| o.iter().position(|x| *x == id)).unwrap_or(0);
+                                    drag_style(drag.get(), id, idx)
+                                }
+                                on:click=move |_| {
+                                    if suppress.get_value() {
+                                        suppress.set_value(false);
+                                    } else {
+                                        cmd(UiCommand::Select { account: id });
+                                    }
+                                }
                             >
-                                {icon_view(&a, false)}
-                                {(show_badge && a.unread > 0).then(|| view! { <span class="badge">{badge_text(a.unread)}</span> })}
-                                {(show_badge && a.unread == 0 && a.indirect).then(|| view! { <span class="dot"></span> })}
-                                {muted.then(|| view! { <span class="mute-mark">"\u{1F507}"</span> })}
-                                {hibernated.then(|| view! { <span class="moon-mark" title="Sleeping">"\u{1F319}"</span> })}
+                                {move || acct.get().map(|a| {
+                                    let show_badge = a.settings.show_badge;
+                                    let muted = a.settings.muted;
+                                    let hibernated = a.settings.enabled && a.hibernated;
+                                    view! {
+                                        {icon_view(&a, false)}
+                                        {(show_badge && a.unread > 0).then(|| view! { <span class="badge">{badge_text(a.unread)}</span> })}
+                                        {(show_badge && a.unread == 0 && a.indirect).then(|| view! { <span class="dot"></span> })}
+                                        {muted.then(|| view! { <span class="mute-mark">"\u{1F507}"</span> })}
+                                        {hibernated.then(|| view! { <span class="moon-mark" title="Sleeping">"\u{1F319}"</span> })}
+                                    }
+                                })}
                             </button>
                         }
                     }
@@ -350,6 +733,7 @@ fn Sidebar(snap: ReadSignal<Snapshot>) -> impl IntoView {
 /// Round icon: the account's image if it has one, else initials on the service color.
 fn icon_view(a: &AccountView, small: bool) -> AnyView {
     match &a.icon {
+        Some(src) if a.icon_glyph => view! { <span class="icon has-img glyph" class:small=small style=format!("background:{}", a.color)><img src=src.clone() alt="" draggable="false" /></span> }.into_any(),
         Some(src) => view! { <span class="icon has-img" class:small=small><img src=src.clone() alt="" draggable="false" /></span> }.into_any(),
         None => view! { <span class="icon" class:small=small style=format!("background:{}", a.color)>{a.initials.clone()}</span> }.into_any(),
     }
@@ -421,7 +805,11 @@ fn ConfirmButton(
 
 /// One form row: label column + control column (with optional muted helper text under it).
 #[component]
-fn Row(#[prop(into)] label: String, #[prop(optional)] hint: &'static str, children: Children) -> impl IntoView {
+fn Row(
+    #[prop(into)] label: String,
+    #[prop(optional)] hint: &'static str,
+    children: Children,
+) -> impl IntoView {
     view! {
         <div class="frow">
             <span class="flabel">{label}</span>
@@ -502,13 +890,33 @@ fn app_toggle(
 
 #[component]
 fn GeneralTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
+    let size = Memo::new(move |_| snap.with(|s| s.settings.icon_size));
+    let opt = move |v: IconSize, label: &'static str| {
+        view! {
+            <button class="btn" class:on=move || size.get() == v on:click=move |_| update_settings(snap, |s| s.icon_size = v)>{label}</button>
+        }
+    };
     view! {
         <h2>"General"</h2>
         <div class="form">
+            <Row label="Sidebar icon size" hint="Size of the account icons; the sidebar width follows.">
+                <div class="btn-group seg">
+                    {opt(IconSize::Small, "Small")}
+                    {opt(IconSize::Medium, "Medium")}
+                    {opt(IconSize::Large, "Large")}
+                </div>
+            </Row>
             {app_toggle(snap, "Launch at login", "", |s| s.launch_at_login, |s, v| s.launch_at_login = v)}
             {app_toggle(snap, "Start hidden", "Start without showing the window.", |s| s.start_hidden, |s, v| s.start_hidden = v)}
             {app_toggle(snap, "Keep running in background", "Otherwise closing the window quits the app.", |s| s.close_to_background, |s, v| s.close_to_background = v)}
             {app_toggle(snap, "Menu bar icon", "Unread count and account menu in the menu bar.", |s| s.show_tray, |s, v| s.show_tray = v)}
+            <Row label="Put inactive services to sleep after" hint="Sleeping services free memory but show no notifications or unread counts until you open them again. Selecting a service wakes it up.">
+                <select prop:value=move || snap.with(|s| s.settings.hibernate_after_min.filter(|&m| m > 0).map(|m| m.to_string()).unwrap_or_default())
+                    on:change=move |e| { let v = event_target_value(&e).parse::<u32>().ok(); update_settings(snap, |s| s.hibernate_after_min = v) }>
+                    <option value="">"Never"</option>
+                    {move || num_options(&HIBERNATE, snap.with(|s| s.settings.hibernate_after_min), minutes_label)}
+                </select>
+            </Row>
             {app_toggle(snap, "Reload after wake", "Reload services after waking from sleep; fixes stale connections.", |s| s.reload_after_wake, |s, v| s.reload_after_wake = v)}
         </div>
     }
@@ -550,7 +958,14 @@ fn DockTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
     }
 }
 
-const BROWSERS: [&str; 6] = ["Safari", "Firefox", "Google Chrome", "Arc", "Microsoft Edge", "Brave Browser"];
+const BROWSERS: [&str; 6] = [
+    "Safari",
+    "Firefox",
+    "Google Chrome",
+    "Arc",
+    "Microsoft Edge",
+    "Brave Browser",
+];
 
 #[component]
 fn LinksTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
@@ -572,45 +987,45 @@ fn LinksTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
         }
     };
     view! {
-        <h2>"Links"</h2>
-        <div class="form">
-            <Row label="New-window links" hint="Sign-in popups always stay in the app, so OAuth and SSO keep working.">
-                {target_opt(LinkTarget::SystemBrowser, "System browser")}
-                {target_opt(LinkTarget::AppWindow, "App window")}
-            </Row>
-            <Row label="Browser" hint="Enter the name of an installed application, e.g. Firefox.">
-                <label class="radio">
-                    <input type="radio" name="browser" prop:checked=move || browser.get().is_none()
-                        on:change=move |_| update_settings(snap, |s| s.browser = None) />
-                    <span>"System default browser"</span>
-                </label>
-                <label class="radio">
-                    <input type="radio" name="browser" prop:checked=move || browser.get().is_some()
-                        on:change=move |_| {
-                            if draft.get_untracked().trim().is_empty() {
-                                draft.set("Safari".into());
-                            }
-                            commit();
-                        } />
-                    <span>"Open links in:"</span>
-                    <input
-                        type="text"
-                        list="browsers"
-                        placeholder="Application name"
-                        autocapitalize="off"
-                        spellcheck="false"
-                        autocomplete="off"
-                        prop:value=move || draft.get()
-                        on:input=move |e| draft.set(event_target_value(&e))
-                        on:change=move |_| commit()
- use:noac />
-                    <datalist id="browsers">
-                        {BROWSERS.map(|b| view! { <option value=b></option> }).into_iter().collect_view()}
-                    </datalist>
-                </label>
-            </Row>
-        </div>
-    }
+           <h2>"Links"</h2>
+           <div class="form">
+               <Row label="New-window links" hint="Sign-in popups always stay in the app, so OAuth and SSO keep working.">
+                   {target_opt(LinkTarget::SystemBrowser, "System browser")}
+                   {target_opt(LinkTarget::AppWindow, "App window")}
+               </Row>
+               <Row label="Browser" hint="Enter the name of an installed application, e.g. Firefox.">
+                   <label class="radio">
+                       <input type="radio" name="browser" prop:checked=move || browser.get().is_none()
+                           on:change=move |_| update_settings(snap, |s| s.browser = None) />
+                       <span>"System default browser"</span>
+                   </label>
+                   <label class="radio">
+                       <input type="radio" name="browser" prop:checked=move || browser.get().is_some()
+                           on:change=move |_| {
+                               if draft.get_untracked().trim().is_empty() {
+                                   draft.set("Safari".into());
+                               }
+                               commit();
+                           } />
+                       <span>"Open links in:"</span>
+                       <input
+                           type="text"
+                           list="browsers"
+                           placeholder="Application name"
+                           autocapitalize="off"
+                           spellcheck="false"
+                           autocomplete="off"
+                           prop:value=move || draft.get()
+                           on:input=move |e| draft.set(event_target_value(&e))
+                           on:change=move |_| commit()
+    use:noac />
+                       <datalist id="browsers">
+                           {BROWSERS.map(|b| view! { <option value=b></option> }).into_iter().collect_view()}
+                       </datalist>
+                   </label>
+               </Row>
+           </div>
+       }
 }
 
 #[component]
@@ -648,7 +1063,10 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
     let label = RwSignal::new(String::new());
     let team = RwSignal::new(String::new());
     // Which account is being edited; its draft lives inside `EditForm`.
-    let initial_edit = ui.edit_idx.get_untracked().and_then(|i| snap.with_untracked(|s| s.accounts.get(i).map(|a| a.id)));
+    let initial_edit = ui
+        .edit_idx
+        .get_untracked()
+        .and_then(|i| snap.with_untracked(|s| s.accounts.get(i).map(|a| a.id)));
     ui.edit_idx.set(None);
     let editing: RwSignal<Option<Uuid>> = RwSignal::new(initial_edit);
 
@@ -672,17 +1090,35 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
         }
     });
 
+    let added: RwSignal<Option<String>> = RwSignal::new(None);
     let add = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let Some(sv) = current() else { return };
         let team_v = team.get_untracked().trim().to_string();
         let team_opt = (sv.team_label.is_some() && !team_v.is_empty()).then_some(team_v);
         let l = label.get_untracked().trim().to_string();
-        cmd(UiCommand::AddAccount { service: sv.id.clone(), label: if l.is_empty() { sv.name.clone() } else { l }, team: team_opt });
+        let l = if l.is_empty() { sv.name.clone() } else { l };
+        cmd(UiCommand::AddAccount {
+            service: sv.id.clone(),
+            label: l.clone(),
+            team: team_opt,
+        });
         label.set(String::new());
+        team.set(sv.team_default.clone().unwrap_or_default());
+        added.set(Some(l.clone()));
+        set_timeout(
+            move || {
+                if added.get_untracked().as_deref() == Some(l.as_str()) {
+                    added.set(None);
+                }
+            },
+            Duration::from_secs(3),
+        );
+        focus_by_id("add-label");
     };
 
-    let ids = Memo::new(move |_| snap.with(|s| s.accounts.iter().map(|a| a.id).collect::<Vec<_>>()));
+    let ids =
+        Memo::new(move |_| snap.with(|s| s.accounts.iter().map(|a| a.id).collect::<Vec<_>>()));
 
     view! {
         <h2>"Accounts"</h2>
@@ -714,6 +1150,7 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
             </Row>
             <Row label="Label">
                 <input
+                    id="add-label"
                     type="text"
                     spellcheck="false"
                     placeholder=move || current().map(|s| s.name).unwrap_or_default()
@@ -729,6 +1166,7 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
             })}
             <Row label="">
                 <button class="btn primary" type="submit" disabled=move || current().is_none()>"Add"</button>
+                {move || added.get().map(|l| view! { <span class="added-note">{format!("Added {l}")}</span> })}
             </Row>
         </form>
         <h3 class="spaced">"Your accounts"</h3>
@@ -748,13 +1186,18 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
 }
 
 #[component]
-fn AccountRow(snap: ReadSignal<Snapshot>, id: Uuid, editing: RwSignal<Option<Uuid>>) -> impl IntoView {
+fn AccountRow(
+    snap: ReadSignal<Snapshot>,
+    id: Uuid,
+    editing: RwSignal<Option<Uuid>>,
+) -> impl IntoView {
     let acct = Memo::new(move |_| snap.with(|s| s.accounts.iter().find(|a| a.id == id).cloned()));
     view! {
         {move || acct.get().map(|a| {
             let is_editing = move || editing.get() == Some(id);
             let a_edit = a.clone();
             let enabled = a.settings.enabled;
+            let global_hibernate = snap.with_untracked(|s| s.settings.hibernate_after_min);
             let media_default = snap.with_untracked(|s| s.services.iter().find(|x| x.id == a.service).is_some_and(|x| x.allow_media));
             view! {
                 <div class="acct-item" class:open=is_editing>
@@ -782,7 +1225,7 @@ fn AccountRow(snap: ReadSignal<Snapshot>, id: Uuid, editing: RwSignal<Option<Uui
                         <button class="btn small" title="Unload the view to save memory" disabled=!enabled on:click=move |_| cmd(UiCommand::Hibernate { account: id })>"Sleep now"</button>
                         <ConfirmButton small=true label="Clear website data\u{2026}" confirm_label="Confirm: log out" title="Logs you out of this service" on_confirm=move |_| cmd(UiCommand::ClearData { account: id }) />
                     </div>
-                    {move || is_editing().then(|| view! { <EditForm a=a_edit.clone() editing=editing media_default=media_default /> })}
+                    {move || is_editing().then(|| view! { <EditForm a=a_edit.clone() editing=editing media_default=media_default global_hibernate=global_hibernate /> })}
                 </div>
             }
         })}
@@ -791,30 +1234,59 @@ fn AccountRow(snap: ReadSignal<Snapshot>, id: Uuid, editing: RwSignal<Option<Uui
 
 const MAX_ICON_BYTES: f64 = 256.0 * 1024.0;
 const ZOOMS: [u32; 10] = [50, 67, 80, 90, 100, 110, 125, 150, 175, 200];
-const HIBERNATE: [u32; 4] = [5, 15, 30, 60];
+const HIBERNATE: [u32; 5] = [5, 15, 30, 60, 120];
+
+/// "5 min", "2 h", ...
+fn minutes_label(n: u32) -> String {
+    if n >= 60 && n.is_multiple_of(60) {
+        format!("{} h", n / 60)
+    } else {
+        format!("{n} min")
+    }
+}
+
+/// Label of a global sleep timeout.
+fn hibernate_label(v: Option<u32>) -> String {
+    v.filter(|&m| m > 0)
+        .map_or_else(|| "Never".to_string(), minutes_label)
+}
 
 /// Options of a numeric select; a stored value that is not in the list is kept as an extra option.
 fn num_options(list: &[u32], current: Option<u32>, fmt: fn(u32) -> String) -> impl IntoView {
     let mut v = list.to_vec();
     if let Some(c) = current
+        && c > 0
         && !v.contains(&c)
     {
         v.push(c);
         v.sort_unstable();
     }
-    v.into_iter().map(|n| view! { <option value=n.to_string()>{fmt(n)}</option> }).collect_view()
+    v.into_iter()
+        .map(|n| view! { <option value=n.to_string()>{fmt(n)}</option> })
+        .collect_view()
 }
 
 /// Read the chosen image file as a data URL into `icon`; files over 256 KB are rejected.
-fn read_image(input: web_sys::HtmlInputElement, icon: RwSignal<Option<String>>, err: RwSignal<String>) {
+fn read_image(
+    input: web_sys::HtmlInputElement,
+    icon: RwSignal<Option<String>>,
+    err: RwSignal<String>,
+) {
     err.set(String::new());
-    let Some(file) = input.files().and_then(|f| f.get(0)) else { return };
+    let Some(file) = input.files().and_then(|f| f.get(0)) else {
+        return;
+    };
     if file.size() > MAX_ICON_BYTES {
-        err.set(format!("Image is too large ({} KB); the limit is 256 KB.", (file.size() / 1024.0).ceil()));
+        err.set(format!(
+            "Image is too large ({} KB); the limit is 256 KB.",
+            (file.size() / 1024.0).ceil()
+        ));
         input.set_value("");
         return;
     }
-    let Ok(reader) = web_sys::FileReader::new() else { return };
+    let Ok(reader) = web_sys::FileReader::new() else {
+        return;
+    };
     let r2 = reader.clone();
     let onload = Closure::once_into_js(move || {
         if let Ok(v) = r2.result()
@@ -842,12 +1314,26 @@ fn ua_split(ua: Option<&str>, none_mode: &'static str) -> (String, String) {
 /// Inline edit form. The draft is copied from the account once, when the form opens; later
 /// snapshots do not touch it.
 #[component]
-fn EditForm(a: AccountView, editing: RwSignal<Option<Uuid>>, media_default: bool) -> impl IntoView {
+fn EditForm(
+    a: AccountView,
+    editing: RwSignal<Option<Uuid>>,
+    media_default: bool,
+    global_hibernate: Option<u32>,
+) -> impl IntoView {
     let id = a.id;
     let service_name = a.service_name.clone();
     let s = a.settings;
     let (mode, custom) = ua_split(s.user_agent.as_deref(), "");
-    let site_icon = if s.custom_icon.is_none() { a.icon.clone() } else { None };
+    let site_icon = if s.custom_icon.is_none() && !a.icon_glyph {
+        a.icon.clone()
+    } else {
+        None
+    };
+    let glyph_icon = if s.custom_icon.is_none() && a.icon_glyph {
+        a.icon.clone()
+    } else {
+        None
+    };
     let (color, initials) = (a.color.clone(), a.initials.clone());
     let label = RwSignal::new(s.label);
     let team = RwSignal::new(s.team.unwrap_or_default());
@@ -861,11 +1347,20 @@ fn EditForm(a: AccountView, editing: RwSignal<Option<Uuid>>, media_default: bool
         Some(LinkTarget::AppWindow) => "app",
     });
     let icon: RwSignal<Option<String>> = RwSignal::new(s.custom_icon.clone());
-    let icon_url = RwSignal::new(s.custom_icon.filter(|i| !i.starts_with("data:")).unwrap_or_default());
+    let icon_url = RwSignal::new(
+        s.custom_icon
+            .filter(|i| !i.starts_with("data:"))
+            .unwrap_or_default(),
+    );
     let icon_err = RwSignal::new(String::new());
+    let simple = RwSignal::new(s.simple_icon.unwrap_or_default());
     let zoom_pct = (s.zoom * 100.0).round().max(1.0) as u32;
     let zoom = RwSignal::new(zoom_pct.to_string());
-    let hib = RwSignal::new(s.hibernate_after_min.map(|m| m.to_string()).unwrap_or_default());
+    let hib = RwSignal::new(
+        s.hibernate_after_min
+            .map(|m| m.to_string())
+            .unwrap_or_default(),
+    );
     let css = RwSignal::new(s.custom_css.unwrap_or_default());
     let media = RwSignal::new(match s.allow_media {
         None => "",
@@ -877,14 +1372,16 @@ fn EditForm(a: AccountView, editing: RwSignal<Option<Uuid>>, media_default: bool
     let team_label = a.team_label;
     let has_team = team_label.is_some();
     let zoom_opts = num_options(&ZOOMS, Some(zoom_pct), |n| format!("{n} %"));
-    let hib_opts = num_options(&HIBERNATE, s.hibernate_after_min, |n| format!("{n} min"));
+    let hib_opts = num_options(&HIBERNATE, s.hibernate_after_min, minutes_label);
 
     let save = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let team_v = team.get_untracked().trim().to_string();
         let user_agent = match ua_mode.get_untracked().as_str() {
             "" => None,
-            "custom" => Some(ua_custom.get_untracked().trim().to_string()).filter(|v| !v.is_empty()),
+            "custom" => {
+                Some(ua_custom.get_untracked().trim().to_string()).filter(|v| !v.is_empty())
+            }
             m => Some(m.to_string()),
         };
         let l = label.get_untracked().trim().to_string();
@@ -892,7 +1389,11 @@ fn EditForm(a: AccountView, editing: RwSignal<Option<Uuid>>, media_default: bool
         cmd(UiCommand::UpdateAccount {
             account: id,
             settings: AccountSettings {
-                label: if l.is_empty() { service_name.clone() } else { l },
+                label: if l.is_empty() {
+                    service_name.clone()
+                } else {
+                    l
+                },
                 team: (has_team && !team_v.is_empty()).then_some(team_v),
                 muted: !notif.get_untracked(),
                 show_badge: badge.get_untracked(),
@@ -905,7 +1406,12 @@ fn EditForm(a: AccountView, editing: RwSignal<Option<Uuid>>, media_default: bool
                     _ => None,
                 },
                 custom_icon: icon.get_untracked().filter(|i| !i.is_empty()),
-                zoom: zoom.get_untracked().parse::<f64>().map_or(1.0, |p| p / 100.0),
+                simple_icon: Some(simple.get_untracked().trim().to_string())
+                    .filter(|v| !v.is_empty()),
+                zoom: zoom
+                    .get_untracked()
+                    .parse::<f64>()
+                    .map_or(1.0, |p| p / 100.0),
                 hibernate_after_min: hib.get_untracked().parse().ok(),
                 custom_css: (!css_v.trim().is_empty()).then_some(css_v),
                 allow_media: match media.get_untracked() {
@@ -946,10 +1452,13 @@ fn EditForm(a: AccountView, editing: RwSignal<Option<Uuid>>, media_default: bool
             </Row>
             <Row label="Icon">
                 <div class="icon-row">
-                    {move || match icon.get().or_else(|| site_icon.clone()) {
+                    {move || match icon.get() {
+                        Some(src) => view! { <span class="icon small has-img"><img src=src alt="" /></span> }.into_any(),
+                        None => match glyph_icon.clone().filter(|_| !simple.get().trim().is_empty()).or_else(|| site_icon.clone()) {
+                        Some(src) if site_icon.as_ref() != Some(&src) => view! { <span class="icon small has-img glyph" style=format!("background:{color}")><img src=src alt="" /></span> }.into_any(),
                         Some(src) => view! { <span class="icon small has-img"><img src=src alt="" /></span> }.into_any(),
                         None => view! { <span class="icon small" style=format!("background:{color}")>{initials.clone()}</span> }.into_any(),
-                    }}
+                    }}}
                     <div class="icon-actions">
                         <label class="btn small file-btn">
                             "Choose image\u{2026}"
@@ -959,11 +1468,16 @@ fn EditForm(a: AccountView, editing: RwSignal<Option<Uuid>>, media_default: bool
                                     read_image(event_target::<web_sys::HtmlInputElement>(&e), icon, icon_err);
                                 } />
                         </label>
-                        <button class="btn small" type="button" on:click=move |_| { icon.set(None); icon_url.set(String::new()); icon_err.set(String::new()); }>"Use site icon"</button>
+                        <button class="btn small" type="button" on:click=move |_| { icon.set(None); simple.set(String::new()); icon_url.set(String::new()); icon_err.set(String::new()); }>"Use site icon"</button>
                         <button class="btn small" type="button" on:click=move |_| cmd(UiCommand::RefreshIcon { account: id })>"Refresh site icon"</button>
                     </div>
                 </div>
                 {move || { let e = icon_err.get(); (!e.is_empty()).then(|| view! { <span class="error">{e}</span> }) }}
+            </Row>
+            <Row label="Simple Icons" hint="Brand glyph on the service color (slug from simpleicons.org, letters and digits only). Precedence: custom image, Simple Icon, site icon, initials.">
+                <input type="text" class="wide" placeholder="e.g. discord"
+                    autocapitalize="off" spellcheck="false" autocomplete="off"
+                    prop:value=move || simple.get() on:input=move |e| simple.set(event_target_value(&e)) use:noac />
             </Row>
             <Row label="Image URL">
                 <input type="url" class="wide" placeholder="https://example.com/icon.png"
@@ -996,7 +1510,8 @@ fn EditForm(a: AccountView, editing: RwSignal<Option<Uuid>>, media_default: bool
             </Row>
             <Row label="Sleep in background">
                 <select prop:value=move || hib.get() on:change=move |e| hib.set(event_target_value(&e))>
-                    <option value="">"Never"</option>
+                    <option value="">{format!("Use global setting ({})", hibernate_label(global_hibernate))}</option>
+                    <option value="0">"Never"</option>
                     {hib_opts}
                 </select>
             </Row>
@@ -1084,7 +1599,11 @@ fn CustomTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
 }
 
 #[component]
-fn CustomForm(snap: ReadSignal<Snapshot>, existing: Option<CustomService>, form: RwSignal<CustomDraft>) -> impl IntoView {
+fn CustomForm(
+    snap: ReadSignal<Snapshot>,
+    existing: Option<CustomService>,
+    form: RwSignal<CustomDraft>,
+) -> impl IntoView {
     let editing = existing.is_some();
     let c = existing.unwrap_or_else(|| CustomService {
         id: String::new(),
@@ -1106,7 +1625,15 @@ fn CustomForm(snap: ReadSignal<Snapshot>, existing: Option<CustomService>, form:
     let ua_mode = RwSignal::new(mode);
     let ua_custom = RwSignal::new(custom);
     let base = RwSignal::new(String::new());
-    let builtin = Memo::new(move |_| snap.with(|s| s.services.iter().filter(|x| !x.custom).cloned().collect::<Vec<_>>()));
+    let builtin = Memo::new(move |_| {
+        snap.with(|s| {
+            s.services
+                .iter()
+                .filter(|x| !x.custom)
+                .cloned()
+                .collect::<Vec<_>>()
+        })
+    });
     let valid = move || !name.with(|n| n.trim().is_empty()) && !url.with(|u| u.trim().is_empty());
     let opt = |v: String| Some(v.trim().to_string()).filter(|v| !v.is_empty());
 
@@ -1115,13 +1642,31 @@ fn CustomForm(snap: ReadSignal<Snapshot>, existing: Option<CustomService>, form:
         base.set(id.clone());
         let svc = builtin.with_untracked(|l| l.iter().find(|x| x.id == id).cloned());
         let (n, u, col, tl, re, ua) = match svc {
-            Some(s) => (format!("{} (custom)", s.name), s.url, s.color, s.team_label, s.title_regex, s.user_agent),
-            None => (String::new(), String::new(), "#6366f1".into(), None, None, None),
+            Some(s) => (
+                format!("{} (custom)", s.name),
+                s.url,
+                s.color,
+                s.team_label,
+                s.title_regex,
+                s.user_agent,
+            ),
+            None => (
+                String::new(),
+                String::new(),
+                "#6366f1".into(),
+                None,
+                None,
+                None,
+            ),
         };
         let (mode, custom) = ua_split(ua.as_deref(), "safari");
         name.set(n);
         url.set(u);
-        color.set(if col.len() == 7 && col.starts_with('#') { col } else { "#888888".into() });
+        color.set(if col.len() == 7 && col.starts_with('#') {
+            col
+        } else {
+            "#888888".into()
+        });
         team_label.set(tl.unwrap_or_default());
         regex.set(re.unwrap_or_default());
         ua_mode.set(mode);
@@ -1138,7 +1683,11 @@ fn CustomForm(snap: ReadSignal<Snapshot>, existing: Option<CustomService>, form:
             id: id.clone(),
             name: name.get_untracked().trim().to_string(),
             color: color.get_untracked(),
-            team_label: if url_v.contains("{team}") { opt(team_label.get_untracked()) } else { None },
+            team_label: if url_v.contains("{team}") {
+                opt(team_label.get_untracked())
+            } else {
+                None
+            },
             url: url_v,
             title_regex: opt(regex.get_untracked()),
             user_agent: match ua_mode.get_untracked().as_str() {
@@ -1147,7 +1696,11 @@ fn CustomForm(snap: ReadSignal<Snapshot>, existing: Option<CustomService>, form:
                 m => Some(m.to_string()),
             },
         };
-        cmd(if editing { UiCommand::UpdateCustomService { service } } else { UiCommand::AddCustomService { service } });
+        cmd(if editing {
+            UiCommand::UpdateCustomService { service }
+        } else {
+            UiCommand::AddCustomService { service }
+        });
         form.set(None);
     };
 

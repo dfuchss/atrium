@@ -11,7 +11,8 @@
 //! Blocking calls (`add_child`, menu and tray building) wait for the main thread, so the main
 //! thread must never wait on the caller.
 //!
-//! New-window policy: see [`links`]. Native menus and tray: see [`menus`].
+//! New-window policy: see [`links`]. Native menus and tray: see [`menus`]. Quitting: see
+//! [`graceful_quit`].
 
 mod icons;
 pub mod links;
@@ -21,18 +22,19 @@ use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::Write as _;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use domain::core::SimpleIconResult;
 use domain::ports::{Notifier, Platform, PortError, PortResult, UiSink, WebviewHost};
 use domain::{Bounds, DockBadge, Input, MenuModel, NotificationReq, ViewPolicy, ViewSpec};
 use protocol::{AppSettings, EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder,
-    WebviewUrl, Window,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, Url, Webview,
+    WebviewBuilder, WebviewUrl, Window,
 };
 use tauri_plugin_autostart::AutoLaunchManager;
 use tauri_plugin_notification::NotificationExt;
@@ -40,7 +42,7 @@ use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 use crate::links::{LinkPolicy, ViewPolicies, navigation_hook, permission_hook};
-use crate::menus::{MenuState, menu_command};
+use crate::menus::{ID_QUIT, MenuState, menu_command};
 
 /// Sink for inputs produced by the adapter; must not block.
 pub type Feed = Arc<dyn Fn(Input) + Send + Sync>;
@@ -84,7 +86,10 @@ impl Logger {
         let line = format!("{} {message}", timestamp());
         println!("{line}");
         if let Some(path) = &self.file
-            && let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path.as_path())
+            && let Ok(mut f) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path.as_path())
         {
             let _ = writeln!(f, "{line}");
         }
@@ -93,7 +98,9 @@ impl Logger {
 
 /// `YYYY-MM-DD HH:MM:SS.mmmZ` (UTC) without a date crate.
 fn timestamp() -> String {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let secs = now.as_secs();
     let (days, rem) = (secs / 86_400, secs % 86_400);
     // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
@@ -160,7 +167,9 @@ impl<R: Runtime> TauriHost<R> {
     fn register_notification_clicks(&self) {
         let (feed, notifications) = (self.feed.clone(), self.notifications.clone());
         let result = self.app.notification().on_action(move |action| {
-            let Some(native_id) = action.notification().map(|n| n.id()) else { return };
+            let Some(native_id) = action.notification().map(|n| n.id()) else {
+                return;
+            };
             let target = notifications
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
@@ -172,7 +181,8 @@ impl<R: Runtime> TauriHost<R> {
             }
         });
         if let Err(e) = result {
-            self.logger.log(&format!("cannot register notification click handler: {e}"));
+            self.logger
+                .log(&format!("cannot register notification click handler: {e}"));
         }
     }
 
@@ -189,8 +199,12 @@ impl<R: Runtime> TauriHost<R> {
     }
 
     fn place(webview: &Webview<R>, bounds: Bounds) -> PortResult {
-        webview.set_position(LogicalPosition::new(bounds.x, bounds.y)).map_err(port_err)?;
-        webview.set_size(LogicalSize::new(bounds.width, bounds.height)).map_err(port_err)
+        webview
+            .set_position(LogicalPosition::new(bounds.x, bounds.y))
+            .map_err(port_err)?;
+        webview
+            .set_size(LogicalSize::new(bounds.width, bounds.height))
+            .map_err(port_err)
     }
 
     /// Adds the native hooks of one service view to `builder`.
@@ -215,13 +229,20 @@ impl<R: Runtime> TauriHost<R> {
             .on_page_load(move |_, payload| {
                 if let PageLoadEvent::Finished = payload.event() {
                     log_load.log(&format!("[{account}] loaded {}", payload.url()));
-                    feed_load(Input::PageLoaded { account, url: payload.url().to_string() });
+                    feed_load(Input::PageLoaded {
+                        account,
+                        url: payload.url().to_string(),
+                    });
                 }
             })
             // Fires for iframe loads too (no frame info), so it must never open anything
             // externally (sign-in and captcha iframes would end up in the browser); it only
             // allows or denies by scheme (`domain::nav_allowed`).
-            .on_navigation(navigation_hook(account, self.logger.clone(), self.feed.clone()))
+            .on_navigation(navigation_hook(
+                account,
+                self.logger.clone(),
+                self.feed.clone(),
+            ))
             // Never Allow: see `links` (sign-in popups -> in-app window, else the link target).
             .on_new_window(move |url, features| policy.on_new_window(url, features))
             .on_download(move |_, event| {
@@ -234,16 +255,26 @@ impl<R: Runtime> TauriHost<R> {
                         if let Ok(dir) = app.path().download_dir() {
                             *destination = dir.join(name);
                         }
-                        log_download.log(&format!("[{account}] download {url} -> {}", destination.display()));
+                        log_download.log(&format!(
+                            "[{account}] download {url} -> {}",
+                            destination.display()
+                        ));
                     }
                     DownloadEvent::Finished { url, path, success } => {
-                        log_download.log(&format!("[{account}] download finished {url} {path:?} ok={success}"));
+                        log_download.log(&format!(
+                            "[{account}] download finished {url} {path:?} ok={success}"
+                        ));
                     }
                     _ => {}
                 }
                 true
             })
-            .on_permission_request(permission_hook(account, self.policies.clone(), self.logger.clone(), "view"))
+            .on_permission_request(permission_hook(
+                account,
+                self.policies.clone(),
+                self.logger.clone(),
+                "view",
+            ))
     }
 }
 
@@ -251,7 +282,10 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
     fn create(&self, spec: &ViewSpec, bounds: Bounds, visible: bool) -> PortResult {
         let label = view_label(spec.account);
         if self.app.get_webview(&label).is_some() {
-            return Err(PortError(format!("view for account {} already exists", spec.account)));
+            return Err(PortError(format!(
+                "view for account {} already exists",
+                spec.account
+            )));
         }
         let mut builder = WebviewBuilder::new(label, WebviewUrl::External(spec.url.clone()))
             .data_store_identifier(spec.store_id)
@@ -274,7 +308,12 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         if !visible {
             webview.hide().map_err(port_err)?;
         }
-        self.logger.log(&format!("[{}] created view {} ({})", spec.account, webview.label(), spec.url));
+        self.logger.log(&format!(
+            "[{}] created view {} ({})",
+            spec.account,
+            webview.label(),
+            spec.url
+        ));
         Ok(())
     }
 
@@ -318,7 +357,10 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
     }
 
     fn set_view_policy(&self, account: Uuid, policy: ViewPolicy) -> PortResult {
-        self.policies.lock().unwrap_or_else(PoisonError::into_inner).insert(account, policy);
+        self.policies
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(account, policy);
         Ok(())
     }
 
@@ -334,13 +376,18 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(800));
             let result = webview.reload();
-            logger.log(&format!("[{account}] cleared browsing data, reload -> {result:?}"));
+            logger.log(&format!(
+                "[{account}] cleared browsing data, reload -> {result:?}"
+            ));
         });
         Ok(())
     }
 
     fn current_url(&self, account: Uuid) -> PortResult<String> {
-        self.webview(account)?.url().map(|u| u.to_string()).map_err(port_err)
+        self.webview(account)?
+            .url()
+            .map(|u| u.to_string())
+            .map_err(port_err)
     }
 
     fn find_icon(&self, account: Uuid, script: &str) -> PortResult {
@@ -354,8 +401,14 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         let (app, logger) = (self.app.clone(), self.logger.clone());
         tauri::async_runtime::spawn(async move {
             match app.remove_data_store(store_id).await {
-                Ok(()) => logger.log(&format!("deleted data store {}", Uuid::from_bytes(store_id))),
-                Err(e) => logger.log(&format!("cannot delete data store {}: {e}", Uuid::from_bytes(store_id))),
+                Ok(()) => logger.log(&format!(
+                    "deleted data store {}",
+                    Uuid::from_bytes(store_id)
+                )),
+                Err(e) => logger.log(&format!(
+                    "cannot delete data store {}: {e}",
+                    Uuid::from_bytes(store_id)
+                )),
             }
         });
         Ok(())
@@ -365,7 +418,10 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
 impl<R: Runtime> Notifier for TauriHost<R> {
     fn notify(&self, req: &NotificationReq) -> PortResult {
         let native_id = {
-            let mut n = self.notifications.lock().unwrap_or_else(PoisonError::into_inner);
+            let mut n = self
+                .notifications
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
             n.next_id = n.next_id.checked_add(1).unwrap_or(1);
             let id = n.next_id;
             n.targets.insert(id, (req.account, req.shim_id));
@@ -375,7 +431,13 @@ impl<R: Runtime> Notifier for TauriHost<R> {
             }
             id
         };
-        let mut builder = self.app.notification().builder().id(native_id).title(&req.title).body(&req.body);
+        let mut builder = self
+            .app
+            .notification()
+            .builder()
+            .id(native_id)
+            .title(&req.title)
+            .body(&req.body);
         if req.sound {
             builder = builder.sound(DEFAULT_SOUND);
         }
@@ -397,7 +459,9 @@ impl<R: Runtime> Platform for TauriHost<R> {
     fn open_external(&self, url: &str, browser: Option<&str>) -> PortResult {
         // With a browser this runs `/usr/bin/open -a <browser> -- <url>` and waits for it.
         let result = self.app.opener().open_url(url, browser).map_err(port_err);
-        self.logger.log(&format!("open external {url} (browser {browser:?}) -> {result:?}"));
+        self.logger.log(&format!(
+            "open external {url} (browser {browser:?}) -> {result:?}"
+        ));
         result
     }
 
@@ -413,7 +477,10 @@ impl<R: Runtime> Platform for TauriHost<R> {
             } else {
                 autostart.disable().map_err(port_err)?;
             }
-            self.logger.log(&format!("launch at login: {enabled} -> {}", settings.launch_at_login));
+            self.logger.log(&format!(
+                "launch at login: {enabled} -> {}",
+                settings.launch_at_login
+            ));
         }
         Ok(())
     }
@@ -432,7 +499,10 @@ impl<R: Runtime> Platform for TauriHost<R> {
             .spawn(move || {
                 let data_url = match icons::download_icon(&url) {
                     Ok(d) => {
-                        logger.log(&format!("[{account}] icon {url} ({} bytes as data URL)", d.len()));
+                        logger.log(&format!(
+                            "[{account}] icon {url} ({} bytes as data URL)",
+                            d.len()
+                        ));
                         Some(d)
                     }
                     Err(e) => {
@@ -446,8 +516,36 @@ impl<R: Runtime> Platform for TauriHost<R> {
             .map_err(port_err)
     }
 
+    fn fetch_simple_icon(&self, account: Uuid, slug: &str) -> PortResult {
+        let (feed, logger, slug) = (self.feed.clone(), self.logger.clone(), slug.to_string());
+        std::thread::Builder::new()
+            .name("simple-icon".into())
+            .spawn(move || {
+                let result = icons::download_simple_icon(&slug);
+                logger.log(&format!(
+                    "[{account}] simple icon {slug}: {}",
+                    match &result {
+                        SimpleIconResult::Found(d) => format!("{} bytes as data URL", d.len()),
+                        SimpleIconResult::NotFound => "not found".into(),
+                        SimpleIconResult::Failed(e) => format!("failed: {e}"),
+                    }
+                ));
+                feed(Input::SimpleIconFetched {
+                    account,
+                    slug,
+                    result,
+                });
+            })
+            .map(drop)
+            .map_err(port_err)
+    }
+
     fn set_menus(&self, model: &MenuModel) -> PortResult {
-        self.menus.lock().unwrap_or_else(PoisonError::into_inner).apply(&self.app, model).map_err(port_err)
+        self.menus
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .apply(&self.app, model)
+            .map_err(port_err)
     }
 
     fn log(&self, message: &str) {
@@ -455,9 +553,70 @@ impl<R: Runtime> Platform for TauriHost<R> {
     }
 }
 
-/// Handles a click on an item of the app menu or the tray menu (main thread): shows the
-/// window `window_label` if the item asks for it, then feeds the item's input.
-pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, window_label: &str, id: &str, feed: &Feed) {
+/// Set once [`graceful_quit`] started; the exit it ends with must not start another one.
+static QUITTING: AtomicBool = AtomicBool::new(false);
+
+/// Time the service pages get for their `pagehide`/`unload` handlers before the process exits.
+const UNLOAD_GRACE: Duration = Duration::from_millis(400);
+
+/// Whether [`graceful_quit`] already ran (the app is exiting).
+pub fn is_quitting() -> bool {
+    QUITTING.load(Ordering::SeqCst)
+}
+
+/// Quits the app after unloading every service page (service views, popup and app windows).
+///
+/// Navigating to `about:blank` fires `pagehide`/`unload`, so pages release what they hold
+/// (Element's session lock would otherwise look alive on the next start and show "Element is
+/// open in another window"). The wait runs on a background thread, then `app.exit(0)`, whose
+/// `ExitRequested` must be let through (see [`is_quitting`]). Only the first call does anything.
+pub fn graceful_quit<R: Runtime>(app: &AppHandle<R>) {
+    if QUITTING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let logger = Logger::new(app);
+    let blank = Url::parse("about:blank").expect("valid URL");
+    let views: Vec<_> = app
+        .webviews()
+        .into_values()
+        .filter(|w| w.label() != UI_WEBVIEW)
+        .collect();
+    logger.log(&format!("quit: unloading {} service views", views.len()));
+    for view in &views {
+        if let Err(e) = view.navigate(blank.clone()) {
+            logger.log(&format!("quit: cannot unload {}: {e}", view.label()));
+        }
+    }
+    let grace = if views.is_empty() {
+        Duration::ZERO
+    } else {
+        UNLOAD_GRACE
+    };
+    let exiting = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("quit".into())
+        .spawn(move || {
+            std::thread::sleep(grace);
+            exiting.exit(0);
+        });
+    if spawned.is_err() {
+        app.exit(0);
+    }
+}
+
+/// Handles a click on an item of the app menu or the tray menu (main thread): quits for the
+/// Quit items, otherwise shows the window `window_label` if the item asks for it, then feeds
+/// the item's input.
+pub fn handle_menu_event<R: Runtime>(
+    app: &AppHandle<R>,
+    window_label: &str,
+    id: &str,
+    feed: &Feed,
+) {
+    if id == ID_QUIT {
+        graceful_quit(app);
+        return;
+    }
     let Some(cmd) = menu_command(id) else { return };
     if cmd.show_window
         && let Some(window) = app.get_window(window_label)
@@ -473,7 +632,9 @@ pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, window_label: &str, id:
 
 impl<R: Runtime> UiSink for TauriHost<R> {
     fn emit_snapshot(&self, snapshot: &Snapshot) -> PortResult {
-        self.app.emit_to(UI_WEBVIEW, EVENT_SNAPSHOT, snapshot).map_err(port_err)
+        self.app
+            .emit_to(UI_WEBVIEW, EVENT_SNAPSHOT, snapshot)
+            .map_err(port_err)
     }
 }
 

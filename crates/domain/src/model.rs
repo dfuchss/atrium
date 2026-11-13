@@ -39,7 +39,8 @@ pub struct Account {
     /// Page zoom factor, 1.0 = 100 %.
     #[serde(default = "one")]
     pub zoom: f64,
-    /// Unload the view after this many minutes in the background.
+    /// Unload the view after this many minutes in the background; None = use the global
+    /// setting, Some(0) = never.
     #[serde(default)]
     pub hibernate_after_min: Option<u32>,
     /// CSS injected into every page of this account.
@@ -51,6 +52,12 @@ pub struct Account {
     /// Grant camera/microphone/screen capture; None = the service default.
     #[serde(default)]
     pub allow_media: Option<bool>,
+    /// Simple Icons slug (normalised) chosen by the user.
+    #[serde(default)]
+    pub simple_icon: Option<String>,
+    /// Cached white glyph of `simple_icon` as `data:image/svg+xml` URL; cleared when the slug changes.
+    #[serde(default)]
+    pub simple_icon_data: Option<String>,
 }
 
 fn yes() -> bool {
@@ -63,7 +70,12 @@ fn one() -> f64 {
 
 impl Account {
     /// New account with default settings.
-    pub fn new(id: Uuid, service: impl Into<String>, label: impl Into<String>, team: Option<String>) -> Account {
+    pub fn new(
+        id: Uuid,
+        service: impl Into<String>,
+        label: impl Into<String>,
+        team: Option<String>,
+    ) -> Account {
         Account {
             id,
             service: service.into(),
@@ -81,6 +93,8 @@ impl Account {
             custom_css: None,
             favicon: None,
             allow_media: None,
+            simple_icon: None,
+            simple_icon_data: None,
         }
     }
 
@@ -105,6 +119,7 @@ impl Account {
             hibernate_after_min: self.hibernate_after_min,
             custom_css: self.custom_css.clone(),
             allow_media: self.allow_media,
+            simple_icon: self.simple_icon.clone(),
         }
     }
 }
@@ -147,15 +162,33 @@ mod tests {
         }"#;
         let p: Persisted = serde_json::from_str(json).unwrap();
         let a = &p.accounts[0];
-        assert_eq!((a.label.as_str(), a.team.as_deref(), a.muted), ("KIT", Some("kit"), true));
+        assert_eq!(
+            (a.label.as_str(), a.team.as_deref(), a.muted),
+            ("KIT", Some("kit"), true)
+        );
         assert!(a.show_badge && a.in_dock_badge && a.user_agent.is_none());
-        assert!(a.enabled && a.link_target.is_none() && a.custom_icon.is_none() && a.custom_css.is_none());
-        assert_eq!((a.zoom, a.hibernate_after_min, a.favicon.as_deref()), (1.0, None, None));
+        assert!(
+            a.enabled
+                && a.link_target.is_none()
+                && a.custom_icon.is_none()
+                && a.custom_css.is_none()
+        );
+        assert_eq!(
+            (a.zoom, a.hibernate_after_min, a.favicon.as_deref()),
+            (1.0, None, None)
+        );
         assert!(p.custom_services.is_empty());
         assert_eq!(a.allow_media, None);
+        assert_eq!(
+            (a.simple_icon.as_deref(), a.simple_icon_data.as_deref()),
+            (None, None)
+        );
         assert!(!p.accounts[1].muted && p.accounts[1].team.is_none());
         assert_eq!(p.settings.active, Some(Uuid::from_u128(42)));
-        let expected = AppSettings { dnd: true, ..AppSettings::default() };
+        let expected = AppSettings {
+            dnd: true,
+            ..AppSettings::default()
+        };
         assert_eq!(p.settings.app, expected);
     }
 
@@ -163,7 +196,10 @@ mod tests {
     fn empty_and_round_trip() {
         let p: Persisted = serde_json::from_str("{}").unwrap();
         assert_eq!(p, Persisted::default());
-        let mut p = Persisted { accounts: vec![Account::new(Uuid::from_u128(1), "slack", "S", None)], ..Default::default() };
+        let mut p = Persisted {
+            accounts: vec![Account::new(Uuid::from_u128(1), "slack", "S", None)],
+            ..Default::default()
+        };
         p.accounts[0].user_agent = Some("chrome".into());
         p.settings.app.dock_badge = DockBadgeMode::CountOnly;
         p.settings.app.browser = Some("Firefox".into());
@@ -176,6 +212,8 @@ mod tests {
         a.hibernate_after_min = Some(10);
         a.custom_css = Some("body{color:red}".into());
         a.favicon = Some("data:image/png;base64,AA==".into());
+        a.simple_icon = Some("discord".into());
+        a.simple_icon_data = Some("data:image/svg+xml;base64,AA==".into());
         p.custom_services.push(CustomService {
             id: "custom-x".into(),
             name: "X".into(),

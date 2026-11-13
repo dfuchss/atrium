@@ -13,8 +13,8 @@ pub mod security;
 
 pub use crate::catalog::{Catalog, CatalogError, ServiceDef, UnreadRules};
 pub use crate::core::{
-    Bounds, Core, DockBadge, Effect, ICON_SCRIPT, Input, MenuAccount, MenuAction, MenuModel, NotificationReq, ViewPolicy,
-    ViewSpec, WAKE_GAP_MS, ZOOM_STEPS,
+    Bounds, Core, DockBadge, Effect, ICON_SCRIPT, Input, MenuAccount, MenuAction, MenuModel,
+    NotificationReq, ViewPolicy, ViewSpec, WAKE_GAP_MS, ZOOM_STEPS,
 };
 pub use crate::model::{Account, Persisted, Settings};
 pub use crate::security::{nav_allowed, opener_url_allowed};

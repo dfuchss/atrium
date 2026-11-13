@@ -1,0 +1,116 @@
+name: release
+
+# Builds unsigned macOS bundles for Apple silicon and Intel on a version tag and publishes them
+# as a GitHub Release with a SHA256SUMS file, which the in-app updater requires.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    name: Check version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # The version lives only in the workspace Cargo.toml; tauri.conf.json inherits it.
+      - name: Tag matches the Cargo version
+        run: |
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "atrium") | .version')"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match the Cargo version ${version}"
+            exit 1
+          fi
+          if jq -e 'has("version")' app/src-tauri/tauri.conf.json > /dev/null; then
+            echo "::error::tauri.conf.json must not set its own version"
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: version
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: arm64
+          - target: x86_64-apple-darwin
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install Trunk and the Tauri CLI
+        run: |
+          brew install trunk
+          cargo install tauri-cli --version '^2' --locked
+      - name: Build the app bundle
+        working-directory: app/src-tauri
+        run: cargo tauri build --target ${{ matrix.target }} --bundles app
+      - name: Check and zip the bundle
+        run: |
+          app="target/${{ matrix.target }}/release/bundle/macos/Atrium.app"
+          plist="$app/Contents/Info.plist"
+          bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
+          bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$plist")"
+          if [ "v${bundle_version}" != "${GITHUB_REF_NAME}" ] || [ "${bundle_id}" != "org.fuchss.atrium" ]; then
+            echo "::error::Bundle ${bundle_id} ${bundle_version} does not match ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          mkdir dist
+          # ditto keeps the bundle structure, modes and symbolic links.
+          ditto -c -k --keepParent "$app" "dist/atrium-macos-${{ matrix.arch }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: atrium-macos-${{ matrix.arch }}
+          path: dist/atrium-macos-${{ matrix.arch }}.zip
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Write checksums
+        working-directory: dist
+        run: |
+          sha256sum atrium-macos-*.zip > SHA256SUMS
+          cat SHA256SUMS
+      - name: Write release notes
+        run: |
+          cat > release-notes.md <<'EOF'
+          Unsigned macOS builds of Atrium (macOS 14 or later):
+
+          - `atrium-macos-arm64.zip` for Apple silicon
+          - `atrium-macos-x86_64.zip` for Intel Macs
+          - `SHA256SUMS` with the checksums (`shasum -a 256 -c SHA256SUMS`)
+
+          **Installing:** unzip the file and move `Atrium.app` to the Applications folder. Atrium is not signed, so macOS blocks the first start: open it once, then allow it in System Settings → Privacy & Security → *Open Anyway*. If macOS says the app is "damaged", remove the download quarantine with `xattr -cr /Applications/Atrium.app` and open it again.
+
+          **Updating:** an Atrium in the Applications folder updates itself: Settings → About shows new versions and *Restart and update* installs them.
+          EOF
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/atrium-macos-*.zip dist/SHA256SUMS \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Atrium ${GITHUB_REF_NAME#v}" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            --latest

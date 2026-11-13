@@ -70,7 +70,17 @@ The screenshots use a local demo Matrix server with made-up users (see [Developm
 
 ## Installation
 
-There are no signed release builds yet, so build Atrium yourself.
+Download `atrium-macos-arm64.zip` (Apple silicon) or `atrium-macos-x86_64.zip` (Intel) from the [latest release](https://github.com/dfuchss/atrium/releases/latest), unzip it and move `Atrium.app` to the Applications folder.
+
+The builds are not signed, so macOS blocks the first start: open Atrium once, then allow it in System Settings → Privacy & Security → *Open Anyway*. If macOS reports the app as "damaged", remove the download quarantine with `xattr -cr /Applications/Atrium.app`.
+
+### Updates
+
+Atrium checks for a new release on startup and every six hours (Settings → About; the check can be switched off there). An update is downloaded, verified against the release's `SHA256SUMS` and placed next to the app; *Restart and update* quits Atrium, swaps in the new version and starts it again. This works only for an Atrium in `/Applications` or `~/Applications`; development builds and other locations just point to the release page.
+
+Releases are built by `.github/workflows/release.yml` when a tag `v<version>` is pushed; the tag must match the version in the workspace `Cargo.toml`, the only place the version is set.
+
+### Building from source
 
 Requirements:
 - macOS 14 or later. Per-account data stores need WebKit's `WKWebsiteDataStore(forIdentifier:)`.
@@ -86,7 +96,7 @@ cd atrium/app/src-tauri
 cargo tauri build                        # → target/release/bundle/macos/Atrium.app
 ```
 
-Copy `Atrium.app` to `/Applications`. The app is not signed. The first time, open it with right-click → *Open*.
+Copy `Atrium.app` to `/Applications`. The app is not signed; the first time, open it as described above.
 
 ## Usage
 
@@ -134,7 +144,7 @@ title_regex = '^\((\d+)\)'          # capture group 1 = unread count
 - **Isolation:** every service view runs in its own sandboxed WebKit content process with its own data store. Service pages get **no access** to Atrium's internal API.
 - **Minimal script injection:** Atrium injects only a small script that forwards web notifications and routes new-window links, plus optional custom CSS. Unread counts are read from the page title in Rust.
 - **Links:** only `http(s)` and `mailto` links are handed to macOS, and in-page navigation is limited to web schemes.
-- **Local only:** the settings UI runs under a strict Content Security Policy. Atrium has no telemetry and no server; everything stays on your Mac.
+- **Local only:** the settings UI runs under a strict Content Security Policy. Atrium has no telemetry and no server; everything stays on your Mac. The update check asks the GitHub API for the latest release (with the Atrium version in the user agent); it can be switched off.
 
 ## Known limitations
 
@@ -153,6 +163,7 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 | `crates/protocol` | Types shared by the backend and the UI (`UiCommand`, `Snapshot`). Compiles to wasm. |
 | `crates/host-tauri` | Adapter: implements the ports on Tauri multi-webview (webviews, notifications, dock badge, tray, menus, links). |
 | `crates/store-fs` | Adapter: atomic JSON store (`accounts.json`). |
+| `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting. |
 | `app/src-tauri` | Composition root: window, actor thread, Tauri commands. |
 | `app/ui` | Sidebar and settings in [Leptos](https://leptos.dev/) (CSR, built with Trunk). |
 | `services/*.toml` | Built-in service definitions. |

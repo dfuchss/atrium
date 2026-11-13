@@ -26,6 +26,7 @@ use uuid::Uuid;
 
 use crate::catalog::{Catalog, ServiceDef};
 use crate::model::{Account, Persisted};
+use crate::throttle::RateLimiter;
 
 pub use icons::{normalize_slug, simple_icon_url};
 pub use messages::{
@@ -73,7 +74,12 @@ pub struct Core {
     startup_log: Vec<String>,
     /// Write page titles into the log (diagnosing unread patterns); off by default.
     log_page_titles: bool,
+    /// External opens (browser, mail app) per account, so a page cannot flood the desktop.
+    external_link_limit: RateLimiter<Uuid>,
 }
+
+/// One external open per account within this time (tick clock).
+const EXTERNAL_LINK_INTERVAL_MS: u64 = 2_000;
 
 impl Core {
     /// `new_account_id` creates ids for new accounts (`Uuid::new_v4` in the app, deterministic
@@ -108,6 +114,7 @@ impl Core {
             favicon_attempts: HashMap::new(),
             startup_log: vec![],
             log_page_titles: false,
+            external_link_limit: RateLimiter::new(1, EXTERNAL_LINK_INTERVAL_MS),
         };
         core.startup_log = core.rebuild_catalog();
         core

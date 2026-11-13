@@ -240,6 +240,7 @@ fn external_links_only_web_and_mail() {
             browser: None
         }]
     );
+    core.handle(Input::Tick { now_ms: 10_000 });
     assert!(matches!(
         open(&mut core, "https://x.org").as_slice(),
         [Effect::OpenExternal { .. }]
@@ -295,4 +296,55 @@ fn media_is_allowed_only_on_internal_hosts() {
         );
     }
     assert!(!spec.media_allowed_at(true, None));
+}
+
+#[test]
+fn external_links_are_throttled_per_account() {
+    let (mut core, _) = started(vec![account(1, "slack", "S"), account(2, "slack", "T")]);
+    let open = |core: &mut Core, n: u128| {
+        core.handle(Input::ExternalLink {
+            account: id(n),
+            url: "https://x.org/a?secret=1".into(),
+        })
+    };
+    core.handle(Input::Tick { now_ms: 10_000 });
+    assert!(matches!(
+        open(&mut core, 1).as_slice(),
+        [Effect::OpenExternal { .. }]
+    ));
+    let dropped = open(&mut core, 1);
+    assert!(
+        matches!(dropped.as_slice(), [Effect::Log(line)] if line.contains("https://x.org/a:") && !line.contains("secret")),
+        "{dropped:?}"
+    );
+    assert!(matches!(
+        open(&mut core, 2).as_slice(),
+        [Effect::OpenExternal { .. }]
+    ));
+    core.handle(Input::Tick { now_ms: 12_000 });
+    assert!(matches!(
+        open(&mut core, 1).as_slice(),
+        [Effect::OpenExternal { .. }]
+    ));
+}
+
+#[test]
+fn mail_links_open_only_for_the_visible_account() {
+    let (mut core, _) = started(vec![account(1, "slack", "S"), account(2, "slack", "T")]);
+    let mail = |core: &mut Core, n: u128| {
+        core.handle(Input::ExternalLink {
+            account: id(n),
+            url: "mailto:a@b.org".into(),
+        })
+    };
+    assert!(
+        matches!(mail(&mut core, 2).as_slice(), [Effect::Log(line)] if line.contains("mailto:") && !line.contains("a@b.org"))
+    );
+    assert!(matches!(
+        mail(&mut core, 1).as_slice(),
+        [Effect::OpenExternal { .. }]
+    ));
+    core.handle(Input::Tick { now_ms: 10_000 });
+    core.handle(Input::Ui(UiCommand::SetDialog { open: true }));
+    assert!(matches!(mail(&mut core, 1).as_slice(), [Effect::Log(_)]));
 }

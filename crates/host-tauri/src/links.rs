@@ -92,7 +92,7 @@ pub(crate) fn navigation_hook(
                 &format!("[{account}] navigation {}", redact_url(url.as_str())),
             );
         } else if url.scheme() == "mailto" {
-            logger.log(&format!("[{account}] mailto link -> mail app"));
+            logger.log(&format!("[{account}] mailto link -> mail app if allowed"));
             feed(Input::ExternalLink {
                 account,
                 url: url.to_string(),

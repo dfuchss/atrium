@@ -27,6 +27,7 @@ First release.
 - Links open in your browser of choice or in an app window that keeps the account's login
 - A per-account list of hosts that always open in the app
 - Popup and app windows show the site's host in their title
+- Mail links open only for the account you are looking at, and external links are rate-limited
 - Camera and microphone are only available to the service's own sites
 - A private log: no full URLs or page titles, readable only by you, and rotated
 - Downloads are quarantined, hidden files are refused, and you are notified when a download finishes

@@ -189,18 +189,33 @@ impl Core {
         effects
     }
 
-    /// A new window the adapter sent to the browser; only safe schemes are opened.
-    pub(super) fn open_external_link(&self, account_id: Uuid, url: String) -> Vec<Effect> {
-        if crate::security::opener_url_allowed(&url) {
-            vec![Effect::OpenExternal {
+    /// A new window or `mailto:` link the adapter handed to the system; only safe schemes are
+    /// opened, at most one per account every two seconds. `mailto:` also comes from iframes
+    /// without a click, so it opens the mail app only for the account the user looks at.
+    pub(super) fn open_external_link(&mut self, account_id: Uuid, url: String) -> Vec<Effect> {
+        let shown_url = crate::security::redact_url(&url);
+        let refusal = if !crate::security::opener_url_allowed(&url) {
+            Some("scheme not allowed")
+        } else if url.trim_start().to_ascii_lowercase().starts_with("mailto:")
+            && !self.is_visible(account_id)
+        {
+            Some("mail link from an account in the background")
+        } else if !self
+            .external_link_limit
+            .allow(account_id, self.last_tick_ms.unwrap_or(0))
+        {
+            Some("too many external links")
+        } else {
+            None
+        };
+        match refusal {
+            Some(reason) => vec![Effect::Log(format!(
+                "[{account_id}] not opening {shown_url}: {reason}"
+            ))],
+            None => vec![Effect::OpenExternal {
                 url,
                 browser: self.settings().browser.clone(),
-            }]
-        } else {
-            vec![Effect::Log(format!(
-                "[{account_id}] not opening {}: scheme not allowed",
-                crate::security::redact_url(&url)
-            ))]
+            }],
         }
     }
 

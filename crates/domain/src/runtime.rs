@@ -14,6 +14,7 @@ pub struct Ports<'a> {
     pub store: &'a dyn Store,
 }
 
+#[expect(clippy::too_many_lines, reason = "one flat arm per effect")]
 pub fn apply(effect: Effect, ports: &Ports<'_>) {
     let (name, result) = match effect {
         Effect::CreateView {

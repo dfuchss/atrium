@@ -129,8 +129,7 @@ impl AccountDraft {
             hibernate_after: RwSignal::new(
                 settings
                     .hibernate_after_min
-                    .map(|minutes| minutes.to_string())
-                    .unwrap_or_default(),
+                    .map_or_default(|minutes| minutes.to_string()),
             ),
             custom_css: RwSignal::new(settings.custom_css.clone().unwrap_or_default()),
             app_hosts: RwSignal::new(settings.app_hosts.join("\n")),
@@ -208,7 +207,8 @@ pub(super) fn EditForm(
     let id = account.id;
     let draft = AccountDraft::new(&account.settings);
     let service_name = account.service_name.clone();
-    let has_instance = account.instance_label.is_some();
+    let instance_label = account.instance_label.clone();
+    let has_instance = instance_label.is_some();
     let save = move |event: leptos::ev::SubmitEvent| {
         event.prevent_default();
         send_command(UiCommand::UpdateAccount {
@@ -222,7 +222,7 @@ pub(super) fn EditForm(
             <Row label="Label">
                 <input type="text" spellcheck="false" prop:value=move || draft.label.get() on:input=move |event| draft.label.set(event_target_value(&event)) />
             </Row>
-            {account.instance_label.clone().map(|instance_label| view! {
+            {instance_label.map(|instance_label| view! {
                 <Row label=instance_field_label(instance_label) hint="Changing the instance reloads the account.">
                     <input type="text" autocapitalize="off" spellcheck="false" autocomplete="off"
                         prop:value=move || draft.instance.get() on:input=move |event| draft.instance.set(event_target_value(&event)) use:no_autocorrect />
@@ -243,7 +243,7 @@ pub(super) fn EditForm(
                     <option value="app">"App window"</option>
                 </select>
             </Row>
-            <IconRows account=account.clone() draft=draft />
+            <IconRows account=account draft=draft />
             <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate />
             <Row label="">
                 <div class="actions">
@@ -256,7 +256,8 @@ pub(super) fn EditForm(
 }
 
 /// Preview of the icon the account will show with the draft's choices.
-fn icon_preview(account: &AccountView, draft: AccountDraft) -> impl Fn() -> AnyView + use<> {
+fn icon_preview(account: &AccountView, draft: &AccountDraft) -> impl Fn() -> AnyView + use<> {
+    let draft = *draft;
     let uses_custom = account.settings.custom_icon.is_some();
     let site_icon = account
         .icon
@@ -305,7 +306,7 @@ fn IconRows(account: AccountView, draft: AccountDraft) -> impl IntoView {
     view! {
         <Row label="Icon">
             <div class="icon-row">
-                {icon_preview(&account, draft)}
+                {icon_preview(&account, &draft)}
                 <div class="icon-actions">
                     <label class="btn small file-btn">
                         "Choose image\u{2026}"

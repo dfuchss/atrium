@@ -116,7 +116,7 @@ fn AddAccountForm(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             <Row label="Service">
                 <select
                     id="add-service"
-                    prop:value=move || current().map(|service| service.id).unwrap_or_default()
+                    prop:value=move || current().map_or_default(|service| service.id)
                     on:change=move |event| {
                         let value = event_target_value(&event);
                         if value == CUSTOM_OPTION {
@@ -142,7 +142,7 @@ fn AddAccountForm(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     id="add-label"
                     type="text"
                     spellcheck="false"
-                    placeholder=move || current().map(|service| service.name).unwrap_or_default()
+                    placeholder=move || current().map_or_default(|service| service.name)
                     prop:value=move || label.get()
                     on:input=move |event| label.set(event_target_value(&event))
                 />

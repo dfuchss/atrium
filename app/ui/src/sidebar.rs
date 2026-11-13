@@ -237,7 +237,7 @@ impl DragState {
         let Some(list) = self
             .list
             .get_untracked()
-            .map(|list| list.unchecked_into::<web_sys::Element>())
+            .map(wasm_bindgen::JsCast::unchecked_into::<web_sys::Element>)
         else {
             return;
         };
@@ -363,7 +363,7 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
             class:muted=move || account.get().is_some_and(|account| account.settings.muted)
             class:disabled=move || account.get().is_some_and(|account| !account.settings.enabled)
             class:hibernated=move || account.get().is_some_and(|account| account.settings.enabled && account.hibernated)
-            title=move || account.get().map(|account| format!("{} \u{2013} {}", account.service_name, account.settings.label)).unwrap_or_default()
+            title=move || account.get().map_or_default(|account| format!("{} \u{2013} {}", account.service_name, account.settings.label))
             data-id=id.to_string()
             draggable="false"
             class:dragged=move || drag.preview.get().is_some_and(|preview| preview.account == id)

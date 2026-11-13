@@ -29,3 +29,32 @@ tauri-build = "2.7"
 tauri-plugin-notification = "2.8.1"
 tauri-plugin-opener = "2.7.3"
 tempfile = "3"
+
+# Clean-code rules for every crate (each opts in with `lints.workspace = true`); thresholds
+# live in clippy.toml. Run everything with scripts/check.sh.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused = { level = "deny", priority = -1 }
+dead_code = "deny"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cognitive_complexity = "warn"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+unwrap_used = "deny"
+# Allowed pedantic lints, with the reason:
+# - application crates, not a published API: no `# Errors`/`# Panics` sections, no `#[must_use]` everywhere
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+# - settings structs mirror independent user toggles
+struct_excessive_bools = "allow"
+# - zoom factors and bounds are compared as stored, never as computed results
+float_cmp = "allow"
+# - `assert!(x.is_empty())` reads better than comparing against a typed empty array
+assert_is_empty = "allow"

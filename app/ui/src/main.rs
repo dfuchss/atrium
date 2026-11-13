@@ -1,5 +1,8 @@
 //! Sidebar and settings UI of Atrium (Leptos, client-side rendered in the `ui` webview).
 
+// Leptos' `#[component]` generates `pub` props structs inside restricted modules.
+#![allow(unreachable_pub)]
+
 mod commands;
 mod demo;
 mod glyphs;

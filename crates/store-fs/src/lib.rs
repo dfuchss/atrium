@@ -34,18 +34,15 @@ impl Store for FsStore {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Persisted::default()),
             Err(e) => return Err(err("read accounts.json", e)),
         };
-        match serde_json::from_slice(&bytes) {
-            Ok(p) => Ok(p),
-            Err(_) => {
-                let secs = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-                let target = self.dir.join(format!("accounts.json.corrupt-{secs}"));
-                fs::rename(&path, &target)
-                    .map_err(|e| err("quarantine corrupt accounts.json", e))?;
-                Ok(Persisted::default())
-            }
+        if let Ok(p) = serde_json::from_slice(&bytes) {
+            Ok(p)
+        } else {
+            let secs = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            let target = self.dir.join(format!("accounts.json.corrupt-{secs}"));
+            fs::rename(&path, &target).map_err(|e| err("quarantine corrupt accounts.json", e))?;
+            Ok(Persisted::default())
         }
     }
 

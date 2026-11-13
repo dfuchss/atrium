@@ -21,7 +21,7 @@
 use protocol::CustomService;
 use serde::Deserialize;
 
-/// Desktop Safari UA; WKWebView's default UA lacks "Version/... Safari/..." and some sites reject it.
+/// Desktop Safari UA; `WKWebView`'s default UA lacks "Version/... Safari/..." and some sites reject it.
 pub const UA_SAFARI: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15";
 pub const UA_CHROME: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
 
@@ -399,10 +399,14 @@ pub fn custom_service_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
     if !taken(&base) {
         return base;
     }
-    (2..)
-        .map(|n| format!("{base}-{n}"))
-        .find(|id| !taken(id))
-        .expect("unbounded")
+    let mut suffix = 2u32;
+    loop {
+        let id = format!("{base}-{suffix}");
+        if !taken(&id) {
+            return id;
+        }
+        suffix += 1;
+    }
 }
 
 /// Resolves a user agent preset: "safari"/"chrome" -> constant, "default"/None -> None
@@ -606,7 +610,7 @@ mod tests {
             "https://user:pw@login.example.com:8443/path?q=1".into(),
             "*.MicrosoftOnline.com".into(),
             "idp.example.org".into(),
-            "".into(),
+            String::new(),
             "   ".into(),
             "bad host".into(),
             "a*b.com".into(),

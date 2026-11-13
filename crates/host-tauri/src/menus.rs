@@ -128,7 +128,7 @@ fn app_menu_key(model: &MenuModel) -> Vec<(Uuid, String)> {
         .collect()
 }
 
-/// What the tray menu shows: account texts and the DnD state.
+/// What the tray menu shows: account texts and the `DnD` state.
 fn tray_menu_key(model: &MenuModel) -> (Vec<(Uuid, String)>, bool) {
     (
         model

@@ -16,7 +16,7 @@ use uuid::Uuid;
 use crate::links::{LinkPolicy, navigation_hook, permission_hook};
 use crate::{Input, Logger, TauriHost, port_err};
 
-/// Time WebKit gets to delete the browsing data before the view reloads.
+/// Time `WebKit` gets to delete the browsing data before the view reloads.
 const CLEAR_DATA_RELOAD_DELAY: Duration = Duration::from_millis(800);
 
 /// Label of the service webview of `account`.
@@ -114,7 +114,7 @@ impl<R: Runtime> TauriHost<R> {
                 self.feed.clone(),
             ))
             // Never Allow: see `links` (sign-in popups -> in-app window, else the link target).
-            .on_new_window(move |url, features| link_policy.on_new_window(url, features))
+            .on_new_window(move |url, features| link_policy.on_new_window(&url, features))
             .on_download(download_hook(
                 self.app.clone(),
                 account,

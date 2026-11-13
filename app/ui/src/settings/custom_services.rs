@@ -76,8 +76,7 @@ fn CustomServiceRow(
         .name
         .chars()
         .next()
-        .map(|first| first.to_uppercase().to_string())
-        .unwrap_or_default();
+        .map_or_default(|first| first.to_uppercase().to_string());
     view! {
         <div class="row">
             <span class="icon small" style=format!("background:{}", service.color)>{initial}</span>

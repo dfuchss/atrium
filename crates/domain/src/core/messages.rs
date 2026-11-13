@@ -21,7 +21,7 @@ pub struct Bounds {
 pub struct ViewSpec {
     pub account: Uuid,
     pub url: url::Url,
-    /// WKWebView data store identifier (= account id bytes) -> isolated, persistent session.
+    /// `WKWebView` data store identifier (= account id bytes) -> isolated, persistent session.
     pub store_id: [u8; 16],
     pub user_agent: Option<String>,
     /// Injected at document start ([`crate::NOTIFY_SHIM`], plus the account's custom CSS).

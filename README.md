@@ -168,10 +168,13 @@ Data locations:
 ## Development
 
 ```sh
+scripts/check.sh                               # everything CI checks: fmt, UI build, clippy, tests
 cargo test --workspace --exclude atrium-ui     # core, adapters, store
 cd app/src-tauri && cargo tauri dev            # run with live-reloading UI
 cd app/src-tauri && cargo tauri build --debug  # bundle: target/debug/bundle/macos/Atrium.app
 ```
+
+`scripts/check.sh` must pass before every commit; the GitHub workflow runs it too. The lint rules are in the `[workspace.lints]` section of `Cargo.toml` (clippy pedantic plus a few denials, each allowed exception with its reason), the thresholds for function length, complexity and arguments in `clippy.toml`.
 
 Debug builds (`cargo tauri dev`, `cargo tauri build --debug`) read these environment variables; release builds ignore them. They let a second, isolated instance run next to the regular one, e.g. for screenshots:
 

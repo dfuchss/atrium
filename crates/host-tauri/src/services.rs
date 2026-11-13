@@ -41,9 +41,7 @@ pub fn read_user_services(dir: &Path) -> (Vec<ServiceDef>, Vec<String>) {
 pub fn prepare_services_dir(dir: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
     let has = |wanted: &dyn Fn(&Path) -> bool| {
-        std::fs::read_dir(dir)
-            .map(|rd| rd.filter_map(Result::ok).any(|e| wanted(&e.path())))
-            .unwrap_or(false)
+        std::fs::read_dir(dir).is_ok_and(|rd| rd.filter_map(Result::ok).any(|e| wanted(&e.path())))
     };
     let has_toml = has(&|p| p.extension().is_some_and(|e| e == "toml"));
     let has_readme = has(&|p| p.file_name().is_some_and(|n| n == README_NAME));

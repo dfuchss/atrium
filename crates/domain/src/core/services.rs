@@ -63,19 +63,19 @@ impl Core {
         )));
         effects.extend(log_effects(self.apply_user_services(defs, errors)));
         for (account_id, old_spec) in old_specs {
-            effects.extend(self.refresh_view(account_id, old_spec));
+            effects.extend(self.refresh_view(account_id, old_spec.as_ref()));
         }
         effects.push(self.emit());
         effects
     }
 
     /// Recreates the view if its spec changed with the catalog, else re-sends its policy.
-    fn refresh_view(&mut self, account_id: Uuid, old_spec: Option<ViewSpec>) -> Vec<Effect> {
+    fn refresh_view(&mut self, account_id: Uuid, old_spec: Option<&ViewSpec>) -> Vec<Effect> {
         let Some(account) = self.account(account_id) else {
             return vec![];
         };
         let new_spec = self.view_spec(account).ok();
-        if new_spec.is_some() && new_spec != old_spec {
+        if new_spec.is_some() && new_spec.as_ref() != old_spec {
             self.recreate_view(account_id)
         } else {
             vec![Effect::SetViewPolicy {

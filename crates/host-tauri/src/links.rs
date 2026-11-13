@@ -47,7 +47,7 @@ pub(crate) fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
         })
 }
 
-/// wry does not implement WebKit's `webViewDidClose`, so a popup's own `window.close()` (end of
+/// wry does not implement `WebKit`'s `webViewDidClose`, so a popup's own `window.close()` (end of
 /// an OAuth flow) would do nothing. This wrapper records the call; [`watch_close`] polls it.
 const CLOSE_HOOK: &str = "(()=>{if(window.__msgrCloseHook)return;window.__msgrCloseHook=1;const c=window.close.bind(window);window.close=function(){window.__msgrClosed=true;try{c()}catch(e){}};})();";
 
@@ -58,7 +58,7 @@ pub(crate) fn popup_label(account: Uuid, number: u64) -> String {
 
 /// Camera, microphone and screen capture are granted only with `allow_media`, else denied;
 /// everything else gets the engine's default handling.
-pub(crate) fn permission_response(kind: &PermissionKind, allow_media: bool) -> PermissionResponse {
+pub(crate) fn permission_response(kind: PermissionKind, allow_media: bool) -> PermissionResponse {
     match kind {
         PermissionKind::Camera | PermissionKind::Microphone | PermissionKind::DisplayCapture => {
             if allow_media {
@@ -106,7 +106,7 @@ pub(crate) fn permission_hook<R: Runtime>(
     what: &'static str,
 ) -> impl Fn(tauri::Webview<R>, PermissionKind) -> PermissionResponse + Send + Sync + 'static {
     move |_, kind| {
-        let response = permission_response(&kind, policy_of(&policies, account).allow_media);
+        let response = permission_response(kind, policy_of(&policies, account).allow_media);
         logger.log(&format!(
             "[{account}] {what} permission {kind} -> {response:?}"
         ));
@@ -127,11 +127,11 @@ pub(crate) struct LinkPolicy<R: Runtime> {
 impl<R: Runtime> LinkPolicy<R> {
     pub(crate) fn on_new_window(
         self: &Arc<Self>,
-        url: Url,
+        url: &Url,
         features: NewWindowFeatures,
     ) -> NewWindowResponse<R> {
         let account = self.spec.account;
-        let kind = if self.spec.is_internal(&url) {
+        let kind = if self.spec.is_internal(url) {
             "internal"
         } else {
             "external"
@@ -170,11 +170,11 @@ impl<R: Runtime> LinkPolicy<R> {
         }
     }
 
-    /// Creates the in-app window WebKit loads the request into. Runs on the main thread
+    /// Creates the in-app window `WebKit` loads the request into. Runs on the main thread
     /// (inside wry's callback), where `build()` creates the window synchronously.
     fn open_window(
         self: &Arc<Self>,
-        url: Url,
+        url: &Url,
         features: NewWindowFeatures,
         size: Option<(f64, f64)>,
     ) -> NewWindowResponse<R> {
@@ -192,7 +192,7 @@ impl<R: Runtime> LinkPolicy<R> {
             .data_store_identifier(self.spec.store_id)
             .title(url.as_str())
             .initialization_script(CLOSE_HOOK)
-            .on_new_window(move |url, features| popup_policy.on_new_window(url, features))
+            .on_new_window(move |url, features| popup_policy.on_new_window(&url, features))
             .on_document_title_changed(|window, title| {
                 let _ = window.set_title(&title);
             })
@@ -217,7 +217,7 @@ impl<R: Runtime> LinkPolicy<R> {
             Ok(window) => {
                 self.logger
                     .log(&format!("[{account}] opened window {label} for {url}"));
-                watch_close(self.app.clone(), label, self.logger.clone());
+                watch_close(self.app.clone(), label, &self.logger);
                 NewWindowResponse::Create { window }
             }
             Err(error) => {
@@ -232,7 +232,7 @@ impl<R: Runtime> LinkPolicy<R> {
 
 /// Closes the window `label` once its page called `window.close()` (see [`CLOSE_HOOK`]);
 /// ends when the window is gone.
-fn watch_close<R: Runtime>(app: AppHandle<R>, label: String, logger: Logger) {
+fn watch_close<R: Runtime>(app: AppHandle<R>, label: String, logger: &Logger) {
     let spawned = std::thread::Builder::new()
         .name(format!("watch-{label}"))
         .spawn(move || {
@@ -271,16 +271,16 @@ mod tests {
             PermissionKind::DisplayCapture,
         ] {
             assert!(matches!(
-                permission_response(&kind, true),
+                permission_response(kind, true),
                 PermissionResponse::Allow
             ));
             assert!(matches!(
-                permission_response(&kind, false),
+                permission_response(kind, false),
                 PermissionResponse::Deny
             ));
         }
         assert!(matches!(
-            permission_response(&PermissionKind::Geolocation, true),
+            permission_response(PermissionKind::Geolocation, true),
             PermissionResponse::Default
         ));
     }

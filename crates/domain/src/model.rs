@@ -8,7 +8,7 @@ use uuid::Uuid;
 /// Fields added after v0.1 have serde defaults so older `accounts.json` files still load.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
-    /// Also the view id and (as bytes) the WKWebView data store identifier.
+    /// Also the view id and (as bytes) the `WKWebView` data store identifier.
     pub id: Uuid,
     /// [`crate::ServiceDef::id`].
     pub service: String,

@@ -31,7 +31,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             {app_toggle(snapshot, "Keep running in background", "Otherwise closing the window quits the app.", |settings| settings.close_to_background, |settings, enabled| settings.close_to_background = enabled)}
             {app_toggle(snapshot, "Menu bar icon", "Unread count and account menu in the menu bar.", |settings| settings.show_tray, |settings, enabled| settings.show_tray = enabled)}
             <Row label="Put inactive services to sleep after" hint="Sleeping services free memory but show no notifications or unread counts until you open them again. Selecting a service wakes it up.">
-                <select prop:value=move || hibernate_after().filter(|&minutes| minutes > 0).map(|minutes| minutes.to_string()).unwrap_or_default()
+                <select prop:value=move || hibernate_after().filter(|&minutes| minutes > 0).map_or_default(|minutes| minutes.to_string())
                     on:change=move |event| { let minutes = event_target_value(&event).parse::<u32>().ok(); update_settings(snapshot, |settings| settings.hibernate_after_min = minutes) }>
                     <option value="">"Never"</option>
                     {move || number_options(&HIBERNATE_MINUTES, hibernate_after(), minutes_label)}
@@ -120,7 +120,7 @@ fn BrowserRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     let commit = move || {
         let name = draft.get_untracked().trim().to_string();
         update_settings(snapshot, |settings| {
-            settings.browser = (!name.is_empty()).then_some(name)
+            settings.browser = (!name.is_empty()).then_some(name);
         });
     };
     view! {

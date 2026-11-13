@@ -7,6 +7,10 @@ use protocol::AccountView;
 use wasm_bindgen::JsCast;
 
 /// Directive: switch off macOS auto-correction (not a typed attribute in leptos).
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Leptos `use:` directives receive the element by value"
+)]
 pub(crate) fn no_autocorrect(element: web_sys::Element) {
     let _ = element.set_attribute("autocorrect", "off");
 }

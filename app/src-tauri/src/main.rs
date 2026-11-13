@@ -99,11 +99,19 @@ struct Shared {
 }
 
 #[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri commands receive their arguments by value"
+)]
 fn ui_command(state: State<'_, Shared>, command: UiCommand) {
     (state.feed)(Input::Ui(command));
 }
 
 #[tauri::command]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri commands receive their arguments by value"
+)]
 fn get_snapshot(state: State<'_, Shared>) -> Snapshot {
     state
         .snapshot
@@ -132,16 +140,16 @@ fn now_ms() -> u64 {
 fn run_actor(
     mut core: Core,
     inputs: Receiver<Input>,
-    host: TauriHost<Wry>,
-    store: FsStore,
-    cache: Arc<Mutex<Snapshot>>,
+    host: &TauriHost<Wry>,
+    store: &FsStore,
+    cache: &Mutex<Snapshot>,
 ) {
     let ports = Ports {
-        host: &host,
-        notifier: &host,
-        platform: &host,
-        ui: &host,
-        store: &store,
+        host,
+        notifier: host,
+        platform: host,
+        ui: host,
+        store,
     };
     for input in inputs {
         for effect in core.handle(input) {
@@ -325,8 +333,7 @@ fn setup(
         services_dir: services_dir.display().to_string(),
         log_file: host
             .log_file()
-            .map(|path| path.display().to_string())
-            .unwrap_or_default(),
+            .map_or_default(|path| path.display().to_string()),
     });
     *snapshot_cache
         .lock()
@@ -337,7 +344,7 @@ fn setup(
     let actor_cache = snapshot_cache.clone();
     std::thread::Builder::new()
         .name("core".into())
-        .spawn(move || run_actor(core, inputs, host, store, actor_cache))?;
+        .spawn(move || run_actor(core, inputs, &host, &store, &actor_cache))?;
     spawn_ticker(feed.clone())?;
     watch_main_window(&window, feed.clone(), snapshot_cache.clone());
     feed(Input::Started {

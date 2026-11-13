@@ -173,8 +173,7 @@ impl Core {
         let unread = self
             .title_rules
             .get(&service_id)
-            .map(|rules| rules.parse(title))
-            .unwrap_or_default();
+            .map_or_default(|rules| rules.parse(title));
         self.unread.from_title.insert(account_id, unread);
         if has_poll && self.unread.polled.contains(&account_id) {
             return vec![];

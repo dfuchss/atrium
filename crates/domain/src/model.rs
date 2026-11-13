@@ -127,6 +127,28 @@ impl Account {
             app_hosts: self.app_hosts.clone(),
         }
     }
+
+    /// Stores already validated settings; a new Simple Icons slug drops the cached glyph.
+    pub fn apply_settings(&mut self, settings: AccountSettings) {
+        if self.simple_icon != settings.simple_icon {
+            self.simple_icon_data = None;
+        }
+        self.label = settings.label;
+        self.instance = settings.instance;
+        self.muted = settings.muted;
+        self.show_badge = settings.show_badge;
+        self.in_dock_badge = settings.in_dock_badge;
+        self.user_agent = settings.user_agent;
+        self.enabled = settings.enabled;
+        self.link_target = settings.link_target;
+        self.custom_icon = settings.custom_icon;
+        self.zoom = settings.zoom;
+        self.hibernate_after_min = settings.hibernate_after_min;
+        self.custom_css = settings.custom_css;
+        self.allow_media = settings.allow_media;
+        self.simple_icon = settings.simple_icon;
+        self.app_hosts = settings.app_hosts;
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -234,5 +256,25 @@ mod tests {
         assert!(json.contains(r#""dock_badge":"count_only""#), "{json}");
         assert!(json.contains(r#""link_target":"app_window""#), "{json}");
         assert_eq!(serde_json::from_str::<Persisted>(&json).unwrap(), p);
+    }
+
+    #[test]
+    fn apply_settings_round_trips_and_drops_stale_glyph() {
+        let mut account = Account::new(Uuid::from_u128(1), "slack", "Work", None);
+        account.simple_icon = Some("slack".into());
+        account.simple_icon_data = Some("data:image/svg+xml;base64,AA".into());
+        let mut settings = account.settings();
+        settings.label = "Home".into();
+        account.apply_settings(settings.clone());
+        assert_eq!(account.settings(), settings);
+        assert!(
+            account.simple_icon_data.is_some(),
+            "same slug keeps the glyph"
+        );
+
+        settings.simple_icon = Some("discord".into());
+        account.apply_settings(settings);
+        assert_eq!(account.simple_icon.as_deref(), Some("discord"));
+        assert_eq!(account.simple_icon_data, None);
     }
 }

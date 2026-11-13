@@ -1,7 +1,8 @@
 //! Tests of the reducer, grouped by feature; shared fixtures live here.
 
+use super::snapshot::initials;
 use super::*;
-use protocol::IconSize;
+use protocol::{AccountSettings, CustomService, DockBadgeMode, IconSize, LinkTarget, Snapshot};
 
 mod accounts;
 mod hibernation;

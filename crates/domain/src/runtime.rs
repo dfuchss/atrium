@@ -2,6 +2,7 @@
 //! by [`crate::Core::handle`]; errors are logged via [`Platform::log`] and never stop the loop.
 
 use crate::core::Effect;
+use crate::model::Persisted;
 use crate::ports::{Notifier, Platform, Store, UiSink, WebviewHost};
 use crate::ports::{PortError, PortResult};
 use crate::security::opener_url_allowed;
@@ -12,10 +13,52 @@ pub struct Ports<'a> {
     pub platform: &'a dyn Platform,
     pub ui: &'a dyn UiSink,
     pub store: &'a dyn Store,
+    /// Saved data was unreadable at startup: [`Effect::Persist`] is dropped.
+    pub read_only: bool,
+}
+
+/// What the saved settings gave at startup. A store reports a missing file as an empty
+/// `Persisted`, so any error here means a file that may exist but cannot be read.
+#[derive(Debug, PartialEq)]
+pub enum StartupLoad {
+    Loaded(Persisted),
+    /// The saved accounts could not be read: run empty and never overwrite the file.
+    Unreadable(String),
+}
+
+impl StartupLoad {
+    pub fn from_store(result: PortResult<Persisted>) -> StartupLoad {
+        match result {
+            Ok(persisted) => StartupLoad::Loaded(persisted),
+            Err(error) => StartupLoad::Unreadable(error.to_string()),
+        }
+    }
+
+    /// True if nothing may be written back this run.
+    pub fn is_read_only(&self) -> bool {
+        matches!(self, StartupLoad::Unreadable(_))
+    }
+
+    /// The saved data, or an empty state if unreadable.
+    pub fn into_persisted(self) -> Persisted {
+        match self {
+            StartupLoad::Loaded(persisted) => persisted,
+            StartupLoad::Unreadable(_) => Persisted::default(),
+        }
+    }
+}
+
+/// True if `effect` must be dropped: persisting while the saved data was unreadable would
+/// replace it with the empty fallback.
+pub fn skip_effect(effect: &Effect, read_only: bool) -> bool {
+    read_only && matches!(effect, Effect::Persist(_))
 }
 
 #[expect(clippy::too_many_lines, reason = "one flat arm per effect")]
 pub fn apply(effect: Effect, ports: &Ports<'_>) {
+    if skip_effect(&effect, ports.read_only) {
+        return;
+    }
     let (name, result) = match effect {
         Effect::CreateView {
             spec,
@@ -228,6 +271,7 @@ mod tests {
             platform: &f,
             ui: &f,
             store: &f,
+            read_only: false,
         };
         apply(
             Effect::OpenInBrowser {
@@ -244,6 +288,24 @@ mod tests {
             &ports,
         );
         (f.opened.into_inner().unwrap(), f.logs.into_inner().unwrap())
+    }
+
+    #[test]
+    fn unreadable_store_makes_the_run_read_only() {
+        let error = PortError("read accounts.json: permission denied".into());
+        let unreadable = StartupLoad::from_store(Err(error));
+        assert!(unreadable.is_read_only());
+        assert_eq!(unreadable.into_persisted(), Persisted::default());
+        let loaded = StartupLoad::from_store(Ok(Persisted::default()));
+        assert!(!loaded.is_read_only(), "a fresh start saves normally");
+    }
+
+    #[test]
+    fn read_only_drops_only_persist_effects() {
+        let persist = Effect::Persist(Persisted::default());
+        assert!(skip_effect(&persist, true));
+        assert!(!skip_effect(&persist, false));
+        assert!(!skip_effect(&Effect::FocusWindow, true));
     }
 
     #[test]

@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use domain::ports::{Platform, Store};
-use domain::runtime::{Ports, apply};
+use domain::runtime::{Ports, StartupLoad, apply};
 use domain::{Catalog, Core, Effect, Input, Persisted};
 use host_tauri::{Feed, TauriHost};
 use protocol::{AppInfo, Snapshot, UI_WEBVIEW, UiCommand};
@@ -123,15 +123,29 @@ fn get_snapshot(state: State<'_, Shared>) -> Snapshot {
         .clone()
 }
 
-/// The saved accounts and settings, and whether they were read from the file (not a fallback).
-fn load_persisted(store: &dyn Store, log: &dyn Platform) -> (Persisted, bool) {
-    match store.load() {
-        Ok(persisted) => (persisted, true),
-        Err(error) => {
-            log.log(&format!("cannot load accounts, starting empty: {error}"));
-            (Persisted::default(), false)
-        }
+/// The saved accounts and settings. If the file cannot be read, the run is read-only: nothing
+/// is saved (the file may still hold the real accounts) and the user is told once.
+fn load_persisted(store: &dyn Store, log: &dyn Platform) -> StartupLoad {
+    let load = StartupLoad::from_store(store.load());
+    if let StartupLoad::Unreadable(error) = &load {
+        log.log(&format!(
+            "cannot read accounts, running read-only and not saving: {error}"
+        ));
+        show_unreadable_settings_alert();
     }
+    load
+}
+
+/// Native alert (macOS only): the UI cannot carry this, it starts after the load. Runs on its
+/// own thread so the alert does not block startup.
+fn show_unreadable_settings_alert() {
+    const SCRIPT: &str = "display alert \"Atrium cannot read its settings\" message \"Your accounts could not be loaded, so Atrium started empty. Changes made in this session will not be saved, and your saved accounts stay untouched. Quit and check the permissions of accounts.json, then start Atrium again.\" as critical";
+    std::thread::spawn(|| {
+        // The alert is a courtesy; the log already holds the reason.
+        let _ = std::process::Command::new("osascript")
+            .args(["-e", SCRIPT])
+            .status();
+    });
 }
 
 /// Deletes the web data of accounts that no longer exist, but only against an intact
@@ -161,26 +175,13 @@ fn now_ms() -> u64 {
 }
 
 /// Owns the core; never returns while the channel is open.
-fn run_actor(
-    mut core: Core,
-    inputs: Receiver<Input>,
-    host: &TauriHost<Wry>,
-    store: &FsStore,
-    cache: &Mutex<Snapshot>,
-) {
-    let ports = Ports {
-        host,
-        notifier: host,
-        platform: host,
-        ui: host,
-        store,
-    };
+fn run_actor(mut core: Core, inputs: Receiver<Input>, ports: &Ports<'_>, cache: &Mutex<Snapshot>) {
     for input in inputs {
         for effect in core.handle(input) {
             if let Effect::EmitSnapshot(snapshot) = &effect {
                 *cache.lock().unwrap_or_else(PoisonError::into_inner) = snapshot.clone();
             }
-            apply(effect, &ports);
+            apply(effect, ports);
         }
     }
 }
@@ -312,6 +313,33 @@ fn watch_main_window(window: &Window, feed: Feed, snapshot_cache: Arc<Mutex<Snap
     });
 }
 
+/// What the actor thread owns besides the core.
+struct ActorEnv {
+    host: TauriHost<Wry>,
+    store: FsStore,
+    cache: Arc<Mutex<Snapshot>>,
+    /// Saved data was unreadable: do not persist.
+    read_only: bool,
+}
+
+/// Runs the actor on its own thread, which owns the core, the host and the store.
+fn spawn_actor(core: Core, inputs: Receiver<Input>, env: ActorEnv) -> std::io::Result<()> {
+    std::thread::Builder::new()
+        .name("core".into())
+        .spawn(move || {
+            let ports = Ports {
+                host: &env.host,
+                notifier: &env.host,
+                platform: &env.host,
+                ui: &env.host,
+                store: &env.store,
+                read_only: env.read_only,
+            };
+            run_actor(core, inputs, &ports, &env.cache);
+        })?;
+    Ok(())
+}
+
 /// Builds the window, the host and the core, starts the actor and the ticker, and feeds
 /// `Input::Started`. The host only needs the window lazily, so it can log while loading the
 /// settings that decide how the window is created.
@@ -327,8 +355,10 @@ fn setup(
     host.log(&format!("---- Atrium {version} starting ----"));
     let config_dir = config_dir(app, &dev, &host)?;
     let store = FsStore::new(config_dir.clone());
-    let (persisted, loaded) = load_persisted(&store, &host);
-    remove_unused_data_stores(&host, &store, &dev, &persisted, loaded);
+    let load = load_persisted(&store, &host);
+    let read_only = load.is_read_only();
+    let persisted = load.into_persisted();
+    remove_unused_data_stores(&host, &store, &dev, &persisted, !read_only);
     let services_dir = config_dir.join("services");
     let (user_defs, user_errors) = host_tauri::services::read_user_services(&services_dir);
     host.log(&format!(
@@ -367,10 +397,13 @@ fn setup(
 
     // The actor may block in `add_child` until the main thread runs the build, so the main
     // thread (this function, window events, commands) only ever sends to it.
-    let actor_cache = snapshot_cache.clone();
-    std::thread::Builder::new()
-        .name("core".into())
-        .spawn(move || run_actor(core, inputs, &host, &store, &actor_cache))?;
+    let env = ActorEnv {
+        host,
+        store,
+        cache: snapshot_cache.clone(),
+        read_only,
+    };
+    spawn_actor(core, inputs, env)?;
     spawn_ticker(feed.clone())?;
     watch_main_window(&window, feed.clone(), snapshot_cache.clone());
     feed(Input::Started {

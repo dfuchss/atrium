@@ -22,6 +22,8 @@ use tauri::{
 };
 use tauri_plugin_autostart::MacosLauncher;
 
+mod service_files;
+
 const MAIN_WINDOW: &str = "main";
 
 /// Sidebar background (`--bg` in `app/ui/styles.css`), shown through the transparent title bar.
@@ -360,6 +362,10 @@ fn setup(
     let persisted = load.into_persisted();
     remove_unused_data_stores(&host, &store, &dev, &persisted, !read_only);
     let services_dir = config_dir.join("services");
+    app.manage(service_files::ServiceFiles {
+        dir: services_dir.clone(),
+        feed: feed.clone(),
+    });
     let (user_defs, user_errors) = host_tauri::services::read_user_services(&services_dir);
     host.log(&format!(
         "config {}, {} accounts, {} user services, {} service errors",
@@ -434,7 +440,17 @@ fn main() {
             feed,
             snapshot: snapshot_cache,
         })
-        .invoke_handler(tauri::generate_handler![ui_command, get_snapshot])
+        .invoke_handler(tauri::generate_handler![
+            ui_command,
+            get_snapshot,
+            service_files::list_service_files,
+            service_files::read_service_file,
+            service_files::new_service_template,
+            service_files::validate_service,
+            service_files::save_service_file,
+            service_files::delete_service_file,
+            service_files::set_service_file_enabled,
+        ])
         // App menu and tray menu items (built by the host from the core's menu model).
         .on_menu_event(move |app, event| {
             host_tauri::handle_menu_event(app, MAIN_WINDOW, event.id().as_ref(), &menu_feed);

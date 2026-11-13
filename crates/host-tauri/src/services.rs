@@ -268,8 +268,20 @@ mod tests {
             assert!(validate_file_name(good).is_ok(), "{good}");
         }
         for bad in [
-            "", ".toml", "a", "a.txt", "A.toml", "a b.toml", "../a.toml", "a/b.toml",
-            "..\\a.toml", "a.toml/", ".hidden.toml", "a.toml.tmp", "\u{e4}.toml", "a.TOML",
+            "",
+            ".toml",
+            "a",
+            "a.txt",
+            "A.toml",
+            "a b.toml",
+            "../a.toml",
+            "a/b.toml",
+            "..\\a.toml",
+            "a.toml/",
+            ".hidden.toml",
+            "a.toml.tmp",
+            "\u{e4}.toml",
+            "a.TOML",
         ] {
             assert!(validate_file_name(bad).is_err(), "{bad}");
         }
@@ -290,8 +302,15 @@ mod tests {
         let dir = temp("save");
         let problems = save_service_file(&dir, "a.toml", "id = ", true).unwrap();
         assert_eq!(problems.len(), 1);
-        assert!(!dir.join("a.toml").exists(), "invalid text must not be written");
-        assert!(save_service_file(&dir, "a.toml", VALID, true).unwrap().is_empty());
+        assert!(
+            !dir.join("a.toml").exists(),
+            "invalid text must not be written"
+        );
+        assert!(
+            save_service_file(&dir, "a.toml", VALID, true)
+                .unwrap()
+                .is_empty()
+        );
         assert_eq!(std::fs::read_to_string(dir.join("a.toml")).unwrap(), VALID);
         let leftovers = std::fs::read_dir(&dir)
             .unwrap()
@@ -317,8 +336,16 @@ mod tests {
         set_service_file_enabled(&dir, "a.toml", false).unwrap();
         assert!(save_service_file(&dir, "a.toml", VALID, true).is_err());
         let changed = VALID.replace("'A'", "'B'");
-        assert!(save_service_file(&dir, "a.toml.disabled", &changed, false).unwrap().is_empty());
-        assert!(read_service_file(&dir, "a.toml.disabled").unwrap().contains("'B'"));
+        assert!(
+            save_service_file(&dir, "a.toml.disabled", &changed, false)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            read_service_file(&dir, "a.toml.disabled")
+                .unwrap()
+                .contains("'B'")
+        );
         assert!(save_service_file(&dir, "../x.toml", VALID, true).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -330,7 +357,10 @@ mod tests {
         save_service_file(&dir, "a.toml", VALID, true).unwrap();
         std::fs::write(dir.join("notes.txt"), "x").unwrap();
         let names = |files: Vec<ServiceFile>| {
-            files.into_iter().map(|file| (file.name, file.enabled)).collect::<Vec<_>>()
+            files
+                .into_iter()
+                .map(|file| (file.name, file.enabled))
+                .collect::<Vec<_>>()
         };
         let before = names(list_service_files(&dir));
         assert!(before.contains(&("a.toml".into(), true)));

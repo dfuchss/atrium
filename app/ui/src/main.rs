@@ -201,9 +201,9 @@ fn demo_snapshot() -> Snapshot {
         service_errors: vec![],
         app: AppInfo {
             version: "0.1.0-demo".into(),
-            services_dir: "~/Library/Application Support/org.fuchss.messengers/services".into(),
-            config_dir: "~/Library/Application Support/org.fuchss.messengers".into(),
-            log_file: "~/Library/Logs/org.fuchss.messengers/atrium.log".into(),
+            services_dir: "~/Library/Application Support/org.fuchss.atrium/services".into(),
+            config_dir: "~/Library/Application Support/org.fuchss.atrium".into(),
+            log_file: "~/Library/Logs/org.fuchss.atrium/atrium.log".into(),
         },
     }
 }

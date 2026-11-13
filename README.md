@@ -40,8 +40,8 @@ cd app/src-tauri && cargo tauri build --debug       # bundle: target/debug/bundl
 Use the bundled `.app` to test notifications and the dock badge.
 
 Where things are stored:
-- **Config:** `~/Library/Application Support/org.fuchss.messengers/accounts.json`
-- **Log:** `~/Library/Logs/org.fuchss.messengers/atrium.log`
-- **Web data, per account:** `~/Library/WebKit/org.fuchss.messengers`
+- **Config:** `~/Library/Application Support/org.fuchss.atrium/accounts.json`
+- **Log:** `~/Library/Logs/org.fuchss.atrium/atrium.log`
+- **Web data, per account:** `~/Library/WebKit/org.fuchss.atrium`
 
-Note: the bundle identifier stays `org.fuchss.messengers` (the app was called "Messengers" before it was renamed to Atrium). The config, log and per-account WebKit login data are keyed by it, so changing it would log you out everywhere.
+

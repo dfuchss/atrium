@@ -106,6 +106,7 @@ fn show_main_window(app: &AppHandle) {
 }
 
 fn main() {
+    let context = tauri::generate_context!();
     let (tx, rx) = mpsc::channel::<Input>();
     let feed: Feed = Arc::new(move |input| {
         // Fails only after the actor is gone (app shutting down).
@@ -258,7 +259,7 @@ fn main() {
             });
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building Atrium");
     app.run(|app, event| match event {
         // Dock icon click: bring a hidden (closed to background / started hidden) window back.

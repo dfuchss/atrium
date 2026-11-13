@@ -25,4 +25,5 @@ First release.
 - Native notifications that open the right account, with Do Not Disturb and per-account mute
 - Links open in your browser of choice or in an app window that keeps the account's login
 - A per-account list of hosts that always open in the app
+- Popup and app windows show the site's host in their title
 - Camera and microphone are only available to the service's own sites

@@ -19,10 +19,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use domain::{Input, ViewPolicy, ViewSpec, nav_allowed};
+use domain::{Input, ViewPolicy, ViewSpec, host_matches_any, nav_allowed, window_title};
 use protocol::LinkTarget;
-use tauri::webview::{NewWindowFeatures, NewWindowResponse, PermissionKind, PermissionResponse};
-use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindowBuilder};
+use tauri::webview::{
+    NewWindowFeatures, NewWindowResponse, PageLoadEvent, PageLoadPayload, PermissionKind,
+    PermissionResponse,
+};
+use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
 use crate::{Feed, Logger};
@@ -132,6 +135,17 @@ pub(crate) struct LinkPolicy<R: Runtime> {
 }
 
 impl<R: Runtime> LinkPolicy<R> {
+    /// Window title for `page` (see [`window_title`]): the account's internal and app hosts
+    /// count as its own, as does the blank page a window starts with.
+    fn window_title_for(&self, page_title: &str, page: &Url) -> String {
+        let own_host = page.scheme() == "about"
+            || page.host_str().is_some_and(|host| {
+                host_matches_any(&self.spec.internal_hosts, host)
+                    || policy_of(&self.policies, self.spec.account).is_app_host(host)
+            });
+        window_title(page_title, page, own_host)
+    }
+
     pub(crate) fn on_new_window(
         self: &Arc<Self>,
         url: &Url,
@@ -191,18 +205,21 @@ impl<R: Runtime> LinkPolicy<R> {
             self.popup_counter.fetch_add(1, Ordering::Relaxed) + 1,
         );
         let popup_policy = self.clone();
+        let title_on_change = Arc::new(PopupTitle::new(self.clone()));
+        let title_on_load = title_on_change.clone();
         let blank = Url::parse("about:blank").expect("valid URL");
         let mut builder = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(blank))
             // Requested size/position and, on macOS, the opener's WKWebViewConfiguration, which
             // WebKit requires for the returned view (it also carries the opener's data store).
             .window_features(features)
             .data_store_identifier(self.spec.store_id)
-            .title(url.as_str())
+            .title(self.window_title_for("", url))
             .initialization_script(CLOSE_HOOK)
             .on_new_window(move |url, features| popup_policy.on_new_window(&url, features))
-            .on_document_title_changed(|window, title| {
-                let _ = window.set_title(&title);
+            .on_document_title_changed(move |window, title| {
+                title_on_change.title_changed(&window, title);
             })
+            .on_page_load(move |window, payload| title_on_load.page_loading(&window, &payload))
             .on_navigation(navigation_hook(
                 account,
                 self.logger.clone(),
@@ -234,6 +251,44 @@ impl<R: Runtime> LinkPolicy<R> {
                 NewWindowResponse::Deny
             }
         }
+    }
+}
+
+/// Keeps a popup/app window's title at `"<page title> — <host>"` while its page and title
+/// change, so the shown host is always the one actually loaded.
+struct PopupTitle<R: Runtime> {
+    policy: Arc<LinkPolicy<R>>,
+    page_title: Mutex<String>,
+}
+
+impl<R: Runtime> PopupTitle<R> {
+    fn new(policy: Arc<LinkPolicy<R>>) -> PopupTitle<R> {
+        PopupTitle {
+            policy,
+            page_title: Mutex::default(),
+        }
+    }
+
+    fn title_changed(&self, window: &WebviewWindow<R>, title: String) {
+        if let Ok(page) = window.url() {
+            let _ = window.set_title(&self.policy.window_title_for(&title, &page));
+        }
+        *self
+            .page_title
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = title;
+    }
+
+    /// A new page starts without the previous page's title; its own follows as title change.
+    fn page_loading(&self, window: &WebviewWindow<R>, payload: &PageLoadPayload<'_>) {
+        let mut page_title = self
+            .page_title
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if let PageLoadEvent::Started = payload.event() {
+            page_title.clear();
+        }
+        let _ = window.set_title(&self.policy.window_title_for(&page_title, payload.url()));
     }
 }
 

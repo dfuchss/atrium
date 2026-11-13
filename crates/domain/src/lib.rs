@@ -18,7 +18,7 @@ pub use crate::core::{
     NotificationReq, ViewPolicy, ViewSpec, WAKE_GAP_MS, ZOOM_STEPS,
 };
 pub use crate::model::{Account, Persisted, Settings};
-pub use crate::security::{nav_allowed, opener_url_allowed};
+pub use crate::security::{nav_allowed, opener_url_allowed, window_title};
 
 /// JavaScript injected into every service page: collects web notifications into a queue
 /// (`window.__msgr`) that Rust drains by polling, as service pages get no Tauri IPC.

@@ -186,6 +186,15 @@ cd app/src-tauri && cargo tauri build --debug  # bundle: target/debug/bundle/mac
 
 `scripts/check.sh` must pass before every commit; the GitHub workflow runs it too. The lint rules are in the `[workspace.lints]` section of `Cargo.toml` (clippy pedantic plus a few denials, each allowed exception with its reason), the thresholds for function length, complexity and arguments in `clippy.toml`.
 
+### Releasing
+
+Notes for the user-visible changes go under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md) as they happen. To release:
+1. Rename the Unreleased content to a `## X.Y.Z` section and leave a fresh empty `## [Unreleased]` above it.
+2. Set the version in the workspace `Cargo.toml`.
+3. Commit and tag `vX.Y.Z`.
+
+The release workflow publishes that section plus the install text from `.github/release-install.md` (built by `.github/scripts/release-notes.sh`) and fails if the section is missing or empty.
+
 Debug builds (`cargo tauri dev`, `cargo tauri build --debug`) read these environment variables; release builds ignore them. They let a second, isolated instance run next to the regular one, e.g. for screenshots:
 
 | Variable | Effect |

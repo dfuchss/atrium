@@ -82,6 +82,7 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -91,19 +92,8 @@ jobs:
         run: |
           sha256sum atrium-macos-*.zip > SHA256SUMS
           cat SHA256SUMS
-      - name: Write release notes
-        run: |
-          cat > release-notes.md <<'EOF'
-          Unsigned macOS builds of Atrium (macOS 14 or later):
-
-          - `atrium-macos-arm64.zip` for Apple silicon
-          - `atrium-macos-x86_64.zip` for Intel Macs
-          - `SHA256SUMS` with the checksums (`shasum -a 256 -c SHA256SUMS`)
-
-          **Installing:** unzip the file and move `Atrium.app` to the Applications folder. Atrium is not signed, so macOS blocks the first start: open it once, then allow it in System Settings → Privacy & Security → *Open Anyway*. If macOS says the app is "damaged", remove the download quarantine with `xattr -cr /Applications/Atrium.app` and open it again.
-
-          **Updating:** an Atrium in the Applications folder updates itself: Settings → About shows new versions and *Restart and update* installs them.
-          EOF
+      - name: Build release notes
+        run: .github/scripts/release-notes.sh "${GITHUB_REF_NAME}" > release-notes.md
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

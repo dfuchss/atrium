@@ -1,0 +1,20 @@
+[package]
+name = "messengers"
+description = "Messenger aggregator app: composition root wiring the core to the Tauri adapter."
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+domain.workspace = true
+protocol.workspace = true
+store-fs.workspace = true
+host-tauri.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+tauri = { workspace = true, features = ["tray-icon", "image-png"] }
+tauri-plugin-notification.workspace = true
+tauri-plugin-opener.workspace = true
+tauri-plugin-autostart = "2.7.0"
+
+[build-dependencies]
+tauri-build.workspace = true

@@ -1,0 +1,9 @@
+id = "linkedin"
+name = "LinkedIn"
+color = "#0A66C2"
+url = "https://www.linkedin.com/messaging/"
+user_agent = "safari"
+internal_hosts = ["linkedin.com", "*.linkedin.com", "*.licdn.com"]
+
+[unread]
+title_regex = '^\((\d+)\)'

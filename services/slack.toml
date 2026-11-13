@@ -1,0 +1,12 @@
+id = "slack"
+name = "Slack"
+color = "#4A154B"
+url = "https://app.slack.com/client"
+user_agent = "safari"
+internal_hosts = ["slack.com", "*.slack.com", "*.slack-edge.com"]
+allow_media = true
+
+[unread]
+# Slack: "(3) Slack | ..." or "* Slack | ..." for unread without mentions (to verify in S2)
+title_regex = '^\((\d+)\)'
+title_indirect_regex = '^\*'

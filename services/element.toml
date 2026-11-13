@@ -1,0 +1,14 @@
+id = "element"
+name = "Element"
+color = "#0DBD8B"
+url = "https://{team}/"
+team_label = "Element web host"
+team_default = "app.element.io"
+user_agent = "safari"
+internal_hosts = ["{team}", "*.element.io", "*.matrix.org"]
+allow_media = true
+
+[unread]
+# Element puts the notification count in brackets, e.g. "Element [3]" (to verify in spike S2)
+title_regex = '\[(\d+)\]'
+title_indirect_regex = '\*'

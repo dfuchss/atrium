@@ -1,0 +1,11 @@
+id = "mastodon"
+name = "Mastodon"
+color = "#6364FF"
+url = "https://{team}/"
+team_label = "Instance"
+team_default = "mastodon.social"
+user_agent = "safari"
+internal_hosts = ["{team}"]
+
+[unread]
+title_regex = '^\((\d+)\)'

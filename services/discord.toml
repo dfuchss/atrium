@@ -1,0 +1,12 @@
+id = "discord"
+name = "Discord"
+color = "#5865F2"
+url = "https://discord.com/app"
+user_agent = "safari"
+internal_hosts = ["discord.com", "*.discord.com", "*.discordapp.com", "discord.gg"]
+allow_media = true
+
+[unread]
+# Discord: "(3) Discord | ..." for mentions, "• Discord | ..." for unread channels
+title_regex = '^\((\d+)\)'
+title_indirect_regex = '^•'

@@ -1,0 +1,10 @@
+[package]
+name = "protocol"
+description = "Types shared by the Rust backend and the Leptos (wasm) UI"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+uuid.workspace = true

@@ -396,3 +396,21 @@ fn main() {
         _ => {}
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    /// Service webviews are children of the main window, so a window pattern in the UI
+    /// capability would grant them IPC as soon as only their origin stood in the way.
+    #[test]
+    fn ui_capability_targets_only_the_ui_webview() {
+        let capability: Value = serde_json::from_str(include_str!("../capabilities/ui.json"))
+            .expect("capability is valid JSON");
+        assert!(capability.get("windows").is_none());
+        assert_eq!(
+            capability["webviews"],
+            serde_json::json!([super::UI_WEBVIEW])
+        );
+    }
+}

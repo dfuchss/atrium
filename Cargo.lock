@@ -231,6 +231,7 @@ dependencies = [
  "domain",
  "host-tauri",
  "protocol",
+ "serde_json",
  "store-fs",
  "tauri",
  "tauri-build",

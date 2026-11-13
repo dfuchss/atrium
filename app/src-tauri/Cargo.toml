@@ -18,6 +18,9 @@ tauri-plugin-notification.workspace = true
 tauri-plugin-opener.workspace = true
 tauri-plugin-autostart = "2.7.0"
 
+[dev-dependencies]
+serde_json.workspace = true
+
 [build-dependencies]
 tauri-build.workspace = true
 

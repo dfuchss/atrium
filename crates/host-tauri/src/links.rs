@@ -20,7 +20,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use domain::{
-    Input, ViewPolicy, ViewSpec, host_matches_any, nav_allowed, redact_url, window_title,
+    Input, ViewPolicy, ViewSpec, WindowQuota, WindowRefusal, host_matches_any, nav_allowed,
+    redact_url, window_title,
 };
 use protocol::LinkTarget;
 use tauri::webview::{
@@ -30,6 +31,8 @@ use tauri::webview::{
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
+use crate::logger::now_ms;
+use crate::webviews::popup_labels;
 use crate::{Feed, Logger};
 
 /// Size of windows opened for `LinkTarget::AppWindow`.
@@ -56,6 +59,24 @@ pub(crate) fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
 /// wry does not implement `WebKit`'s `webViewDidClose`, so a popup's own `window.close()` (end of
 /// an OAuth flow) would do nothing. This wrapper records the call; [`watch_close`] polls it.
 const CLOSE_HOOK: &str = "(()=>{if(window.__msgrCloseHook)return;window.__msgrCloseHook=1;const c=window.close.bind(window);window.close=function(){window.__msgrClosed=true;try{c()}catch(e){}};})();";
+
+/// Most in-app windows an account may have open at once.
+const MAX_OPEN_WINDOWS: usize = 5;
+/// Most in-app windows an account may open within [`OPEN_WINDOWS_PERIOD_MS`].
+const MAX_WINDOWS_PER_PERIOD: usize = 3;
+const OPEN_WINDOWS_PERIOD_MS: u64 = 10_000;
+
+/// Window admission shared by all accounts' views.
+pub(crate) type PopupQuota = Arc<Mutex<WindowQuota<Uuid>>>;
+
+/// A quota with the limits above.
+pub(crate) fn new_popup_quota() -> PopupQuota {
+    Arc::new(Mutex::new(WindowQuota::new(
+        MAX_OPEN_WINDOWS,
+        MAX_WINDOWS_PER_PERIOD,
+        OPEN_WINDOWS_PERIOD_MS,
+    )))
+}
 
 /// Label of an in-app window opened by `account`'s view.
 pub(crate) fn popup_label(account: Uuid, number: u64) -> String {
@@ -144,6 +165,7 @@ pub(crate) struct LinkPolicy<R: Runtime> {
     pub(crate) spec: Arc<ViewSpec>,
     pub(crate) policies: ViewPolicies,
     pub(crate) popup_counter: Arc<AtomicU64>,
+    pub(crate) popup_quota: PopupQuota,
     pub(crate) feed: Feed,
     pub(crate) logger: Logger,
 }
@@ -206,6 +228,28 @@ impl<R: Runtime> LinkPolicy<R> {
         }
     }
 
+    /// True if the account may open another window; logs the refusal otherwise.
+    fn admit_window(&self, shown_url: &str) -> bool {
+        let account = self.spec.account;
+        let open_now = popup_labels(&self.app, account).len();
+        let admitted = self
+            .popup_quota
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .admit(account, open_now, now_ms());
+        let Err(refusal) = admitted else {
+            return true;
+        };
+        let reason = match refusal {
+            WindowRefusal::TooManyOpen => "too many windows open",
+            WindowRefusal::TooFast => "opening windows too fast",
+        };
+        self.logger.log(&format!(
+            "[{account}] window for {shown_url} refused: {reason}"
+        ));
+        false
+    }
+
     /// Creates the in-app window `WebKit` loads the request into. Runs on the main thread
     /// (inside wry's callback), where `build()` creates the window synchronously.
     fn open_window(
@@ -216,6 +260,9 @@ impl<R: Runtime> LinkPolicy<R> {
     ) -> NewWindowResponse<R> {
         let account = self.spec.account;
         let shown_url = redact_url(url.as_str());
+        if !self.admit_window(&shown_url) {
+            return NewWindowResponse::Deny;
+        }
         let label = popup_label(
             account,
             self.popup_counter.fetch_add(1, Ordering::Relaxed) + 1,

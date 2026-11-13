@@ -41,7 +41,7 @@ fn belongs_to_account(label: &str, account: Uuid) -> bool {
 }
 
 /// Labels of the in-app (popup and app) windows `account` currently has.
-fn popup_labels<R: Runtime>(app: &AppHandle<R>, account: Uuid) -> Vec<String> {
+pub(crate) fn popup_labels<R: Runtime>(app: &AppHandle<R>, account: Uuid) -> Vec<String> {
     let prefix = popup_label_prefix(account);
     app.webview_windows()
         .into_keys()
@@ -204,6 +204,7 @@ impl<R: Runtime> TauriHost<R> {
             spec: shared_spec.clone(),
             policies: self.policies.clone(),
             popup_counter: self.popup_counter.clone(),
+            popup_quota: self.popup_quota.clone(),
             feed: self.feed.clone(),
             logger: self.logger.clone(),
         });

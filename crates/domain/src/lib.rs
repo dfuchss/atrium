@@ -20,7 +20,7 @@ pub use crate::core::{
 };
 pub use crate::model::{Account, Persisted, Settings, unused_store_ids};
 pub use crate::security::{nav_allowed, opener_url_allowed, redact_url, window_title};
-pub use crate::throttle::RateLimiter;
+pub use crate::throttle::{RateLimiter, WindowQuota, WindowRefusal};
 
 /// JavaScript injected into every service page: collects web notifications into a queue
 /// (`window.__msgr`) that Rust drains by polling, as service pages get no Tauri IPC.

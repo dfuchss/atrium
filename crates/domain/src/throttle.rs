@@ -37,6 +37,43 @@ impl<K: Hash + Eq> RateLimiter<K> {
     }
 }
 
+/// Why a new in-app window was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowRefusal {
+    TooManyOpen,
+    TooFast,
+}
+
+/// Admission of in-app windows per key (account): a cap on windows open at once and a rate
+/// limit on opening, so a page cannot flood the screen with `window.open`.
+#[derive(Debug)]
+pub struct WindowQuota<K> {
+    max_open: usize,
+    opening: RateLimiter<K>,
+}
+
+impl<K: Hash + Eq> WindowQuota<K> {
+    pub fn new(max_open: usize, max_per_window: usize, window_ms: u64) -> WindowQuota<K> {
+        WindowQuota {
+            max_open,
+            opening: RateLimiter::new(max_per_window, window_ms),
+        }
+    }
+
+    /// Admits a window for `key` that has `open_now` windows, recording the opening. A window
+    /// refused for the cap does not use up the rate limit.
+    pub fn admit(&mut self, key: K, open_now: usize, now_ms: u64) -> Result<(), WindowRefusal> {
+        if open_now >= self.max_open {
+            return Err(WindowRefusal::TooManyOpen);
+        }
+        if self.opening.allow(key, now_ms) {
+            Ok(())
+        } else {
+            Err(WindowRefusal::TooFast)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -59,5 +96,21 @@ mod tests {
         assert!(limiter.allow(1, 0));
         assert!(!limiter.allow(1, 1_500));
         assert!(limiter.allow(1, 2_000));
+    }
+
+    #[test]
+    fn window_quota_caps_open_windows_and_opening_rate() {
+        let mut quota = WindowQuota::new(2, 3, 10_000);
+        assert_eq!(quota.admit(1, 2, 0), Err(WindowRefusal::TooManyOpen));
+        assert_eq!(quota.admit(1, 0, 0), Ok(()));
+        assert_eq!(quota.admit(1, 1, 100), Ok(()));
+        assert_eq!(
+            quota.admit(1, 0, 200),
+            Ok(()),
+            "the cap refusal cost nothing"
+        );
+        assert_eq!(quota.admit(1, 0, 300), Err(WindowRefusal::TooFast));
+        assert_eq!(quota.admit(2, 0, 300), Ok(()), "accounts are independent");
+        assert_eq!(quota.admit(1, 0, 10_000), Ok(()));
     }
 }

@@ -37,7 +37,7 @@ use domain::ports::{PortError, PortResult, UiSink};
 use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
 use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
 
-use crate::links::ViewPolicies;
+use crate::links::{PopupQuota, ViewPolicies, new_popup_quota};
 use crate::logger::Logger;
 use crate::menus::MenuState;
 use crate::notifications::NotificationTargets;
@@ -70,6 +70,8 @@ pub struct TauriHost<R: Runtime> {
     policies: ViewPolicies,
     /// Numbers the labels of popup/app windows.
     popup_counter: Arc<AtomicU64>,
+    /// Limits popup/app windows per account.
+    popup_quota: PopupQuota,
     menus: Mutex<MenuState<R>>,
     /// Development override of the config folder (see [`TauriHost::with_config_dir`]).
     config_dir: Option<PathBuf>,
@@ -89,6 +91,7 @@ impl<R: Runtime> TauriHost<R> {
             notifications: Arc::default(),
             policies: Arc::default(),
             popup_counter: Arc::default(),
+            popup_quota: new_popup_quota(),
             menus: Mutex::default(),
             config_dir: None,
             extra_init_script: None,

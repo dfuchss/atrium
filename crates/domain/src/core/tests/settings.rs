@@ -142,7 +142,7 @@ fn update_account_instance_recreates_view() {
     let (mut c, _) = started(vec![acc(2, "slack", "S"), a]);
     // inactive account -> recreated hidden
     let fx = update_account(&mut c, 1, |s| {
-        s.instance = Some(" https://fosstodon.org/ ".into())
+        s.instance = Some(" https://fosstodon.org/ ".into());
     });
     assert_eq!(fx[0], Effect::Destroy(id(1)));
     let v = views(&fx);
@@ -223,7 +223,7 @@ fn update_account_before_start_does_not_recreate() {
 fn custom_css_injected_and_recreates() {
     let (mut c, _) = started(vec![acc(1, "slack", "A")]);
     let fx = update_account(&mut c, 1, |s| {
-        s.custom_css = Some("body{content:\"</style>\\n\"}".into())
+        s.custom_css = Some("body{content:\"</style>\\n\"}".into());
     });
     assert_eq!(destroys(&fx), vec![id(1)]);
     let script = &views(&fx)[0].0.init_script;

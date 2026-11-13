@@ -9,7 +9,7 @@ fn app_hosts_normalised_and_policy_updated_live() {
             "idp.example.org".into(),
             "*.microsoftonline.com".into(),
             "no good".into(),
-        ]
+        ];
     });
     let want = vec![
         "idp.example.org".to_string(),
@@ -140,6 +140,12 @@ fn allow_media_from_service_and_override() {
         policies(&fx),
         vec![(id(1), pol(LinkTarget::SystemBrowser, false))]
     );
+}
+
+#[test]
+fn allow_media_equal_to_default_and_while_hibernated() {
+    let (mut c, _) = started(vec![acc(1, "slack", "S"), acc(2, "linkedin", "L")]);
+    update_account(&mut c, 2, |s| s.allow_media = Some(true));
     // explicit value equal to the service default -> no change
     let fx = update_account(&mut c, 2, |s| s.allow_media = None);
     assert_eq!(
@@ -156,13 +162,17 @@ fn allow_media_from_service_and_override() {
         policies(&fx),
         vec![(id(2), pol(LinkTarget::SystemBrowser, true))]
     );
-    // custom services default to no media
+}
+
+#[test]
+fn custom_services_default_to_no_media() {
+    let (mut c, _) = started(vec![]);
     c.handle(Input::Ui(UiCommand::AddCustomService {
         service: custom("Site", "https://site.org"),
     }));
     let fx = c.handle(Input::Ui(UiCommand::AddAccount {
         service: "custom-site".into(),
-        label: "".into(),
+        label: String::new(),
         instance: None,
     }));
     assert_eq!(

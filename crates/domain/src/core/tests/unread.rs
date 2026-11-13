@@ -86,8 +86,8 @@ fn poll_muted_or_dnd_silent() {
     );
 }
 
-#[test]
-fn poll_unread_and_bad_json() {
+/// Started core with one account (id 1) of a service with poll `1+1` and title pattern `(n)`.
+fn core_with_polled_service() -> Core {
     let mut def = Catalog::parse("p", "id='p'\nname='P'\ncolor='#fff'\nurl='https://p.io'\n[unread]\npoll='1+1'\ntitle_regex='^\\((\\d+)\\)'").unwrap();
     def.id = "p".into();
     let mut cat = Catalog::builtin();
@@ -101,67 +101,58 @@ fn poll_unread_and_bad_json() {
         width: 800.0,
         height: 600.0,
     });
-    let fx = c.handle(Input::PollResult {
-        account: id(1),
-        raw: r#"{"n":null,"u":4}"#.into(),
-    });
-    assert_eq!(badges(&fx), vec![DockBadge::Count(4)]);
-    // poll wins over titles
-    assert!(
-        c.handle(Input::TitleChanged {
-            account: id(1),
-            title: "(9) P".into()
-        })
-        .is_empty()
-    );
-    let fx = c.handle(Input::PollResult {
-        account: id(1),
-        raw: r#"{"n":[],"u":{"direct":0,"indirect":true}}"#.into(),
-    });
-    assert_eq!(badges(&fx), vec![DockBadge::Dot]);
-    // no poll value: the last title value (9) takes over
-    let fx = c.handle(Input::PollResult {
-        account: id(1),
-        raw: r#"{"n":[],"u":null}"#.into(),
-    });
-    assert_eq!(badges(&fx), vec![DockBadge::Count(9)]);
-    // title changes apply while the poll yields nothing
-    let fx = c.handle(Input::TitleChanged {
-        account: id(1),
-        title: "(2) P".into(),
-    });
-    assert_eq!(badges(&fx), vec![DockBadge::Count(2)]);
+    c
+}
+
+fn polled(c: &mut Core, raw: &str) -> Vec<Effect> {
     c.handle(Input::PollResult {
         account: id(1),
-        raw: r#"{"n":[],"u":null}"#.into(),
-    });
-    // a poll value wins again, and later title changes are stored but ignored
-    let fx = c.handle(Input::PollResult {
+        raw: raw.into(),
+    })
+}
+
+fn titled(c: &mut Core, title: &str) -> Vec<Effect> {
+    c.handle(Input::TitleChanged {
         account: id(1),
-        raw: r#"{"n":[],"u":5}"#.into(),
-    });
-    assert_eq!(badges(&fx), vec![DockBadge::Count(5)]);
-    assert!(
-        c.handle(Input::TitleChanged {
-            account: id(1),
-            title: "(7) P".into()
-        })
-        .is_empty()
-    );
-    let fx = c.handle(Input::PollResult {
-        account: id(1),
-        raw: r#"{"n":[],"u":null}"#.into(),
-    });
-    assert_eq!(badges(&fx), vec![DockBadge::Count(7)]);
-    let fx = c.handle(Input::PollResult {
-        account: id(1),
-        raw: r#"{"n":[],"u":{"direct":0,"indirect":true}}"#.into(),
-    });
+        title: title.into(),
+    })
+}
+
+#[test]
+fn poll_value_wins_over_the_title() {
+    let mut c = core_with_polled_service();
+    let fx = polled(&mut c, r#"{"n":null,"u":4}"#);
+    assert_eq!(badges(&fx), vec![DockBadge::Count(4)]);
+    assert!(titled(&mut c, "(9) P").is_empty());
+    let fx = polled(&mut c, r#"{"n":[],"u":{"direct":0,"indirect":true}}"#);
     assert_eq!(badges(&fx), vec![DockBadge::Dot]);
-    let fx = c.handle(Input::PollResult {
-        account: id(1),
-        raw: "not json".into(),
-    });
+}
+
+#[test]
+fn title_applies_while_the_poll_yields_nothing() {
+    let mut c = core_with_polled_service();
+    polled(&mut c, r#"{"n":null,"u":4}"#);
+    titled(&mut c, "(9) P");
+    // no poll value: the last title value (9) takes over
+    let fx = polled(&mut c, r#"{"n":[],"u":null}"#);
+    assert_eq!(badges(&fx), vec![DockBadge::Count(9)]);
+    let fx = titled(&mut c, "(2) P");
+    assert_eq!(badges(&fx), vec![DockBadge::Count(2)]);
+    polled(&mut c, r#"{"n":[],"u":null}"#);
+    // a poll value wins again, and later title changes are stored but ignored
+    let fx = polled(&mut c, r#"{"n":[],"u":5}"#);
+    assert_eq!(badges(&fx), vec![DockBadge::Count(5)]);
+    assert!(titled(&mut c, "(7) P").is_empty());
+    let fx = polled(&mut c, r#"{"n":[],"u":null}"#);
+    assert_eq!(badges(&fx), vec![DockBadge::Count(7)]);
+    let fx = polled(&mut c, r#"{"n":[],"u":{"direct":0,"indirect":true}}"#);
+    assert_eq!(badges(&fx), vec![DockBadge::Dot]);
+}
+
+#[test]
+fn bad_poll_json_is_logged_and_the_tick_polls_the_expression() {
+    let mut c = core_with_polled_service();
+    let fx = polled(&mut c, "not json");
     assert!(matches!(fx.as_slice(), [Effect::Log(_)]));
     let fx = c.handle(Input::Tick { now_ms: 1000 });
     match &fx[0] {

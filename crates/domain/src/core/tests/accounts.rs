@@ -184,7 +184,7 @@ fn add_first_account_from_dialog_becomes_active_on_close() {
     c.handle(Input::Ui(UiCommand::SetDialog { open: true }));
     let fx = c.handle(Input::Ui(UiCommand::AddAccount {
         service: "discord".into(),
-        label: "".into(),
+        label: String::new(),
         instance: None,
     }));
     let new = snap(&fx).accounts[0].id;

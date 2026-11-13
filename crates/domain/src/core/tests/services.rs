@@ -1,11 +1,32 @@
 use super::*;
 
-#[test]
-fn custom_service_crud() {
+/// Started core with the custom service "My Chat" (`custom-my-chat`).
+fn core_with_custom_chat() -> (Core, Vec<Effect>) {
     let (mut c, _) = started(vec![]);
     let fx = c.handle(Input::Ui(UiCommand::AddCustomService {
         service: custom(" My Chat ", "https://chat.example.org/app"),
     }));
+    (c, fx)
+}
+
+/// `core_with_custom_chat` plus an account of it (id 101).
+fn core_with_custom_chat_account() -> (Core, Vec<Effect>) {
+    let (mut c, _) = core_with_custom_chat();
+    let fx = c.handle(Input::Ui(UiCommand::AddAccount {
+        service: "custom-my-chat".into(),
+        label: String::new(),
+        instance: None,
+    }));
+    (c, fx)
+}
+
+fn is_log_and_snapshot(fx: &[Effect]) -> bool {
+    matches!(fx, [Effect::Log(_), Effect::EmitSnapshot(_)])
+}
+
+#[test]
+fn custom_service_add_normalises_and_numbers_ids() {
+    let (mut c, fx) = core_with_custom_chat();
     let s = snap(&fx);
     assert_eq!(s.custom_services.len(), 1);
     assert_eq!(
@@ -30,39 +51,43 @@ fn custom_service_crud() {
         service: custom("My chat", "https://b.org"),
     }));
     assert_eq!(snap(&fx).custom_services[1].id, "custom-my-chat-2");
+}
 
-    // invalid input: logged, nothing stored
-    for bad in [custom(" ", "https://a.org"), custom("X", "mailto:a@b.c"), {
-        let mut x = custom("X", "https://a.org");
-        x.title_regex = Some("(".into());
-        x
-    }] {
+#[test]
+fn custom_service_invalid_input_is_logged_and_not_stored() {
+    let (mut c, _) = core_with_custom_chat();
+    let mut bad_regex = custom("X", "https://a.org");
+    bad_regex.title_regex = Some("(".into());
+    for bad in [
+        custom(" ", "https://a.org"),
+        custom("X", "mailto:a@b.c"),
+        bad_regex,
+    ] {
         let fx = c.handle(Input::Ui(UiCommand::AddCustomService { service: bad }));
-        assert!(
-            matches!(fx.as_slice(), [Effect::Log(_), Effect::EmitSnapshot(_)]),
-            "{fx:?}"
-        );
+        assert!(is_log_and_snapshot(&fx), "{fx:?}");
     }
-    assert_eq!(c.snapshot().custom_services.len(), 2);
+    assert_eq!(c.snapshot().custom_services.len(), 1);
+}
 
-    // an account of the custom service: title unread with the default regex
-    let fx = c.handle(Input::Ui(UiCommand::AddAccount {
-        service: "custom-my-chat".into(),
-        label: "".into(),
-        instance: None,
-    }));
+#[test]
+fn custom_service_account_uses_its_definition() {
+    let (mut c, fx) = core_with_custom_chat_account();
     let (spec, _) = views(&fx)[0];
     assert_eq!(spec.url.as_str(), "https://chat.example.org/app");
     assert_eq!(spec.internal_hosts, vec!["chat.example.org"]);
     assert_eq!(spec.user_agent.as_deref(), Some(crate::catalog::UA_SAFARI));
+    // title unread with the default regex
     let fx = c.handle(Input::TitleChanged {
         account: id(101),
         title: "(4) Chat".into(),
     });
     assert_eq!(snap(&fx).accounts[0].unread, 4);
     assert_eq!(snap(&fx).accounts[0].settings.label, "My Chat");
+}
 
-    // update recreates the views of its accounts
+#[test]
+fn custom_service_update_recreates_the_views_of_its_accounts() {
+    let (mut c, _) = core_with_custom_chat_account();
     let mut changed = c.snapshot().custom_services[0].clone();
     changed.url = "https://new.example.org/".into();
     let fx = c.handle(Input::Ui(UiCommand::UpdateCustomService {
@@ -75,20 +100,20 @@ fn custom_service_crud() {
     let fx = c.handle(Input::Ui(UiCommand::UpdateCustomService {
         service: changed.clone(),
     }));
-    assert!(matches!(
-        fx.as_slice(),
-        [Effect::Log(_), Effect::EmitSnapshot(_)]
-    ));
+    assert!(is_log_and_snapshot(&fx));
     changed.id = "custom-unknown".into();
     let fx = c.handle(Input::Ui(UiCommand::UpdateCustomService {
         service: changed,
     }));
-    assert!(matches!(
-        fx.as_slice(),
-        [Effect::Log(_), Effect::EmitSnapshot(_)]
-    ));
+    assert!(is_log_and_snapshot(&fx));
+}
 
-    // remove: refused while used
+#[test]
+fn custom_service_removal_is_refused_while_used() {
+    let (mut c, _) = core_with_custom_chat_account();
+    c.handle(Input::Ui(UiCommand::AddCustomService {
+        service: custom("My chat", "https://b.org"),
+    }));
     let fx = c.handle(Input::Ui(UiCommand::RemoveCustomService {
         id: "custom-my-chat".into(),
     }));

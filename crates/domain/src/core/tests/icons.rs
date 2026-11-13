@@ -1,34 +1,49 @@
 use super::*;
 
-#[test]
-fn favicon_flow() {
-    let (mut c, _) = started(vec![acc(1, "slack", "A")]);
-    let loaded = |c: &mut Core| {
-        c.handle(Input::PageLoaded {
-            account: id(1),
-            url: "https://app.slack.com".into(),
-        })
-    };
-    let fx = loaded(&mut c);
-    assert_eq!(
-        fx,
-        vec![Effect::FindIcon {
-            account: id(1),
-            script: ICON_SCRIPT.into()
-        }]
-    );
-    // retried on later page loads (single-page apps set their icon late), at most 3 times
-    assert_eq!(loaded(&mut c).len(), 1);
-    assert_eq!(loaded(&mut c).len(), 1);
-    assert!(
-        loaded(&mut c).is_empty(),
-        "at most MAX_ICON_ATTEMPTS per run"
-    );
-    let raw = serde_json::to_string("https://a.slack-edge.com/icon.png").unwrap();
-    let fx = c.handle(Input::IconFound {
+fn page_loaded(c: &mut Core) -> Vec<Effect> {
+    c.handle(Input::PageLoaded {
         account: id(1),
-        raw,
-    });
+        url: "https://app.slack.com".into(),
+    })
+}
+
+fn icon_found(c: &mut Core, url: &str) -> Vec<Effect> {
+    c.handle(Input::IconFound {
+        account: id(1),
+        raw: serde_json::to_string(url).unwrap(),
+    })
+}
+
+fn find_icon() -> Vec<Effect> {
+    vec![Effect::FindIcon {
+        account: id(1),
+        script: ICON_SCRIPT.into(),
+    }]
+}
+
+fn persists_favicon(fx: &[Effect], favicon: &str) -> bool {
+    fx.iter().any(
+        |e| matches!(e, Effect::Persist(p) if p.accounts[0].favicon.as_deref() == Some(favicon)),
+    )
+}
+
+#[test]
+fn favicon_lookup_is_retried_on_page_loads_at_most_three_times() {
+    let (mut c, _) = started(vec![acc(1, "slack", "A")]);
+    assert_eq!(page_loaded(&mut c), find_icon());
+    // single-page apps set their icon late
+    assert_eq!(page_loaded(&mut c).len(), 1);
+    assert_eq!(page_loaded(&mut c).len(), 1);
+    assert!(
+        page_loaded(&mut c).is_empty(),
+        "at most MAX_FAVICON_ATTEMPTS per run"
+    );
+}
+
+#[test]
+fn favicon_is_downloaded_and_cached() {
+    let (mut c, _) = started(vec![acc(1, "slack", "A")]);
+    let fx = icon_found(&mut c, "https://a.slack-edge.com/icon.png");
     assert_eq!(
         fx,
         vec![Effect::FetchIcon {
@@ -46,34 +61,41 @@ fn favicon_flow() {
         account: id(1),
         data_url: Some(data.clone()),
     });
-    assert!(fx.iter().any(
-        |e| matches!(e, Effect::Persist(p) if p.accounts[0].favicon.as_deref() == Some(&*data))
-    ));
+    assert!(persists_favicon(&fx, &data));
     assert_eq!(snap(&fx).accounts[0].icon.as_deref(), Some(&*data));
-    // a custom icon wins
+    // a cached favicon is not looked up again on the next run
+    let mut next_run = core_with(c.persisted.accounts.clone());
+    next_run.handle(Input::Started {
+        width: 800.0,
+        height: 600.0,
+    });
+    assert!(page_loaded(&mut next_run).is_empty());
+}
+
+#[test]
+fn custom_icon_wins_and_refresh_looks_up_again() {
+    let (mut c, _) = started(vec![acc(1, "slack", "A")]);
+    c.handle(Input::IconFetched {
+        account: id(1),
+        data_url: Some("data:image/png;base64,AAAA".into()),
+    });
     let fx = update_account(&mut c, 1, |s| {
-        s.custom_icon = Some(" https://x.org/me.png ".into())
+        s.custom_icon = Some(" https://x.org/me.png ".into());
     });
     assert_eq!(
         snap(&fx).accounts[0].icon.as_deref(),
         Some("https://x.org/me.png")
     );
-    // refresh looks it up again, even with a cached favicon
+    // even with a cached favicon
     let fx = c.handle(Input::Ui(UiCommand::RefreshIcon { account: id(1) }));
-    assert_eq!(
-        fx,
-        vec![Effect::FindIcon {
-            account: id(1),
-            script: ICON_SCRIPT.into()
-        }]
-    );
-    // data URLs are taken directly; bad results are logged
-    let raw = serde_json::to_string("data:image/svg+xml;base64,BB").unwrap();
-    let fx = c.handle(Input::IconFound {
-        account: id(1),
-        raw,
-    });
-    assert!(fx.iter().any(|e| matches!(e, Effect::Persist(p) if p.accounts[0].favicon.as_deref() == Some("data:image/svg+xml;base64,BB"))));
+    assert_eq!(fx, find_icon());
+}
+
+#[test]
+fn icon_data_urls_are_taken_directly_and_bad_results_logged() {
+    let (mut c, _) = started(vec![acc(1, "slack", "A")]);
+    let fx = icon_found(&mut c, "data:image/svg+xml;base64,BB");
+    assert!(persists_favicon(&fx, "data:image/svg+xml;base64,BB"));
     for raw in ["null", "\"javascript:alert(1)\"", "garbage"] {
         let fx = c.handle(Input::IconFound {
             account: id(1),
@@ -81,19 +103,6 @@ fn favicon_flow() {
         });
         assert!(matches!(fx.as_slice(), [Effect::Log(_)]), "{raw}: {fx:?}");
     }
-    // a cached favicon is not looked up again on the next run
-    let mut c2 = core_with(c.persisted.accounts.clone());
-    c2.handle(Input::Started {
-        width: 800.0,
-        height: 600.0,
-    });
-    assert!(
-        c2.handle(Input::PageLoaded {
-            account: id(1),
-            url: "x".into()
-        })
-        .is_empty()
-    );
 }
 
 #[test]
@@ -204,7 +213,7 @@ fn simple_icon_precedence_and_404_fallback() {
     assert_eq!((v.icon.as_deref(), v.icon_glyph), (Some(&*svg("GG")), true));
     // custom icon beats glyph
     let fx = update_account(&mut c, 1, |s| {
-        s.custom_icon = Some("https://x.org/me.png".into())
+        s.custom_icon = Some("https://x.org/me.png".into());
     });
     let v = &snap(&fx).accounts[0];
     assert_eq!(

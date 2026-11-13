@@ -1802,6 +1802,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "domain",
+ "macos-dialogs",
  "protocol",
  "tauri",
  "tauri-plugin-autostart",
@@ -2572,6 +2573,18 @@ dependencies = [
  "objc2-foundation",
  "time",
  "uuid",
+]
+
+[[package]]
+name = "macos-dialogs"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
+ "tauri",
 ]
 
 [[package]]

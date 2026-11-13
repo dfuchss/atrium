@@ -1,0 +1,461 @@
+//! Native `alert`, `confirm` and `prompt` for pages in service webviews and the windows they
+//! open.
+//!
+//! wry's `WKUIDelegate` class (`WryWebViewUIDelegate`) implements none of `WebKit`'s three
+//! JavaScript panel methods, so `WebKit` answers them itself with the defaults (`confirm` ->
+//! false). [`install`] adds the methods to that class at runtime (`class_addMethod`, the way an
+//! Objective-C category extends a class): everything the delegate already does (new windows,
+//! media permission, file upload) stays untouched, and should a wry upgrade implement the methods
+//! itself, adding them fails and wry's own dialogs are used.
+//!
+//! `WebKit` records which methods the delegate implements when the delegate is set, so
+//! [`install`] must run before the first service webview is created; and objc2 registers wry's
+//! class with the first webview, so one webview (the sidebar) must exist already.
+//!
+//! What a dialog shows is decided by the [`DialogHandler`] in safe code (text, suppression, rate
+//! limits); this crate only converts between `WebKit` and `NSAlert`, shown as a sheet on the
+//! webview's window so the main thread never blocks. `WebKit`'s completion handler is called
+//! exactly once: with the default answer when the dialog is suppressed or its sheet never
+//! completes.
+//!
+//! The only crate of the workspace with `unsafe` code; every block says why it is sound.
+
+use std::cell::RefCell;
+use std::ffi::CStr;
+use std::fmt;
+use std::ptr::{self, null_mut};
+use std::sync::{Arc, OnceLock};
+
+use block2::{DynBlock, RcBlock};
+use objc2::rc::Retained;
+use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, NSObject, Sel};
+use objc2::{ClassType, MainThreadMarker, ffi, sel};
+use objc2_app_kit::{
+    NSAlert, NSAlertFirstButtonReturn, NSButton, NSControlStateValueOn, NSModalResponse,
+    NSTextField,
+};
+use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+use objc2_web_kit::{WKFrameInfo, WKWebView};
+use tauri::webview::PlatformWebview;
+
+/// Which panel the page asked for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogKind {
+    Alert,
+    Confirm,
+    Prompt { default_text: String },
+}
+
+/// Origin of the frame that asked, as `WebKit` reports it (the page cannot fake it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageOrigin {
+    /// Empty for pages without a host (`about:blank`, `data:`).
+    pub host: String,
+    /// 0 = the scheme's default port.
+    pub port: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DialogRequest {
+    pub kind: DialogKind,
+    pub message: String,
+    pub origin: PageOrigin,
+    /// The tag set with [`tag_webview`] on the asking webview, if any.
+    pub webview_tag: Option<String>,
+}
+
+/// What the panel shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DialogText {
+    pub title: String,
+    pub message: String,
+    /// Add the "Prevent this page from creating additional dialogs" checkbox.
+    pub offer_suppression: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Presentation {
+    Show(DialogText),
+    /// Answer with the default (OK for `alert`, false for `confirm`, null for `prompt`).
+    Suppress,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DialogAnswer {
+    Cancelled,
+    Confirmed,
+    /// The text entered into a `prompt`.
+    Text(String),
+}
+
+/// Decides and observes the dialogs; called on the main thread, so it must not block.
+pub trait DialogHandler: Send + Sync {
+    fn present(&self, request: &DialogRequest) -> Presentation;
+    fn answered(&self, request: &DialogRequest, answer: &DialogAnswer, suppress_further: bool);
+}
+
+#[derive(Debug)]
+pub enum InstallError {
+    AlreadyInstalled,
+    /// wry's delegate class is not registered (no webview yet) or was renamed.
+    NoWryDelegateClass,
+    DonorClassExists,
+    MissingDonorMethod(String),
+    /// wry implements the method itself; its own handling is kept.
+    AlreadyImplemented(String),
+}
+
+impl fmt::Display for InstallError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            InstallError::AlreadyInstalled => write!(formatter, "dialogs are already installed"),
+            InstallError::NoWryDelegateClass => write!(
+                formatter,
+                "class {} not found (no webview created yet, or wry renamed it)",
+                WRY_DELEGATE_CLASS.to_string_lossy()
+            ),
+            InstallError::DonorClassExists => write!(
+                formatter,
+                "class {} exists already",
+                DONOR_CLASS.to_string_lossy()
+            ),
+            InstallError::MissingDonorMethod(selector) => {
+                write!(formatter, "donor class lacks {selector}")
+            }
+            InstallError::AlreadyImplemented(selector) => {
+                write!(formatter, "wry implements {selector} itself")
+            }
+        }
+    }
+}
+
+impl std::error::Error for InstallError {}
+
+const WRY_DELEGATE_CLASS: &CStr = c"WryWebViewUIDelegate";
+const DONOR_CLASS: &CStr = c"AtriumDialogMethods";
+const SUPPRESSION_TITLE: &str = "Prevent this page from creating additional dialogs";
+const PROMPT_FIELD_SIZE: (f64, f64) = (300.0, 24.0);
+
+static HANDLER: OnceLock<Arc<dyn DialogHandler>> = OnceLock::new();
+
+/// Adds the three panel methods to wry's delegate class; see the crate documentation for when
+/// to call it. On an error nothing changes: the pages keep getting the default answers.
+pub fn install(handler: Arc<dyn DialogHandler>) -> Result<(), InstallError> {
+    let target = AnyClass::get(WRY_DELEGATE_CLASS).ok_or(InstallError::NoWryDelegateClass)?;
+    let donor = register_donor_class()?;
+    HANDLER
+        .set(handler)
+        .map_err(|_| InstallError::AlreadyInstalled)?;
+    for selector in panel_selectors() {
+        copy_method(donor, target, selector)?;
+    }
+    Ok(())
+}
+
+fn panel_selectors() -> [Sel; 3] {
+    [
+        sel!(webView:runJavaScriptAlertPanelWithMessage:initiatedByFrame:completionHandler:),
+        sel!(webView:runJavaScriptConfirmPanelWithMessage:initiatedByFrame:completionHandler:),
+        sel!(webView:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:),
+    ]
+}
+
+/// Registers the class holding the three implementations: objc2 derives their Objective-C type
+/// encodings from the Rust signatures, which `copy_method` then reuses.
+fn register_donor_class() -> Result<&'static AnyClass, InstallError> {
+    let mut builder =
+        ClassBuilder::new(DONOR_CLASS, NSObject::class()).ok_or(InstallError::DonorClassExists)?;
+    let [alert, confirm, prompt] = panel_selectors();
+    // SAFETY: each function has the parameter list WebKit uses for its selector (see the
+    // `WKUIDelegate` declarations in objc2-web-kit): the web view, the message (plus the default
+    // text for the prompt), the frame and the completion block. None of them touches the
+    // receiver, so they work on wry's delegate as well.
+    unsafe {
+        builder.add_method(
+            alert,
+            run_alert_panel as extern "C-unwind" fn(_, _, _, _, _, _),
+        );
+        builder.add_method(
+            confirm,
+            run_confirm_panel as extern "C-unwind" fn(_, _, _, _, _, _),
+        );
+        builder.add_method(
+            prompt,
+            run_prompt_panel as extern "C-unwind" fn(_, _, _, _, _, _, _),
+        );
+    }
+    Ok(builder.register())
+}
+
+/// Adds the method `selector` of `donor` to `target`, unless `target` defines it already.
+fn copy_method(donor: &AnyClass, target: &AnyClass, selector: Sel) -> Result<(), InstallError> {
+    let method = donor
+        .instance_method(selector)
+        .ok_or_else(|| InstallError::MissingDonorMethod(selector.to_string()))?;
+    // SAFETY: `method` belongs to the registered donor class, so its type encoding is a C string
+    // owned by the runtime for the life of the process; `target` is a registered class, and the
+    // runtime refuses the addition (instead of replacing) when the class has the method.
+    let added = unsafe {
+        let types = ffi::method_getTypeEncoding(method);
+        ffi::class_addMethod(
+            ptr::from_ref(target).cast_mut(),
+            selector,
+            method.implementation(),
+            types,
+        )
+    };
+    if added.as_bool() {
+        Ok(())
+    } else {
+        Err(InstallError::AlreadyImplemented(selector.to_string()))
+    }
+}
+
+/// Key of the tag association; only its address matters.
+static TAG_KEY: u8 = 0;
+
+/// Attaches `tag` to the webview; the [`DialogRequest`]s of its pages carry it. The tag lives
+/// as long as the webview.
+pub fn tag_webview(webview: &PlatformWebview, tag: &str) {
+    let object: *mut AnyObject = webview.inner().cast();
+    let value = NSString::from_str(tag);
+    // SAFETY: `inner()` is the `WKWebView` Tauri built for this webview, alive while `webview`
+    // is borrowed; the association retains `value`, so the string lives as long as the web view,
+    // and the static key is unique to this crate.
+    unsafe {
+        ffi::objc_setAssociatedObject(
+            object,
+            ptr::from_ref(&TAG_KEY).cast(),
+            Retained::as_ptr(&value).cast_mut().cast(),
+            ffi::OBJC_ASSOCIATION_RETAIN,
+        );
+    }
+}
+
+fn tag_of(webview: &WKWebView) -> Option<String> {
+    // SAFETY: looks up the association `tag_webview` made on this live web view; the runtime
+    // returns null or the `NSString` stored there, which the web view keeps alive.
+    let value = unsafe {
+        ffi::objc_getAssociatedObject(
+            ptr::from_ref(webview).cast(),
+            ptr::from_ref(&TAG_KEY).cast(),
+        )
+    };
+    // SAFETY: non-null values are the `NSString` stored by `tag_webview` (see above).
+    unsafe { value.cast::<NSString>().as_ref() }.map(ToString::to_string)
+}
+
+extern "C-unwind" fn run_alert_panel(
+    _this: &AnyObject,
+    _cmd: Sel,
+    webview: &WKWebView,
+    message: &NSString,
+    frame: &WKFrameInfo,
+    completion: &DynBlock<dyn Fn()>,
+) {
+    let completion = completion.copy();
+    run_panel(webview, frame, DialogKind::Alert, message, move |_| {
+        completion.call(());
+    });
+}
+
+extern "C-unwind" fn run_confirm_panel(
+    _this: &AnyObject,
+    _cmd: Sel,
+    webview: &WKWebView,
+    message: &NSString,
+    frame: &WKFrameInfo,
+    completion: &DynBlock<dyn Fn(Bool)>,
+) {
+    let completion = completion.copy();
+    run_panel(
+        webview,
+        frame,
+        DialogKind::Confirm,
+        message,
+        move |answer| {
+            completion.call((Bool::new(answer == DialogAnswer::Confirmed),));
+        },
+    );
+}
+
+extern "C-unwind" fn run_prompt_panel(
+    _this: &AnyObject,
+    _cmd: Sel,
+    webview: &WKWebView,
+    prompt: &NSString,
+    default_text: Option<&NSString>,
+    frame: &WKFrameInfo,
+    completion: &DynBlock<dyn Fn(*mut NSString)>,
+) {
+    let completion = completion.copy();
+    let kind = DialogKind::Prompt {
+        default_text: default_text.map_or_default(ToString::to_string),
+    };
+    run_panel(webview, frame, kind, prompt, move |answer| match answer {
+        DialogAnswer::Text(text) => {
+            // WebKit copies the string during the call.
+            let text = NSString::from_str(&text);
+            completion.call((Retained::as_ptr(&text).cast_mut(),));
+        }
+        DialogAnswer::Cancelled | DialogAnswer::Confirmed => completion.call((null_mut(),)),
+    });
+}
+
+/// Asks the handler, shows the panel as a sheet on the webview's window (app-modal without one)
+/// and calls `finish` exactly once with the answer.
+fn run_panel(
+    webview: &WKWebView,
+    frame: &WKFrameInfo,
+    kind: DialogKind,
+    message: &NSString,
+    finish: impl FnOnce(DialogAnswer) + 'static,
+) {
+    let completion = Completion::new(finish);
+    // Dropping `completion` unanswered gives WebKit the default answer.
+    let (Some(mtm), Some(handler)) = (MainThreadMarker::new(), HANDLER.get()) else {
+        return;
+    };
+    let request = DialogRequest {
+        kind,
+        message: message.to_string(),
+        origin: page_origin(frame),
+        webview_tag: tag_of(webview),
+    };
+    let Presentation::Show(text) = handler.present(&request) else {
+        return;
+    };
+    let (alert, controls) = build_alert(mtm, &request.kind, &text);
+    let handler = handler.clone();
+    let answered = move |response: NSModalResponse| {
+        let (answer, suppress_further) = controls.answer(response);
+        handler.answered(&request, &answer, suppress_further);
+        completion.answer(answer);
+    };
+    match webview.window() {
+        Some(window) => {
+            let block = RcBlock::new(answered);
+            alert.beginSheetModalForWindow_completionHandler(&window, Some(&block));
+        }
+        None => answered(alert.runModal()),
+    }
+}
+
+fn page_origin(frame: &WKFrameInfo) -> PageOrigin {
+    // SAFETY: WebKit hands over a live frame on the main thread; the accessors are plain
+    // property reads that objc2 only marks unsafe because it cannot check their nullability.
+    let (host, port) = unsafe {
+        let origin = frame.securityOrigin();
+        (origin.host().to_string(), origin.port())
+    };
+    PageOrigin {
+        host,
+        port: u16::try_from(port).unwrap_or(0),
+    }
+}
+
+/// The alert's controls whose state makes up the answer. Kept apart from the alert itself: the
+/// sheet's completion block must not retain the alert, which retains the block.
+struct PanelControls {
+    text_field: Option<Retained<NSTextField>>,
+    suppression_button: Option<Retained<NSButton>>,
+}
+
+impl PanelControls {
+    fn answer(&self, response: NSModalResponse) -> (DialogAnswer, bool) {
+        let suppress_further = self
+            .suppression_button
+            .as_ref()
+            .is_some_and(|button| button.state() == NSControlStateValueOn);
+        let answer = if response == NSAlertFirstButtonReturn {
+            match &self.text_field {
+                Some(field) => DialogAnswer::Text(field.stringValue().to_string()),
+                None => DialogAnswer::Confirmed,
+            }
+        } else {
+            DialogAnswer::Cancelled
+        };
+        (answer, suppress_further)
+    }
+}
+
+fn build_alert(
+    mtm: MainThreadMarker,
+    kind: &DialogKind,
+    text: &DialogText,
+) -> (Retained<NSAlert>, PanelControls) {
+    let alert = NSAlert::new(mtm);
+    alert.setMessageText(&NSString::from_str(&text.title));
+    alert.setInformativeText(&NSString::from_str(&text.message));
+    let _ok_button = alert.addButtonWithTitle(&NSString::from_str("OK"));
+    if *kind != DialogKind::Alert {
+        let _cancel_button = alert.addButtonWithTitle(&NSString::from_str("Cancel"));
+    }
+    let text_field = match kind {
+        DialogKind::Prompt { default_text } => Some(add_text_field(&alert, default_text, mtm)),
+        DialogKind::Alert | DialogKind::Confirm => None,
+    };
+    let suppression_button = text.offer_suppression.then(|| {
+        alert.setShowsSuppressionButton(true);
+        alert.suppressionButton()
+    });
+    let suppression_button = suppression_button.flatten();
+    if let Some(button) = &suppression_button {
+        button.setTitle(&NSString::from_str(SUPPRESSION_TITLE));
+    }
+    (
+        alert,
+        PanelControls {
+            text_field,
+            suppression_button,
+        },
+    )
+}
+
+fn add_text_field(
+    alert: &NSAlert,
+    default_text: &str,
+    mtm: MainThreadMarker,
+) -> Retained<NSTextField> {
+    let field = NSTextField::textFieldWithString(&NSString::from_str(default_text), mtm);
+    field.setFrame(NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(PROMPT_FIELD_SIZE.0, PROMPT_FIELD_SIZE.1),
+    ));
+    alert.setAccessoryView(Some(&field));
+    // Typing should start right away, as in a browser.
+    alert.layout();
+    alert.window().setInitialFirstResponder(Some(&field));
+    field
+}
+
+/// Answers `WebKit` exactly once: with the dialog's answer, or with the default when dropped
+/// unanswered (the sheet's window closed before the user answered).
+struct Completion {
+    finish: RefCell<Option<Finish>>,
+}
+
+type Finish = Box<dyn FnOnce(DialogAnswer)>;
+
+impl Completion {
+    fn new(finish: impl FnOnce(DialogAnswer) + 'static) -> Completion {
+        Completion {
+            finish: RefCell::new(Some(Box::new(finish))),
+        }
+    }
+
+    fn answer(&self, answer: DialogAnswer) {
+        let finish = self.finish.borrow_mut().take();
+        if let Some(finish) = finish {
+            finish(answer);
+        }
+    }
+}
+
+impl Drop for Completion {
+    fn drop(&mut self) {
+        if let Some(finish) = self.finish.get_mut().take() {
+            finish(DialogAnswer::Cancelled);
+        }
+    }
+}

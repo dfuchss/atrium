@@ -1,0 +1,59 @@
+[package]
+name = "macos-dialogs"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description.workspace = true
+
+[dependencies]
+tauri.workspace = true
+block2 = "0.6"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSObject", "NSString"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "NSAlert",
+    "NSApplication",
+    "NSButton",
+    "NSCell",
+    "NSControl",
+    "NSResponder",
+    "NSTextField",
+    "NSView",
+    "NSWindow",
+] }
+objc2-web-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "objc2-app-kit",
+    "WKFrameInfo",
+    "WKSecurityOrigin",
+    "WKUIDelegate",
+    "WKWebView",
+] }
+
+# The workspace lints, except that `unsafe_code` is allowed: this crate talks to the
+# Objective-C runtime and AppKit, which no safe binding covers. Keep it in sync with the
+# workspace table in the root Cargo.toml.
+[lints.rust]
+unused = { level = "deny", priority = -1 }
+dead_code = "deny"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cognitive_complexity = "warn"
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+unwrap_used = "deny"
+undocumented_unsafe_blocks = "deny"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"

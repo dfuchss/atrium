@@ -35,3 +35,4 @@ First release.
 - Site icons are fetched only over https from the page's or service's own hosts
 - Your account list is stored readable by you only
 - If your saved accounts can't be read, Atrium starts read-only and leaves them untouched
+- Removing an account also closes its popup windows before its data is deleted

@@ -16,7 +16,7 @@ use tauri::{
 };
 use uuid::Uuid;
 
-use crate::links::{LinkPolicy, navigation_hook, permission_hook};
+use crate::links::{LinkPolicy, navigation_hook, permission_hook, popup_label_prefix};
 use crate::{Feed, Input, Logger, TauriHost, port_err};
 
 /// Time `WebKit` gets to delete the browsing data before the view reloads.
@@ -29,6 +29,46 @@ const REMOVE_STORE_RETRY_DELAYS: [Duration; 3] = [
     Duration::from_secs(5),
     Duration::from_secs(30),
 ];
+
+/// Longest wait for the views and windows of a removed account to disappear before its data
+/// store is deleted anyway (the retries below may still cover a slow close).
+const ACCOUNT_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
+const ACCOUNT_CLOSE_POLL: Duration = Duration::from_millis(100);
+
+/// True if `label` is the service view or an in-app window of `account`.
+fn belongs_to_account(label: &str, account: Uuid) -> bool {
+    label == view_label(account) || label.starts_with(&popup_label_prefix(account))
+}
+
+/// Labels of the in-app (popup and app) windows `account` currently has.
+fn popup_labels<R: Runtime>(app: &AppHandle<R>, account: Uuid) -> Vec<String> {
+    let prefix = popup_label_prefix(account);
+    app.webview_windows()
+        .into_keys()
+        .filter(|label| label.starts_with(&prefix))
+        .collect()
+}
+
+/// Blocks until no view or window of `account` remains, for at most [`ACCOUNT_CLOSE_TIMEOUT`]:
+/// `WebKit` refuses to delete a data store that a live page still uses.
+fn wait_until_account_closed<R: Runtime>(app: &AppHandle<R>, account: Uuid, logger: &Logger) {
+    let mut waited = Duration::ZERO;
+    while app
+        .webviews()
+        .keys()
+        .any(|label| belongs_to_account(label, account))
+    {
+        if waited >= ACCOUNT_CLOSE_TIMEOUT {
+            logger.log(&format!(
+                "[{account}] views or windows still open after {} s, deleting data anyway",
+                waited.as_secs()
+            ));
+            return;
+        }
+        std::thread::sleep(ACCOUNT_CLOSE_POLL);
+        waited += ACCOUNT_CLOSE_POLL;
+    }
+}
 
 /// Deletes the data store `store_id`, retrying after [`REMOVE_STORE_RETRY_DELAYS`]. Blocks, so
 /// it runs on a thread of its own, never on the actor or the main thread.
@@ -270,6 +310,13 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
     }
 
     fn destroy(&self, account: Uuid) -> PortResult {
+        // The windows share the account's data store and login: they go with the view.
+        for label in popup_labels(&self.app, account) {
+            if let Some(window) = self.app.get_webview_window(&label) {
+                // Already closing is fine; the view's own result is what matters.
+                let _ = window.close();
+            }
+        }
         self.webview(account)?.close().map_err(port_err)
     }
 
@@ -341,7 +388,10 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
 
     fn delete_profile(&self, store_id: [u8; 16]) -> PortResult {
         let (app, logger) = (self.app.clone(), self.logger.clone());
+        // A data store id is its account's id.
+        let account = Uuid::from_bytes(store_id);
         spawn_logged("remove-store", &self.logger, move || {
+            wait_until_account_closed(&app, account, &logger);
             remove_data_store_with_retries(&app, store_id, &logger);
         });
         Ok(())
@@ -391,6 +441,22 @@ mod tests {
         );
         assert_eq!(download_file_name(Path::new("/tmp/.zshrc")), None);
         assert_eq!(download_file_name(Path::new(".hidden")), None);
+    }
+
+    #[test]
+    fn account_labels_do_not_match_other_accounts() {
+        let (first, second) = (Uuid::from_u128(1), Uuid::from_u128(2));
+        assert!(belongs_to_account(&view_label(first), first));
+        assert!(belongs_to_account(
+            &crate::links::popup_label(first, 7),
+            first
+        ));
+        assert!(!belongs_to_account(&view_label(second), first));
+        assert!(!belongs_to_account(
+            &crate::links::popup_label(second, 7),
+            first
+        ));
+        assert!(!belongs_to_account("ui", first));
     }
 
     #[test]

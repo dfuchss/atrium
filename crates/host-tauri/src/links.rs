@@ -59,7 +59,13 @@ const CLOSE_HOOK: &str = "(()=>{if(window.__msgrCloseHook)return;window.__msgrCl
 
 /// Label of an in-app window opened by `account`'s view.
 pub(crate) fn popup_label(account: Uuid, number: u64) -> String {
-    format!("popup-{}-{number}", account.simple())
+    format!("{}{number}", popup_label_prefix(account))
+}
+
+/// Start of the labels of all in-app windows of `account` (the trailing dash keeps it from
+/// matching another account).
+pub(crate) fn popup_label_prefix(account: Uuid) -> String {
+    format!("popup-{}-", account.simple())
 }
 
 /// Camera, microphone and screen capture are granted only with `media_allowed`, else denied;

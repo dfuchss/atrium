@@ -156,7 +156,6 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 | `app/src-tauri` | Composition root: window, actor thread, Tauri commands. |
 | `app/ui` | Sidebar and settings in [Leptos](https://leptos.dev/) (CSR, built with Trunk). |
 | `services/*.toml` | Built-in service definitions. |
-| `spikes/multiwebview` | The phase-0 feasibility spike (see `docs/spikes.md`). |
 
 The web engine sits behind the `WebviewHost` port, so a Chromium (CEF) backend can be added later without touching the core.
 
@@ -188,8 +187,6 @@ Debug builds (`cargo tauri dev`, `cargo tauri build --debug`) read these environ
 
 `scripts/screenshots.sh` takes the README screenshots in `docs/screenshots/` with demo data only. It runs a throwaway Matrix homeserver (tuwunel) and Element web in Docker, seeds demo users and chats, builds a debug bundle with its own bundle id `org.fuchss.atrium.demo` into `target/screenshots`, and starts it with the variables above and a temporary config folder. The own bundle id keeps the demo's WebKit data, logs, caches and WebCrypto Keychain item apart from a regular installation (sharing `org.fuchss.atrium` would make macOS ask for access to its Keychain item). At the end it removes the containers, the temporary folder and everything stored under `org.fuchss.atrium.demo`, including its Keychain item. It needs Docker, ImageMagick (`magick`), free ports 8008 and 8080, and Screen Recording permission for the terminal.
 
-
-Planned work is tracked in [`docs/backlog.md`](docs/backlog.md): an auto-updater, signed releases, an in-app TOML editor, a Chromium engine and more.
 
 ## License
 

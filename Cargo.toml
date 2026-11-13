@@ -3,7 +3,6 @@ resolver = "3"
 members = ["crates/protocol", "crates/domain", "crates/store-fs", "crates/host-tauri", "app/src-tauri", "app/ui"]
 # app/ui is a wasm crate built by Trunk; keep it out of plain `cargo build/test`.
 default-members = ["crates/protocol", "crates/domain", "crates/store-fs", "crates/host-tauri", "app/src-tauri"]
-exclude = ["spikes"]
 
 [workspace.package]
 edition = "2024"

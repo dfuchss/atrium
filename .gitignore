@@ -1,8 +1,5 @@
 /target/
 **/target/
-spikes/multiwebview/spike.log
-spikes/multiwebview/run.out
-spikes/multiwebview/gen/
 .DS_Store
 app/ui/dist/
 app/src-tauri/gen/

@@ -171,14 +171,20 @@ impl Core {
         ]
     }
 
-    pub(super) fn notification_clicked(&mut self, account_id: Uuid, shim_id: u64) -> Vec<Effect> {
+    pub(super) fn notification_clicked(
+        &mut self,
+        account_id: Uuid,
+        shim_id: Option<u64>,
+    ) -> Vec<Effect> {
         let mut effects = self.select(account_id);
         if self.has_account(account_id) && self.is_loaded(account_id) {
             effects.push(Effect::FocusWindow);
-            effects.push(Effect::Eval {
-                account: account_id,
-                script: scripts::notification_click_script(shim_id),
-            });
+            if let Some(shim_id) = shim_id {
+                effects.push(Effect::Eval {
+                    account: account_id,
+                    script: scripts::notification_click_script(shim_id),
+                });
+            }
         }
         effects
     }

@@ -23,13 +23,13 @@ const MAX_TRACKED_NOTIFICATIONS: u16 = 512;
 #[derive(Default)]
 pub(crate) struct NotificationTargets {
     last_id: i32,
-    /// Native notification id -> (account, shim id).
-    targets: HashMap<i32, (Uuid, u64)>,
+    /// Native notification id -> (account, shim id if the page sent it).
+    targets: HashMap<i32, (Uuid, Option<u64>)>,
 }
 
 impl NotificationTargets {
     /// Assigns the next native id to the notification `shim_id` of `account`.
-    fn track(&mut self, account: Uuid, shim_id: u64) -> i32 {
+    fn track(&mut self, account: Uuid, shim_id: Option<u64>) -> i32 {
         self.last_id = self.last_id.checked_add(1).unwrap_or(1);
         let native_id = self.last_id;
         self.targets.insert(native_id, (account, shim_id));
@@ -40,7 +40,7 @@ impl NotificationTargets {
         native_id
     }
 
-    fn target(&self, native_id: i32) -> Option<(Uuid, u64)> {
+    fn target(&self, native_id: i32) -> Option<(Uuid, Option<u64>)> {
         self.targets.get(&native_id).copied()
     }
 }
@@ -102,10 +102,10 @@ mod tests {
     fn tracks_the_latest_notifications_only() {
         let mut targets = NotificationTargets::default();
         let account = Uuid::from_u128(1);
-        let first = targets.track(account, 10);
-        assert_eq!(targets.target(first), Some((account, 10)));
+        let first = targets.track(account, Some(10));
+        assert_eq!(targets.target(first), Some((account, Some(10))));
         for shim_id in 0..u64::from(MAX_TRACKED_NOTIFICATIONS) {
-            targets.track(account, shim_id);
+            targets.track(account, Some(shim_id));
         }
         assert_eq!(targets.target(first), None);
         assert_eq!(
@@ -120,6 +120,6 @@ mod tests {
             last_id: i32::MAX,
             ..NotificationTargets::default()
         };
-        assert_eq!(targets.track(Uuid::from_u128(1), 1), 1);
+        assert_eq!(targets.track(Uuid::from_u128(1), None), 1);
     }
 }

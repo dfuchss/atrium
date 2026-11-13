@@ -118,7 +118,7 @@ fn notification_click() {
     let (mut core, _) = started(vec![account(1, "slack", "Slack"), account(2, "slack", "B")]);
     let effects = core.handle(Input::NotificationClicked {
         account: id(2),
-        shim_id: 5,
+        shim_id: Some(5),
     });
     let sel = core.handle(Input::Ui(UiCommand::Select { account: id(1) }));
     assert!(effects.contains(&Effect::Hide(id(1))) && effects.contains(&Effect::Show(id(2))));

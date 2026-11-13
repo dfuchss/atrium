@@ -141,6 +141,9 @@ impl Core {
             Input::NotificationClicked { account, shim_id } => {
                 self.notification_clicked(account, shim_id)
             }
+            Input::DownloadFinished { account, file_name } => {
+                self.download_finished(account, &file_name)
+            }
             Input::WindowResized { width, height } => {
                 self.window_resized(WindowSize { width, height })
             }

@@ -7,5 +7,7 @@
 	<string>Messenger services use the microphone for calls and voice messages.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Messenger services use the camera for video calls.</string>
+	<key>LSFileQuarantineEnabled</key>
+	<true/>
 </dict>
 </plist>

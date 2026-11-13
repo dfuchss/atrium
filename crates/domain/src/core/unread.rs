@@ -242,7 +242,7 @@ impl Core {
             .map(|notification| {
                 Effect::Notify(NotificationReq {
                     account: account_id,
-                    shim_id: notification.id,
+                    shim_id: Some(notification.id),
                     title: format!("{prefix}: {}", notification.title),
                     body: if settings.notification_preview {
                         notification.body.unwrap_or_default()
@@ -253,6 +253,29 @@ impl Core {
                 })
             })
             .collect()
+    }
+
+    /// Tells the user that a download of the account landed in the Downloads folder (the
+    /// page cannot show it); silent under Do Not Disturb.
+    pub(super) fn download_finished(&self, account_id: Uuid, file_name: &str) -> Vec<Effect> {
+        let Some(account) = self.account(account_id) else {
+            return vec![Self::unknown(account_id)];
+        };
+        let settings = self.settings();
+        if settings.dnd {
+            return vec![];
+        }
+        let service_name = self
+            .catalog
+            .get(&account.service)
+            .map_or(account.service.as_str(), |service| service.name.as_str());
+        vec![Effect::Notify(NotificationReq {
+            account: account_id,
+            shim_id: None,
+            title: format!("Downloaded {file_name}"),
+            body: notification_prefix(service_name, &account.label),
+            sound: settings.notification_sound,
+        })]
     }
 
     /// A polled value wins over the title; without one the title-derived unread applies again.

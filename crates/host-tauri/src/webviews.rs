@@ -1,6 +1,8 @@
 //! Service views: one child webview per account in the main window, with its native hooks.
 
-use std::sync::{Arc, PoisonError};
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use domain::ports::{PortError, PortResult, WebviewHost};
@@ -9,12 +11,13 @@ use protocol::UI_WEBVIEW;
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder, WebviewUrl,
+    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, Webview, WebviewBuilder,
+    WebviewUrl,
 };
 use uuid::Uuid;
 
 use crate::links::{LinkPolicy, navigation_hook, permission_hook};
-use crate::{Input, Logger, TauriHost, port_err};
+use crate::{Feed, Input, Logger, TauriHost, port_err};
 
 /// Time `WebKit` gets to delete the browsing data before the view reloads.
 const CLEAR_DATA_RELOAD_DELAY: Duration = Duration::from_millis(800);
@@ -33,36 +36,64 @@ fn place<R: Runtime>(webview: &Webview<R>, bounds: Bounds) -> PortResult {
         .map_err(port_err)
 }
 
-/// Download handler: saves into the user's Downloads folder and logs.
+/// Name a download is saved under: the file name the page suggested, or None for hidden
+/// (dot) files, which would land unseen in Downloads (e.g. `.zshrc`, `.htaccess`).
+fn download_file_name(suggested: &Path) -> Option<String> {
+    let name = suggested.file_name().map_or_else(
+        || "download".into(),
+        |name| name.to_string_lossy().into_owned(),
+    );
+    (!name.starts_with('.')).then_some(name)
+}
+
+/// Download handler: saves into the user's Downloads folder (quarantined by macOS, see
+/// `LSFileQuarantineEnabled` in Info.plist), refuses hidden files and reports finished
+/// downloads as [`Input::DownloadFinished`]. On macOS `Finished` carries no path, so the name
+/// is remembered per URL from `Requested`.
 fn download_hook<R: Runtime>(
     app: AppHandle<R>,
     account: Uuid,
     logger: Logger,
+    feed: Feed,
 ) -> impl Fn(Webview<R>, DownloadEvent<'_>) -> bool + Send + Sync + 'static {
-    move |_, event| {
-        match event {
-            DownloadEvent::Requested { url, destination } => {
-                let name = destination
-                    .file_name()
-                    .map_or_else(|| "download".into(), ToOwned::to_owned);
-                if let Ok(dir) = app.path().download_dir() {
-                    *destination = dir.join(name);
-                }
+    let pending: Mutex<HashMap<Url, String>> = Mutex::default();
+    move |_, event| match event {
+        DownloadEvent::Requested { url, destination } => {
+            let shown_url = redact_url(url.as_str());
+            let Some(name) = download_file_name(destination) else {
                 logger.log(&format!(
-                    "[{account}] download {} -> {}",
-                    redact_url(url.as_str()),
-                    destination.display()
+                    "[{account}] download {shown_url} refused: hidden file name"
                 ));
+                return false;
+            };
+            if let Ok(dir) = app.path().download_dir() {
+                *destination = dir.join(&name);
             }
-            DownloadEvent::Finished { url, path, success } => {
-                logger.log(&format!(
-                    "[{account}] download finished {} {path:?} ok={success}",
-                    redact_url(url.as_str())
-                ));
-            }
-            _ => {}
+            logger.log(&format!(
+                "[{account}] download {shown_url} -> {}",
+                destination.display()
+            ));
+            pending
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .insert(url, name);
+            true
         }
-        true
+        DownloadEvent::Finished { url, success, .. } => {
+            logger.log(&format!(
+                "[{account}] download finished {} ok={success}",
+                redact_url(url.as_str())
+            ));
+            let name = pending
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .remove(&url);
+            if let (true, Some(file_name)) = (success, name) {
+                feed(Input::DownloadFinished { account, file_name });
+            }
+            true
+        }
+        _ => true,
     }
 }
 
@@ -125,6 +156,7 @@ impl<R: Runtime> TauriHost<R> {
                 self.app.clone(),
                 account,
                 self.logger.clone(),
+                self.feed.clone(),
             ))
             .on_permission_request(permission_hook(
                 shared_spec,
@@ -270,6 +302,20 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hidden_downloads_are_refused() {
+        assert_eq!(
+            download_file_name(Path::new("/tmp/report.pdf")).as_deref(),
+            Some("report.pdf")
+        );
+        assert_eq!(
+            download_file_name(Path::new("/")).as_deref(),
+            Some("download")
+        );
+        assert_eq!(download_file_name(Path::new("/tmp/.zshrc")), None);
+        assert_eq!(download_file_name(Path::new(".hidden")), None);
+    }
 
     #[test]
     fn view_label_uses_simple_uuid() {

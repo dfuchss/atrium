@@ -62,8 +62,9 @@ impl ViewSpec {
 #[derive(Debug, Clone, PartialEq)]
 pub struct NotificationReq {
     pub account: Uuid,
-    /// Id assigned by the shim in the page; passed back on click.
-    pub shim_id: u64,
+    /// Id assigned by the shim in the page, passed back on click; None for notifications of
+    /// the app itself (finished downloads).
+    pub shim_id: Option<u64>,
     /// Already prefixed with the account name, e.g. "Slack (KIT): Alice".
     pub title: String,
     /// The message text, or "New message" when previews are off.
@@ -165,7 +166,12 @@ pub enum Input {
     },
     NotificationClicked {
         account: Uuid,
-        shim_id: u64,
+        shim_id: Option<u64>,
+    },
+    /// A download of the account's view was saved (`file_name` in the Downloads folder).
+    DownloadFinished {
+        account: Uuid,
+        file_name: String,
     },
     /// Window content size in logical pixels.
     WindowResized {

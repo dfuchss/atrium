@@ -49,7 +49,7 @@ fn poll_notifies_with_prefix() {
     assert_eq!(n.len(), 1);
     assert_eq!(
         (n[0].shim_id, n[0].title.as_str(), n[0].body.as_str()),
-        (7, "Slack (KIT): Alice", "hi")
+        (Some(7), "Slack (KIT): Alice", "hi")
     );
     let effects = core.handle(Input::PollResult {
         account: id(2),
@@ -316,4 +316,40 @@ fn page_titles_are_logged_only_when_enabled() {
             .iter()
             .any(|line| line.contains("Secret chat"))
     );
+}
+
+#[test]
+fn finished_download_notifies_without_page_click() {
+    let (mut core, _) = started(vec![account(1, "slack", "KIT")]);
+    let downloaded = |core: &mut Core| {
+        core.handle(Input::DownloadFinished {
+            account: id(1),
+            file_name: "report.pdf".into(),
+        })
+    };
+    let effects = downloaded(&mut core);
+    let notifications = notifies(&effects);
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(
+        (
+            notifications[0].shim_id,
+            notifications[0].title.as_str(),
+            notifications[0].body.as_str()
+        ),
+        (None, "Downloaded report.pdf", "Slack (KIT)")
+    );
+
+    let clicked = core.handle(Input::NotificationClicked {
+        account: id(1),
+        shim_id: None,
+    });
+    assert!(clicked.contains(&Effect::FocusWindow));
+    assert!(
+        !clicked
+            .iter()
+            .any(|effect| matches!(effect, Effect::Eval { .. }))
+    );
+
+    core.handle(Input::Ui(UiCommand::SetDnd { enabled: true }));
+    assert!(notifies(&downloaded(&mut core)).is_empty());
 }

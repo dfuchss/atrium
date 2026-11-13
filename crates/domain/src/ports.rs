@@ -59,6 +59,12 @@ pub trait Platform: Send + Sync {
     fn open_external(&self, url: &str, browser: Option<&str>) -> PortResult;
     /// Applies OS-level settings (launch at login, ...); must be idempotent.
     fn apply_system_settings(&self, settings: &AppSettings) -> PortResult;
+    /// Creates `<config>/services/` (with a README and an example if it holds no definitions)
+    /// and shows it in the file manager.
+    fn open_services_folder(&self) -> PortResult;
+    /// Re-reads `<config>/services/*.toml` in the background; the adapter later sends
+    /// `Input::ServicesLoaded`.
+    fn load_services(&self) -> PortResult;
     fn focus_window(&self) -> PortResult;
     /// Downloads an icon in the background; the adapter later sends `Input::IconFetched`.
     fn fetch_icon(&self, account: Uuid, url: &str) -> PortResult;

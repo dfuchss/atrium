@@ -4,7 +4,6 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -70,35 +69,6 @@ fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64)
-}
-
-/// Built-in services plus user definitions from `<config>/services/*.toml` (overriding by id).
-/// The core adds the custom services stored in `accounts.json` on top.
-fn load_catalog(config_dir: &Path, log: &dyn Platform) -> Catalog {
-    let mut catalog = Catalog::builtin();
-    let Ok(entries) = std::fs::read_dir(config_dir.join("services")) else {
-        return catalog;
-    };
-    let mut paths: Vec<_> = entries
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|ext| ext == "toml"))
-        .collect();
-    paths.sort();
-    for path in paths {
-        let source = path.display().to_string();
-        match std::fs::read_to_string(&path) {
-            Ok(text) => match Catalog::parse(&source, &text) {
-                Ok(def) => {
-                    log.log(&format!("loaded service {:?} from {source}", def.id));
-                    catalog.insert(def);
-                }
-                Err(e) => log.log(&format!("invalid service definition: {e}")),
-            },
-            Err(e) => log.log(&format!("cannot read {source}: {e}")),
-        }
-    }
-    catalog
 }
 
 /// Owns the core; never returns while the channel is open.
@@ -169,12 +139,14 @@ fn main() {
             let config_dir = app.path().app_config_dir()?;
             let store = FsStore::new(config_dir.clone());
             let persisted = load_persisted(&store, &host);
-            let catalog = load_catalog(&config_dir, &host);
+            let services_dir = config_dir.join("services");
+            let (user_defs, user_errors) = host_tauri::services::read_user_services(&services_dir);
             host.log(&format!(
-                "config {}, {} accounts, {} services",
+                "config {}, {} accounts, {} user services, {} service errors",
                 config_dir.display(),
                 persisted.accounts.len(),
-                catalog.services().len()
+                user_defs.len(),
+                user_errors.len()
             ));
 
             // Transparent title bar without a title: it shows the window background (the
@@ -203,10 +175,12 @@ fn main() {
                 ),
             )?;
 
-            let mut core = Core::new(catalog, persisted, Box::new(uuid::Uuid::new_v4));
+            let mut core = Core::new(Catalog::builtin(), persisted, Box::new(uuid::Uuid::new_v4));
+            core.set_user_services(user_defs, user_errors);
             core.set_app_info(AppInfo {
                 version,
                 config_dir: config_dir.display().to_string(),
+                services_dir: services_dir.display().to_string(),
                 log_file: host
                     .log_file()
                     .map(|p| p.display().to_string())

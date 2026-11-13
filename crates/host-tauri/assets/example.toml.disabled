@@ -1,0 +1,57 @@
+# Example service definition. This file is ignored because it does not end in ".toml".
+# To use it: copy it to e.g. "myservice.toml", edit it, and click "Reload" in Settings.
+#
+# A file whose `id` equals a built-in service (slack, element, mastodon, discord,
+# linkedin, rainbow) overrides that built-in.
+#
+# Everything is commented out. Remove the leading "#! " or "# " of the lines you want to use.
+# The lines starting with "#!" are the minimal working definition; lines starting with "# "
+# that hold a field are optional ones.
+
+# Unique id (required). Never change it once accounts use it.
+#! id = "example"
+
+# Name shown in the "Add account" list and used as default account label (required).
+#! name = "Example Chat"
+
+# Sidebar color, CSS hex (required).
+#! color = "#3B82F6"
+
+# Start page (required). {team} is replaced by the "team" value the user enters when adding
+# an account (workspace, instance host, ...).
+#! url = "https://{team}/"
+
+# Asks for a team value when adding an account; the text is the label of the input field.
+# team_label = "Server"
+
+# Default for the team value, used when the user leaves it empty.
+# team_default = "chat.example.org"
+
+# Browser identity: "safari", "chrome", "default" (the web view's own) or a literal
+# User-Agent string. Some sites reject the default.
+# user_agent = "safari"
+
+# Hosts that belong to the service (diagnostics and pop-up handling). "*." matches the
+# domain and all subdomains; {team} is substituted.
+# internal_hosts = ["{team}", "*.example.org"]
+
+# Grant camera, microphone and screen capture to the service (call apps). Default false.
+# Accounts can override it in their own settings.
+# allow_media = true
+
+# localStorage keys removed before the page's own scripts run, e.g. stale single-instance
+# session locks left behind when the app was quit without unloading the page.
+# clear_local_storage = ["session_lock_owner"]
+
+# How unread messages are detected. All entries are optional.
+#! [unread]
+# Regular expression on the page title; capture group 1 is the direct unread count
+# (mentions, direct messages). Example title: "(3) Example Chat".
+#! title_regex = '^\((\d+)\)'
+
+# Regular expression on the page title; a match shows an indirect unread dot.
+# title_indirect_regex = '^\*'
+
+# JavaScript expression evaluated in the page about once a minute. Returns a number (direct
+# unread count) or an object {direct, indirect}. Use it when the title carries no count.
+# poll = "document.querySelectorAll('.unread').length"

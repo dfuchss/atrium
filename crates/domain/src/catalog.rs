@@ -137,6 +137,19 @@ impl Catalog {
         Ok(def)
     }
 
+    /// Parses the user's definition files, given as `(source, text)` in the order they are
+    /// applied (later files win). Invalid files are skipped and reported as messages.
+    pub fn parse_user_files(files: &[(String, String)]) -> (Vec<ServiceDef>, Vec<String>) {
+        let (mut defs, mut errors) = (vec![], vec![]);
+        for (source, text) in files {
+            match Catalog::parse(source, text) {
+                Ok(def) => defs.push(def),
+                Err(e) => errors.push(format!("invalid service definition: {e}")),
+            }
+        }
+        (defs, errors)
+    }
+
     /// Adds or replaces (same id) a definition.
     pub fn insert(&mut self, def: ServiceDef) {
         match self.services.iter_mut().find(|s| s.id == def.id) {

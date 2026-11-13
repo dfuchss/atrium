@@ -197,8 +197,10 @@ fn demo_snapshot() -> Snapshot {
         custom_services: vec![custom],
         dialog_open: false,
         settings: AppSettings::default(),
+        service_errors: vec![],
         app: AppInfo {
             version: "0.1.0-demo".into(),
+            services_dir: "~/Library/Application Support/messengers/services".into(),
             config_dir: "~/Library/Application Support/messengers".into(),
             log_file: "~/Library/Logs/messengers/messengers.log".into(),
         },
@@ -1594,6 +1596,26 @@ fn CustomTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
         {move || match form.get() {
             None => view! { <button class="btn primary" on:click=move |_| form.set(Some(None))>"Add custom service\u{2026}"</button> }.into_any(),
             Some(existing) => view! { <CustomForm snap=snap existing=existing form=form /> }.into_any(),
+        }}
+        <h2>"Service definition files"</h2>
+        <p class="note">"Edit or add TOML files here for full control (same format as the built-in services). A file with the same id as a built-in service overrides it. Click Reload to apply."</p>
+        <div class="form">
+            <Row label="Folder"><code>{move || snap.with(|s| s.app.services_dir.clone())}</code></Row>
+            <Row label="">
+                <div class="actions">
+                    <button class="btn" on:click=move |_| cmd(UiCommand::OpenServicesFolder)>"Open folder"</button>
+                    <button class="btn" on:click=move |_| cmd(UiCommand::ReloadServices)>"Reload"</button>
+                </div>
+            </Row>
+        </div>
+        {move || {
+            let errors = snap.with(|s| s.service_errors.clone());
+            (!errors.is_empty()).then(|| view! {
+                <div class="note error">
+                    <For each=move || errors.clone().into_iter().enumerate() key=|(i, e)| (*i, e.clone())
+                        children=|(_, e)| view! { <div><code>{e}</code></div> } />
+                </div>
+            })
         }}
     }
 }

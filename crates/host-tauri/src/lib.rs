@@ -17,6 +17,7 @@
 mod icons;
 pub mod links;
 pub mod menus;
+pub mod services;
 
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -155,6 +156,15 @@ impl<R: Runtime> TauriHost<R> {
         };
         host.register_notification_clicks();
         host
+    }
+
+    /// `<app_config_dir>/services`, the user's service definition files.
+    fn services_dir(&self) -> PortResult<PathBuf> {
+        self.app
+            .path()
+            .app_config_dir()
+            .map(|d| d.join("services"))
+            .map_err(port_err)
     }
 
     /// File the host logger appends to (`<app_log_dir>/messengers.log`), if available.
@@ -482,6 +492,22 @@ impl<R: Runtime> Platform for TauriHost<R> {
                 settings.launch_at_login
             ));
         }
+        Ok(())
+    }
+
+    fn open_services_folder(&self) -> PortResult {
+        let dir = self.services_dir()?;
+        services::prepare_services_dir(&dir).map_err(port_err)?;
+        // Our own config folder: not subject to the URL allow-list.
+        self.app
+            .opener()
+            .open_path(dir.display().to_string(), None::<&str>)
+            .map_err(port_err)
+    }
+
+    fn load_services(&self) -> PortResult {
+        let (defs, errors) = services::read_user_services(&self.services_dir()?);
+        (self.feed)(Input::ServicesLoaded { defs, errors });
         Ok(())
     }
 

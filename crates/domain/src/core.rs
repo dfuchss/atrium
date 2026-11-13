@@ -175,6 +175,12 @@ pub enum Input {
         slug: String,
         result: SimpleIconResult,
     },
+    /// Result of [`Effect::LoadServices`]: the valid definitions of `<config>/services/*.toml`
+    /// (in file order) and a message per file that could not be read or parsed.
+    ServicesLoaded {
+        defs: Vec<ServiceDef>,
+        errors: Vec<String>,
+    },
 }
 
 /// Outcome of a Simple Icons download.
@@ -288,6 +294,10 @@ pub enum Effect {
         browser: Option<String>,
     },
     FocusWindow,
+    /// Create `<config>/services/` (with README and example when empty) and show it.
+    OpenServicesFolder,
+    /// Re-read the user's service files; answered with [`Input::ServicesLoaded`].
+    LoadServices,
     /// Apply OS-level settings (launch at login, ...). Emitted on start and on every change.
     ApplySystemSettings(AppSettings),
     Persist(Persisted),
@@ -323,6 +333,12 @@ const MAX_ICON_ATTEMPTS: u8 = 3;
 pub struct Core {
     /// Built-in + user TOML services; `catalog` = this + custom services.
     base_catalog: Catalog,
+    /// The user's TOML definitions applied on top of `builtin` in `base_catalog`.
+    user_defs: Vec<ServiceDef>,
+    /// Problems of the last load of the user's service files.
+    service_errors: Vec<String>,
+    /// The catalog without user files (built-ins only), the base of every reload.
+    builtin: Catalog,
     catalog: Catalog,
     persisted: Persisted,
     id_gen: Box<dyn FnMut() -> Uuid + Send>,
@@ -369,7 +385,10 @@ impl Core {
         let active = persisted.settings.active;
         let mut core = Core {
             catalog: catalog.clone(),
+            builtin: catalog.clone(),
             base_catalog: catalog,
+            user_defs: vec![],
+            service_errors: vec![],
             persisted,
             id_gen,
             active,
@@ -389,6 +408,74 @@ impl Core {
         };
         core.startup_log = core.rebuild_catalog();
         core
+    }
+
+    /// Applies the user's service files found at startup (call before `Input::Started`).
+    /// Their problems are logged on start and shown in the snapshot.
+    pub fn set_user_services(&mut self, defs: Vec<ServiceDef>, errors: Vec<String>) {
+        self.startup_log.extend(errors.iter().cloned());
+        self.apply_user_services(defs, errors);
+    }
+
+    /// Replaces the user definitions (a failed file keeps the previous definitions of ids that
+    /// no file defines any more, as the failed file may be the one that defined them) and
+    /// rebuilds the catalog. Returns the problems of the custom services.
+    fn apply_user_services(&mut self, defs: Vec<ServiceDef>, errors: Vec<String>) -> Vec<String> {
+        let mut defs = defs;
+        if !errors.is_empty() {
+            let kept: Vec<ServiceDef> = self
+                .user_defs
+                .iter()
+                .filter(|old| !defs.iter().any(|d| d.id == old.id))
+                .cloned()
+                .collect();
+            defs.extend(kept);
+        }
+        let mut base = self.builtin.clone();
+        for def in &defs {
+            base.insert(def.clone());
+        }
+        self.user_defs = defs;
+        self.base_catalog = base;
+        self.service_errors = errors;
+        self.rebuild_catalog()
+    }
+
+    /// Reload of the user's files: new catalog and unread rules; accounts whose view would now
+    /// differ are recreated, the view policies are re-sent.
+    fn services_loaded(&mut self, defs: Vec<ServiceDef>, errors: Vec<String>) -> Vec<Effect> {
+        let old: Vec<(Uuid, Option<ViewSpec>)> = self
+            .persisted
+            .accounts
+            .iter()
+            .filter(|a| self.loaded.contains(&a.id))
+            .map(|a| (a.id, self.view_spec(a).ok()))
+            .collect();
+        let mut fx: Vec<Effect> = errors.iter().cloned().map(Effect::Log).collect();
+        fx.push(Effect::Log(format!(
+            "reloaded services: {} user definitions, {} errors",
+            defs.len(),
+            errors.len()
+        )));
+        fx.extend(
+            self.apply_user_services(defs, errors)
+                .into_iter()
+                .map(Effect::Log),
+        );
+        for (a, old_spec) in old {
+            let Some(acc) = self.account(a) else { continue };
+            let policy = self.view_policy(acc);
+            let new_spec = self.view_spec(acc).ok();
+            if new_spec.is_some() && new_spec != old_spec {
+                fx.extend(self.unload(a));
+                let visible = self.active == Some(a) && !self.dialog_open;
+                fx.extend(self.create(a, visible));
+            } else {
+                fx.push(Effect::SetViewPolicy { account: a, policy });
+            }
+        }
+        fx.push(self.emit());
+        fx
     }
 
     /// Read-only app information shown in the snapshot ("About").
@@ -443,6 +530,7 @@ impl Core {
                 slug,
                 result,
             } => self.simple_icon_fetched(account, &slug, result),
+            Input::ServicesLoaded { defs, errors } => self.services_loaded(defs, errors),
         };
         if self.started {
             let menus = self.menu_model();
@@ -519,6 +607,7 @@ impl Core {
             dialog_open: self.dialog_open,
             settings: self.settings().clone(),
             app: self.app_info.clone(),
+            service_errors: self.service_errors.clone(),
         }
     }
 
@@ -979,6 +1068,8 @@ impl Core {
             UiCommand::AddCustomService { service } => self.add_custom_service(service),
             UiCommand::UpdateCustomService { service } => self.update_custom_service(service),
             UiCommand::RemoveCustomService { id } => self.remove_custom_service(&id),
+            UiCommand::OpenServicesFolder => vec![Effect::OpenServicesFolder],
+            UiCommand::ReloadServices => vec![Effect::LoadServices],
         }
     }
 
@@ -2334,10 +2425,18 @@ mod tests {
     #[test]
     fn element_clears_stale_session_lock_before_page_scripts() {
         let def = Catalog::builtin().get("element").cloned().unwrap();
-        assert!(def.clear_local_storage.iter().any(|k| k == "react_sdk_session_lock_ping"), "{def:?}");
+        assert!(
+            def.clear_local_storage
+                .iter()
+                .any(|k| k == "react_sdk_session_lock_ping"),
+            "{def:?}"
+        );
         let (_, fx) = started(vec![acc(1, "element", "E")]);
         let script = &views(&fx)[0].0.init_script;
-        assert!(script.starts_with("(()=>{try{for(const k of [\"react_sdk_session_lock_ping\""), "{script:.120}");
+        assert!(
+            script.starts_with("(()=>{try{for(const k of [\"react_sdk_session_lock_ping\""),
+            "{script:.120}"
+        );
         assert!(script.contains(crate::NOTIFY_SHIM));
     }
 
@@ -2371,6 +2470,7 @@ mod tests {
         let info = AppInfo {
             version: "1.2.3".into(),
             config_dir: "/cfg".into(),
+            services_dir: "/cfg/services".into(),
             log_file: "/log/m.log".into(),
         };
         c.set_app_info(info.clone());
@@ -3748,5 +3848,132 @@ mod tests {
                 zoom: 1.5
             }
         ));
+    }
+    // ---- expert mode: user service files ----
+
+    fn user_def(id: &str, url: &str) -> ServiceDef {
+        Catalog::parse(
+            "t.toml",
+            &format!("id = \"{id}\"\nname = \"X {id}\"\ncolor = \"#111111\"\nurl = \"{url}\"\n"),
+        )
+        .unwrap()
+    }
+
+    fn created(fx: &[Effect]) -> Vec<Uuid> {
+        fx.iter()
+            .filter_map(|e| match e {
+                Effect::CreateView { spec, .. } => Some(spec.account),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn two_user_accounts() -> Core {
+        let mut c = core_with(vec![acc(1, "alpha", "A"), acc(2, "beta", "B")]);
+        c.set_user_services(
+            vec![
+                user_def("alpha", "https://a.example/"),
+                user_def("beta", "https://b.example/"),
+            ],
+            vec![],
+        );
+        let fx = c.handle(Input::Started {
+            width: 1000.0,
+            height: 600.0,
+        });
+        assert_eq!(created(&fx).len(), 2);
+        c
+    }
+
+    #[test]
+    fn open_and_reload_commands_emit_effects() {
+        let (mut c, _) = started(vec![]);
+        assert_eq!(
+            c.handle(Input::Ui(UiCommand::OpenServicesFolder))[0],
+            Effect::OpenServicesFolder
+        );
+        assert_eq!(
+            c.handle(Input::Ui(UiCommand::ReloadServices))[0],
+            Effect::LoadServices
+        );
+    }
+
+    #[test]
+    fn reload_replaces_definition_and_recreates_only_affected_account() {
+        let mut c = two_user_accounts();
+        let fx = c.handle(Input::ServicesLoaded {
+            defs: vec![
+                user_def("alpha", "https://a2.example/"),
+                user_def("beta", "https://b.example/"),
+            ],
+            errors: vec![],
+        });
+        assert_eq!(created(&fx), vec![id(1)]);
+        assert!(fx.contains(&Effect::Destroy(id(1))));
+        assert!(!fx.contains(&Effect::Destroy(id(2))));
+        // the unaffected account only gets its policy again
+        assert!(
+            fx.iter()
+                .any(|e| matches!(e, Effect::SetViewPolicy { account, .. } if *account == id(2)))
+        );
+        let s0 = snap(&fx);
+        let alpha = s0.services.iter().find(|s| s.id == "alpha").unwrap();
+        assert_eq!(alpha.url, "https://a2.example/");
+        assert!(s0.service_errors.is_empty());
+    }
+
+    #[test]
+    fn reload_error_is_reported_and_keeps_previous_definition() {
+        let mut c = two_user_accounts();
+        let fx = c.handle(Input::ServicesLoaded {
+            defs: vec![user_def("beta", "https://b.example/")],
+            errors: vec!["invalid service definition: broken.toml".into()],
+        });
+        assert!(created(&fx).is_empty());
+        assert!(fx.contains(&Effect::Log(
+            "invalid service definition: broken.toml".into()
+        )));
+        let s0 = snap(&fx);
+        assert_eq!(s0.service_errors.len(), 1);
+        let alpha = s0.services.iter().find(|s| s.id == "alpha").unwrap();
+        assert_eq!(alpha.url, "https://a.example/");
+        // without errors, a missing file removes its definition
+        let fx = c.handle(Input::ServicesLoaded {
+            defs: vec![user_def("beta", "https://b.example/")],
+            errors: vec![],
+        });
+        assert!(snap(&fx).services.iter().all(|s| s.id != "alpha"));
+        assert!(snap(&fx).service_errors.is_empty());
+    }
+
+    #[test]
+    fn user_file_overrides_builtin_and_custom_services_win() {
+        let (mut c, _) = started(vec![]);
+        let fx = c.handle(Input::ServicesLoaded {
+            defs: vec![user_def("slack", "https://my.slack.example/")],
+            errors: vec![],
+        });
+        let slack = snap(&fx)
+            .services
+            .into_iter()
+            .find(|s| s.id == "slack")
+            .unwrap();
+        assert_eq!(slack.url, "https://my.slack.example/");
+        assert_eq!(slack.name, "X slack");
+        assert_eq!(
+            snap(&fx)
+                .services
+                .iter()
+                .filter(|s| s.id == "slack")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn startup_user_services_errors_reach_snapshot() {
+        let mut c = core_with(vec![]);
+        c.set_user_services(vec![], vec!["bad file".into()]);
+        assert_eq!(c.snapshot().service_errors, vec!["bad file".to_string()]);
     }
 }

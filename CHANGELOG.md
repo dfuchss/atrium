@@ -19,5 +19,6 @@ First release.
 - Element starts reliably after a restart instead of getting stuck on a stale session lock
 - Per-account zoom, user agent, custom CSS, site icon, camera and microphone permission, and enable/disable
 - Reorder accounts by drag and drop, choose the icon size, pick a Simple Icons glyph, and let inactive services sleep to free memory
+- Open and reload the services folder from the settings; sleeping services show a grayscale icon
 - Native notifications that open the right account, with Do Not Disturb and per-account mute
 - Links open in your browser of choice or in an app window that keeps the account's login

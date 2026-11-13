@@ -128,6 +128,11 @@ pub enum UiCommand {
     RemoveCustomService {
         id: String,
     },
+    /// Expert mode: open `<config>/services/` in the file manager (created with a README and an
+    /// example on first use).
+    OpenServicesFolder,
+    /// Expert mode: re-read the TOML files in `<config>/services/` without a restart.
+    ReloadServices,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -142,6 +147,8 @@ pub struct Snapshot {
     pub dialog_open: bool,
     pub settings: AppSettings,
     pub app: AppInfo,
+    /// Problems of the last load of `<config>/services/*.toml` (startup or reload).
+    pub service_errors: Vec<String>,
 }
 
 /// Global settings, persisted by the backend.
@@ -293,6 +300,8 @@ pub struct CustomService {
 pub struct AppInfo {
     pub version: String,
     pub config_dir: String,
+    /// Folder of the user's service definition files (`<config_dir>/services`).
+    pub services_dir: String,
     pub log_file: String,
 }
 

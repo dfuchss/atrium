@@ -14,7 +14,7 @@ pub struct Account {
     pub service: String,
     pub label: String,
     #[serde(default)]
-    pub team: Option<String>,
+    pub instance: Option<String>,
     /// No notifications from this account (and not counted in the dock badge).
     #[serde(default)]
     pub muted: bool,
@@ -77,13 +77,13 @@ impl Account {
         id: Uuid,
         service: impl Into<String>,
         label: impl Into<String>,
-        team: Option<String>,
+        instance: Option<String>,
     ) -> Account {
         Account {
             id,
             service: service.into(),
             label: label.into(),
-            team,
+            instance,
             muted: false,
             show_badge: true,
             in_dock_badge: true,
@@ -111,7 +111,7 @@ impl Account {
     pub fn settings(&self) -> AccountSettings {
         AccountSettings {
             label: self.label.clone(),
-            team: self.team.clone(),
+            instance: self.instance.clone(),
             muted: self.muted,
             show_badge: self.show_badge,
             in_dock_badge: self.in_dock_badge,
@@ -160,7 +160,7 @@ mod tests {
     fn loads_old_format() {
         let json = r#"{
             "accounts": [
-                {"id": "00000000-0000-0000-0000-00000000002a", "service": "slack", "label": "KIT", "team": "kit", "muted": true},
+                {"id": "00000000-0000-0000-0000-00000000002a", "service": "slack", "label": "KIT", "instance": "kit", "muted": true},
                 {"id": "00000000-0000-0000-0000-00000000002b", "service": "discord", "label": "Discord"}
             ],
             "settings": {"dnd": true, "active": "00000000-0000-0000-0000-00000000002a"}
@@ -168,7 +168,7 @@ mod tests {
         let p: Persisted = serde_json::from_str(json).unwrap();
         let a = &p.accounts[0];
         assert_eq!(
-            (a.label.as_str(), a.team.as_deref(), a.muted),
+            (a.label.as_str(), a.instance.as_deref(), a.muted),
             ("KIT", Some("kit"), true)
         );
         assert!(a.show_badge && a.in_dock_badge && a.user_agent.is_none());
@@ -189,7 +189,7 @@ mod tests {
             (a.simple_icon.as_deref(), a.simple_icon_data.as_deref()),
             (None, None)
         );
-        assert!(!p.accounts[1].muted && p.accounts[1].team.is_none());
+        assert!(!p.accounts[1].muted && p.accounts[1].instance.is_none());
         assert_eq!(p.settings.active, Some(Uuid::from_u128(42)));
         let expected = AppSettings {
             dnd: true,
@@ -226,7 +226,7 @@ mod tests {
             name: "X".into(),
             url: "https://x.io/".into(),
             color: "#000".into(),
-            team_label: None,
+            instance_label: None,
             title_regex: None,
             user_agent: None,
         });

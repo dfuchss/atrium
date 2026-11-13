@@ -36,6 +36,58 @@ fn window_background(theme: Theme) -> Color {
     }
 }
 
+/// Development hooks, read from environment variables in debug builds only (README
+/// "Development"). Used to run a second, isolated instance with demo data, e.g. for screenshots.
+#[derive(Default)]
+struct DevHooks {
+    /// `ATRIUM_CONFIG_DIR`: config folder (store, services folder, log) instead of the app's.
+    config_dir: Option<std::path::PathBuf>,
+    /// `ATRIUM_ALWAYS_ON_TOP=1`: keep the main window on top (occluded windows are not painted).
+    always_on_top: bool,
+    /// `ATRIUM_WINDOW_POSITION=<x>,<y>`: main window position in logical px (global screen
+    /// coordinates, the main display starts at 0,0), e.g. to pick a Retina display.
+    position: Option<(f64, f64)>,
+    /// Contents of the file named by `ATRIUM_DEV_INIT_SCRIPT`, appended to every service view's
+    /// init script.
+    init_script: Option<String>,
+    /// `ATRIUM_DEV_UI_QUERY`: query string for the sidebar UI, e.g. `dialog=accounts&edit=0`.
+    ui_query: Option<String>,
+}
+
+impl DevHooks {
+    #[cfg(debug_assertions)]
+    fn from_env() -> DevHooks {
+        let var = |name: &str| std::env::var(name).ok().filter(|v| !v.is_empty());
+        DevHooks {
+            config_dir: var("ATRIUM_CONFIG_DIR").map(Into::into),
+            always_on_top: var("ATRIUM_ALWAYS_ON_TOP").is_some_and(|v| v == "1"),
+            position: var("ATRIUM_WINDOW_POSITION").and_then(|v| {
+                let (x, y) = v.split_once(',')?;
+                Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+            }),
+            init_script: var("ATRIUM_DEV_INIT_SCRIPT").map(|path| {
+                std::fs::read_to_string(&path)
+                    .unwrap_or_else(|e| panic!("ATRIUM_DEV_INIT_SCRIPT {path}: {e}"))
+            }),
+            ui_query: var("ATRIUM_DEV_UI_QUERY"),
+        }
+    }
+
+    /// Release builds ignore the environment.
+    #[cfg(not(debug_assertions))]
+    fn from_env() -> DevHooks {
+        DevHooks::default()
+    }
+
+    /// Sidebar UI page, with the query string if one is set.
+    fn ui_url(&self) -> WebviewUrl {
+        match &self.ui_query {
+            Some(q) => WebviewUrl::App(format!("index.html?{}", q.trim_start_matches('?')).into()),
+            None => WebviewUrl::App("index.html".into()),
+        }
+    }
+}
+
 /// State shared with the Tauri commands.
 struct Shared {
     feed: Feed,
@@ -134,10 +186,23 @@ fn main() {
         .setup(move |app| {
             // The host only needs the window lazily, so it can log while loading the settings
             // that decide how the window is created.
-            let host = TauriHost::new(app.handle().clone(), MAIN_WINDOW, feed.clone());
+            let dev = DevHooks::from_env();
+            let mut host = TauriHost::new(app.handle().clone(), MAIN_WINDOW, feed.clone());
+            if let Some(dir) = &dev.config_dir {
+                host = host.with_config_dir(dir.clone());
+            }
+            if let Some(script) = &dev.init_script {
+                host = host.with_extra_init_script(script.clone());
+            }
             let version = app.package_info().version.to_string();
             host.log(&format!("---- Atrium {version} starting ----"));
-            let config_dir = app.path().app_config_dir()?;
+            let config_dir = match &dev.config_dir {
+                Some(dir) => {
+                    host.log(&format!("development config folder {}", dir.display()));
+                    dir.clone()
+                }
+                None => app.path().app_config_dir()?,
+            };
             let store = FsStore::new(config_dir.clone());
             let persisted = load_persisted(&store, &host);
             let services_dir = config_dir.join("services");
@@ -153,14 +218,18 @@ fn main() {
             // Transparent title bar without a title: it shows the window background (the
             // sidebar color) instead of a lighter strip. Not Overlay: the content view stays
             // below the title bar, so the services' top-edge controls keep working.
-            let window = WindowBuilder::new(app, MAIN_WINDOW)
+            let mut builder = WindowBuilder::new(app, MAIN_WINDOW)
                 .title("Atrium")
                 .title_bar_style(TitleBarStyle::Transparent)
                 .hidden_title(true)
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(600.0, 400.0)
                 .visible(!persisted.settings.app.start_hidden)
-                .build()?;
+                .always_on_top(dev.always_on_top);
+            if let Some((x, y)) = dev.position {
+                builder = builder.position(x, y);
+            }
+            let window = builder.build()?;
             window.set_background_color(Some(window_background(
                 window.theme().unwrap_or(Theme::Light),
             )))?;
@@ -168,7 +237,7 @@ fn main() {
                 .inner_size()?
                 .to_logical::<f64>(window.scale_factor()?);
             window.add_child(
-                WebviewBuilder::new(UI_WEBVIEW, WebviewUrl::App("index.html".into())),
+                WebviewBuilder::new(UI_WEBVIEW, dev.ui_url()),
                 LogicalPosition::new(0.0, 0.0),
                 LogicalSize::new(
                     persisted.settings.app.icon_size.sidebar_width(),

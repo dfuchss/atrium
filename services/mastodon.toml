@@ -1,11 +1,11 @@
 id = "mastodon"
 name = "Mastodon"
 color = "#6364FF"
-url = "https://{team}/"
-team_label = "Instance"
-team_default = "mastodon.social"
+url = "https://{instance}/"
+instance_label = "Instance"
+instance_default = "mastodon.social"
 user_agent = "safari"
-internal_hosts = ["{team}"]
+internal_hosts = ["{instance}"]
 
 [unread]
 title_regex = '^\((\d+)\)'

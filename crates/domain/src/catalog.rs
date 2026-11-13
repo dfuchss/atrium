@@ -5,11 +5,11 @@
 //! id = "mastodon"
 //! name = "Mastodon"
 //! color = "#6364FF"
-//! url = "https://{team}/"            # {team} is replaced by the account's team value
-//! team_label = "Instance"            # optional: ask for a team value when adding
-//! team_default = "mastodon.social"   # optional
+//! url = "https://{instance}/"            # {instance} is replaced by the account's instance value
+//! instance_label = "Instance"            # optional: ask for an instance value when adding
+//! instance_default = "mastodon.social"   # optional
 //! user_agent = "safari"              # optional: "safari" | "chrome" | "default" | literal UA
-//! internal_hosts = ["{team}"]        # `*.` wildcard allowed, {team} substituted
+//! internal_hosts = ["{instance}"]        # `*.` wildcard allowed, {instance} substituted
 //! allow_media = true                # optional: grant camera/mic/screen capture (default false)
 //!
 //! [unread]
@@ -52,9 +52,9 @@ pub struct ServiceDef {
     pub color: String,
     pub url: String,
     #[serde(default)]
-    pub team_label: Option<String>,
+    pub instance_label: Option<String>,
     #[serde(default)]
-    pub team_default: Option<String>,
+    pub instance_default: Option<String>,
     #[serde(default)]
     pub user_agent: Option<String>,
     #[serde(default)]
@@ -86,7 +86,7 @@ pub enum CatalogError {
     Parse { source: String, message: String },
     InvalidRegex { service: String, message: String },
     UnknownService(String),
-    MissingTeam(String),
+    MissingInstance(String),
     InvalidUrl { service: String, url: String },
 }
 
@@ -171,9 +171,12 @@ impl Catalog {
     }
 }
 
-/// Trims a team value and strips a pasted scheme and trailing slashes.
-pub(crate) fn normalize_team(team: &str) -> String {
-    let t = team.trim();
+/// URL placeholder for the per-account part (instance host, workspace subdomain...).
+pub const PLACEHOLDER: &str = "{instance}";
+
+/// Trims an instance value and strips a pasted scheme and trailing slashes.
+pub(crate) fn normalize_instance(instance: &str) -> String {
+    let t = instance.trim();
     let t = t
         .strip_prefix("https://")
         .or_else(|| t.strip_prefix("http://"))
@@ -233,27 +236,29 @@ fn matches_host(pattern: &str, host: &str) -> bool {
 }
 
 impl ServiceDef {
-    fn effective_team(&self, team: Option<&str>) -> Option<String> {
-        team.map(normalize_team)
+    fn effective_instance(&self, instance: Option<&str>) -> Option<String> {
+        instance
+            .map(normalize_instance)
             .filter(|t| !t.is_empty())
             .or_else(|| {
-                self.team_default
+                self.instance_default
                     .as_deref()
-                    .map(normalize_team)
+                    .map(normalize_instance)
                     .filter(|t| !t.is_empty())
             })
     }
 
-    /// URL with `{team}` replaced. Errors if the URL needs a team and none (and no default) is given,
+    /// URL with `{instance}` replaced. Errors if the URL needs an instance and none (and no default) is given,
     /// or if the result is not a valid http(s) URL.
-    pub fn resolve_url(&self, team: Option<&str>) -> Result<url::Url, CatalogError> {
-        let raw = if self.url.contains("{team}") {
+    pub fn resolve_url(&self, instance: Option<&str>) -> Result<url::Url, CatalogError> {
+        let url = self.url.clone();
+        let raw = if url.contains(PLACEHOLDER) {
             let t = self
-                .effective_team(team)
-                .ok_or_else(|| CatalogError::MissingTeam(self.id.clone()))?;
-            self.url.replace("{team}", &t)
+                .effective_instance(instance)
+                .ok_or_else(|| CatalogError::MissingInstance(self.id.clone()))?;
+            url.replace(PLACEHOLDER, &t)
         } else {
-            self.url.clone()
+            url
         };
         let invalid = || CatalogError::InvalidUrl {
             service: self.id.clone(),
@@ -266,17 +271,17 @@ impl ServiceDef {
         }
     }
 
-    /// `internal_hosts` with `{team}` replaced (team = host part of the team value).
-    pub fn resolve_hosts(&self, team: Option<&str>) -> Vec<String> {
+    /// `internal_hosts` with `{instance}` replaced (instance = host part of the instance value).
+    pub fn resolve_hosts(&self, instance: Option<&str>) -> Vec<String> {
         let host = self
-            .effective_team(team)
+            .effective_instance(instance)
             .map(|t| t.split('/').next().unwrap_or("").to_string())
             .filter(|h| !h.is_empty());
         self.internal_hosts
             .iter()
-            .filter_map(|h| match (&host, h.contains("{team}")) {
+            .filter_map(|h| match (&host, h.contains(PLACEHOLDER)) {
                 (_, false) => Some(h.clone()),
-                (Some(host), true) => Some(h.replace("{team}", host)),
+                (Some(host), true) => Some(h.replace(PLACEHOLDER, host)),
                 (None, true) => None,
             })
             .collect()
@@ -288,8 +293,8 @@ impl ServiceDef {
     }
 }
 
-/// Validates and normalizes a user-defined service (trimmed fields, `team_label` only when the
-/// URL has `{team}`). The URL must be http(s) once `{team}` is replaced by "example"; the title
+/// Validates and normalizes a user-defined service (trimmed fields, `instance_label` only when the
+/// URL has `{instance}`). The URL must be http(s) once `{instance}` is replaced by "example"; the title
 /// regex must compile. The id is kept as is.
 pub fn normalize_custom(c: &CustomService) -> Result<CustomService, String> {
     let opt = |v: &Option<String>| {
@@ -303,7 +308,7 @@ pub fn normalize_custom(c: &CustomService) -> Result<CustomService, String> {
         return Err("custom service: empty name".into());
     }
     let url = c.url.trim().to_string();
-    let probe = url.replace("{team}", "example");
+    let probe = url.replace(PLACEHOLDER, "example");
     match url::Url::parse(&probe) {
         Ok(u) if matches!(u.scheme(), "http" | "https") && u.host_str().is_some() => {}
         _ => {
@@ -317,8 +322,8 @@ pub fn normalize_custom(c: &CustomService) -> Result<CustomService, String> {
         regex::Regex::new(re)
             .map_err(|e| format!("custom service {name:?}: invalid title regex: {e}"))?;
     }
-    let team_label = if url.contains("{team}") {
-        Some(opt(&c.team_label).unwrap_or_else(|| "Team".into()))
+    let instance_label = if url.contains(PLACEHOLDER) {
+        Some(opt(&c.instance_label).unwrap_or_else(|| "Instance".into()))
     } else {
         None
     };
@@ -331,7 +336,7 @@ pub fn normalize_custom(c: &CustomService) -> Result<CustomService, String> {
         name,
         url,
         color,
-        team_label,
+        instance_label,
         title_regex,
         user_agent: opt(&c.user_agent),
     })
@@ -339,7 +344,7 @@ pub fn normalize_custom(c: &CustomService) -> Result<CustomService, String> {
 
 impl ServiceDef {
     /// Converts a user-defined service (see [`normalize_custom`]) into a definition:
-    /// internal host = the URL's host (may contain `{team}`), unread from the title
+    /// internal host = the URL's host (may contain `{instance}`), unread from the title
     /// ([`DEFAULT_TITLE_REGEX`] unless set), user agent "safari" unless set.
     pub fn from_custom(c: &CustomService) -> Result<ServiceDef, String> {
         let c = normalize_custom(c)?;
@@ -352,8 +357,8 @@ impl ServiceDef {
             name: c.name,
             color: c.color,
             url: c.url,
-            team_label: c.team_label,
-            team_default: None,
+            instance_label: c.instance_label,
+            instance_default: None,
             user_agent: Some(c.user_agent.unwrap_or_else(|| "safari".into())),
             internal_hosts: host.into_iter().collect(),
             allow_media: false,
@@ -367,7 +372,7 @@ impl ServiceDef {
     }
 }
 
-/// Host part of a URL template, textually (so `{team}` survives): no userinfo, no port.
+/// Host part of a URL template, textually (so `{instance}` survives): no userinfo, no port.
 fn url_host_pattern(url: &str) -> Option<String> {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
@@ -425,7 +430,7 @@ mod tests {
     fn def(url: &str, default: Option<&str>) -> ServiceDef {
         let mut d = Catalog::parse("t", "id='t'\nname='T'\ncolor='#000'\nurl='x'").unwrap();
         d.url = url.into();
-        d.team_default = default.map(String::from);
+        d.instance_default = default.map(String::from);
         d
     }
 
@@ -475,8 +480,8 @@ mod tests {
     }
 
     #[test]
-    fn team_substitution() {
-        let d = def("https://{team}/", Some("mastodon.social"));
+    fn instance_substitution() {
+        let d = def("https://{instance}/", Some("mastodon.social"));
         assert_eq!(
             d.resolve_url(None).unwrap().as_str(),
             "https://mastodon.social/"
@@ -494,11 +499,11 @@ mod tests {
     }
 
     #[test]
-    fn missing_team_and_bad_url() {
-        let d = def("https://{team}/", None);
+    fn missing_instance_and_bad_url() {
+        let d = def("https://{instance}/", None);
         assert_eq!(
             d.resolve_url(None),
-            Err(CatalogError::MissingTeam("t".into()))
+            Err(CatalogError::MissingInstance("t".into()))
         );
         let d = def("ftp://x/", None);
         assert!(matches!(
@@ -509,8 +514,8 @@ mod tests {
 
     #[test]
     fn hosts_and_user_agent() {
-        let mut d = def("https://{team}/", None);
-        d.internal_hosts = vec!["{team}".into(), "*.a.io".into()];
+        let mut d = def("https://{instance}/", None);
+        d.internal_hosts = vec!["{instance}".into(), "*.a.io".into()];
         assert_eq!(
             d.resolve_hosts(Some("https://h.example.org/path")),
             vec!["h.example.org", "*.a.io"]
@@ -529,7 +534,7 @@ mod tests {
             name: name.into(),
             url: url.into(),
             color: " ".into(),
-            team_label: None,
+            instance_label: None,
             title_regex: None,
             user_agent: None,
         }
@@ -539,15 +544,15 @@ mod tests {
     fn custom_service_conversion() {
         let d = ServiceDef::from_custom(&custom(
             " Chat ",
-            " https://user@{team}.chat.io:8443/app?x=1 ",
+            " https://user@{instance}.chat.io:8443/app?x=1 ",
         ))
         .unwrap();
         assert_eq!(
             (d.id.as_str(), d.name.as_str(), d.color.as_str()),
             ("custom-x", "Chat", DEFAULT_CUSTOM_COLOR)
         );
-        assert_eq!(d.internal_hosts, vec!["{team}.chat.io"]);
-        assert_eq!(d.team_label.as_deref(), Some("Team"));
+        assert_eq!(d.internal_hosts, vec!["{instance}.chat.io"]);
+        assert_eq!(d.instance_label.as_deref(), Some("Instance"));
         assert_eq!(d.unread.title_regex.as_deref(), Some(DEFAULT_TITLE_REGEX));
         assert_eq!(d.resolve_user_agent().as_deref(), Some(UA_SAFARI));
         assert!(!d.allow_media, "custom services default to no media");
@@ -557,12 +562,12 @@ mod tests {
             "https://user@kit.chat.io:8443/app?x=1"
         );
         let mut c = custom("Plain", "http://Example.org");
-        c.team_label = Some("Ignored".into());
+        c.instance_label = Some("Ignored".into());
         c.title_regex = Some(r"^\[(\d+)\]".into());
         c.user_agent = Some("chrome".into());
         let d = ServiceDef::from_custom(&c).unwrap();
         assert_eq!(
-            (&d.team_label, &d.internal_hosts),
+            (&d.instance_label, &d.internal_hosts),
             (&None, &vec!["example.org".to_string()])
         );
         assert_eq!(d.unread.title_regex.as_deref(), Some(r"^\[(\d+)\]"));
@@ -574,7 +579,7 @@ mod tests {
         assert!(normalize_custom(&custom("  ", "https://a.io")).is_err());
         assert!(normalize_custom(&custom("A", "ftp://a.io")).is_err());
         assert!(normalize_custom(&custom("A", "not a url")).is_err());
-        assert!(normalize_custom(&custom("A", "https://{team}/")).is_ok());
+        assert!(normalize_custom(&custom("A", "https://{instance}/")).is_ok());
         let mut c = custom("A", "https://a.io");
         c.title_regex = Some("(".into());
         assert!(normalize_custom(&c).unwrap_err().contains("regex"));

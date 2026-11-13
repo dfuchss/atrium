@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn loads_old_format_file() {
         let d = tempfile::tempdir().unwrap();
-        let old = r#"{"accounts":[{"id":"00000000-0000-0000-0000-00000000002a","service":"slack","label":"KIT","team":"x","muted":true}],"settings":{"dnd":true,"active":"00000000-0000-0000-0000-00000000002a"}}"#;
+        let old = r#"{"accounts":[{"id":"00000000-0000-0000-0000-00000000002a","service":"slack","label":"KIT","instance":"x","muted":true}],"settings":{"dnd":true,"active":"00000000-0000-0000-0000-00000000002a"}}"#;
         fs::write(d.path().join("accounts.json"), old).unwrap();
         let p = FsStore::new(d.path()).load().unwrap();
         let id = uuid_like();
@@ -122,7 +122,7 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let prev = r#"{
           "accounts": [
-            {"id": "00000000-0000-0000-0000-00000000002a", "service": "rainbow", "label": "Work", "team": null,
+            {"id": "00000000-0000-0000-0000-00000000002a", "service": "rainbow", "label": "Work", "instance": null,
              "muted": false, "show_badge": false, "in_dock_badge": true, "user_agent": "chrome"}
           ],
           "settings": {"dnd": false, "notification_preview": false, "notification_sound": true,

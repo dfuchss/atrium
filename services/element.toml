@@ -1,11 +1,11 @@
 id = "element"
 name = "Element"
 color = "#0DBD8B"
-url = "https://{team}/"
-team_label = "Element web host"
-team_default = "app.element.io"
+url = "https://{instance}/"
+instance_label = "Element web host"
+instance_default = "app.element.io"
 user_agent = "safari"
-internal_hosts = ["{team}", "*.element.io", "*.matrix.org"]
+internal_hosts = ["{instance}", "*.element.io", "*.matrix.org"]
 allow_media = true
 
 # Element's single-instance session lock (SessionLock.ts). This app only ever has one Element page

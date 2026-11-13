@@ -17,23 +17,23 @@
 # Sidebar color, CSS hex (required).
 #! color = "#3B82F6"
 
-# Start page (required). {team} is replaced by the "team" value the user enters when adding
-# an account (workspace, instance host, ...).
-#! url = "https://{team}/"
+# Start page (required). {instance} is replaced by the instance value the user enters when adding
+# an account (server host, workspace subdomain, ...).
+#! url = "https://{instance}/"
 
-# Asks for a team value when adding an account; the text is the label of the input field.
-# team_label = "Server"
+# Asks for an instance value when adding an account; the text is the label of the input field.
+# instance_label = "Server"
 
-# Default for the team value, used when the user leaves it empty.
-# team_default = "chat.example.org"
+# Default for the instance value, used when the user leaves it empty.
+# instance_default = "chat.example.org"
 
 # Browser identity: "safari", "chrome", "default" (the web view's own) or a literal
 # User-Agent string. Some sites reject the default.
 # user_agent = "safari"
 
 # Hosts that belong to the service (diagnostics and pop-up handling). "*." matches the
-# domain and all subdomains; {team} is substituted.
-# internal_hosts = ["{team}", "*.example.org"]
+# domain and all subdomains; {instance} is substituted.
+# internal_hosts = ["{instance}", "*.example.org"]
 
 # Grant camera, microphone and screen capture to the service (call apps). Default false.
 # Accounts can override it in their own settings.

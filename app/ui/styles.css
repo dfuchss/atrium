@@ -139,6 +139,7 @@ input[type=color] { width: 56px; height: 30px; padding: 2px; border: 1px solid v
 .error { color: var(--danger); }
 .custom-form { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
 .content > .btn.primary { margin-top: 12px; }
+.content > .btn + h2, .content > .custom-form + h2 { margin-top: 32px; }
 
 /* Consistent form layout: fixed label column + control column */
 .form { border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 4px 16px; }

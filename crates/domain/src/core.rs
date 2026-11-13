@@ -583,7 +583,7 @@ impl Core {
                     color: svc.map(|s| s.color.clone()).unwrap_or_default(),
                     unread: u.direct,
                     indirect: u.indirect,
-                    team_label: svc.and_then(|s| s.team_label.clone()),
+                    instance_label: svc.and_then(|s| s.instance_label.clone()),
                     icon,
                     icon_glyph: glyph,
                     hibernated: !a.enabled || (self.started && !self.loaded.contains(&a.id)),
@@ -599,8 +599,8 @@ impl Core {
                 id: s.id.clone(),
                 name: s.name.clone(),
                 color: s.color.clone(),
-                team_label: s.team_label.clone(),
-                team_default: s.team_default.clone(),
+                instance_label: s.instance_label.clone(),
+                instance_default: s.instance_default.clone(),
                 custom: self.is_custom(&s.id),
                 allow_media: s.allow_media,
                 url: s.url.clone(),
@@ -806,9 +806,9 @@ impl Core {
             .catalog
             .get(&acc.service)
             .ok_or_else(|| format!("account {}: unknown service {}", acc.id, acc.service))?;
-        let team = acc.team.as_deref();
+        let instance = acc.instance.as_deref();
         let url = svc
-            .resolve_url(team)
+            .resolve_url(instance)
             .map_err(|e| format!("account {}: {e}", acc.id))?;
         let user_agent = match &acc.user_agent {
             Some(preset) => crate::catalog::resolve_user_agent_preset(Some(preset)),
@@ -830,7 +830,7 @@ impl Core {
             store_id: acc.store_id(),
             user_agent,
             init_script,
-            internal_hosts: svc.resolve_hosts(team),
+            internal_hosts: svc.resolve_hosts(instance),
         })
     }
 
@@ -989,8 +989,8 @@ impl Core {
             UiCommand::AddAccount {
                 service,
                 label,
-                team,
-            } => self.add_account(&service, &label, team),
+                instance,
+            } => self.add_account(&service, &label, instance),
             UiCommand::RemoveAccount { account } => self.remove_account(account),
             UiCommand::SetMuted { account, muted } => {
                 let Some(acc) = self.account_mut(account) else {
@@ -1213,11 +1213,11 @@ impl Core {
                 self.emit(),
             ];
         };
-        let team = settings
-            .team
-            .map(|t| crate::catalog::normalize_team(&t))
+        let instance = settings
+            .instance
+            .map(|t| crate::catalog::normalize_instance(&t))
             .filter(|t| !t.is_empty());
-        if let Err(e) = svc.resolve_url(team.as_deref()) {
+        if let Err(e) = svc.resolve_url(instance.as_deref()) {
             return vec![Effect::Log(format!("update account {a}: {e}")), self.emit()];
         }
         let label = settings.label.trim();
@@ -1230,8 +1230,9 @@ impl Core {
         let custom_css = settings.custom_css.filter(|c| !c.trim().is_empty());
         let zoom = sanitize_zoom(settings.zoom);
         let (app_hosts, rejected_hosts) = crate::catalog::normalize_app_hosts(&settings.app_hosts);
-        let recreate =
-            acc.team != team || acc.user_agent != user_agent || acc.custom_css != custom_css;
+        let recreate = acc.instance != instance
+            || acc.user_agent != user_agent
+            || acc.custom_css != custom_css;
         let (was_enabled, old_policy, old_zoom) = (acc.enabled, self.view_policy(acc), acc.zoom);
 
         let (slug, slug_fx) = match normalize_slug(settings.simple_icon.as_deref().unwrap_or("")) {
@@ -1246,7 +1247,7 @@ impl Core {
             acc.simple_icon_data = None;
         }
         acc.label = label;
-        acc.team = team;
+        acc.instance = instance;
         acc.muted = settings.muted;
         acc.show_badge = settings.show_badge;
         acc.in_dock_badge = settings.in_dock_badge;
@@ -1318,9 +1319,9 @@ impl Core {
         fx
     }
 
-    fn add_account(&mut self, service: &str, label: &str, team: Option<String>) -> Vec<Effect> {
-        let team = team
-            .map(|t| crate::catalog::normalize_team(&t))
+    fn add_account(&mut self, service: &str, label: &str, instance: Option<String>) -> Vec<Effect> {
+        let instance = instance
+            .map(|t| crate::catalog::normalize_instance(&t))
             .filter(|t| !t.is_empty());
         let Some(svc) = self.catalog.get(service) else {
             return vec![
@@ -1328,7 +1329,7 @@ impl Core {
                 self.emit(),
             ];
         };
-        if let Err(e) = svc.resolve_url(team.as_deref()) {
+        if let Err(e) = svc.resolve_url(instance.as_deref()) {
             return vec![Effect::Log(format!("add account: {e}")), self.emit()];
         }
         let label = label.trim();
@@ -1337,7 +1338,7 @@ impl Core {
         } else {
             label.to_string()
         };
-        let acc = Account::new((self.id_gen)(), service, label, team);
+        let acc = Account::new((self.id_gen)(), service, label, instance);
         let id = acc.id;
         self.persisted.accounts.push(acc);
         let mut fx = vec![];
@@ -2005,7 +2006,7 @@ mod tests {
         let fx = c.handle(Input::Ui(UiCommand::AddAccount {
             service: "mastodon".into(),
             label: "  ".into(),
-            team: Some(" https://fosstodon.org/ ".into()),
+            instance: Some(" https://fosstodon.org/ ".into()),
         }));
         assert_eq!(fx[0], Effect::Hide(id(1)));
         let (spec, visible) = views(&fx)[0];
@@ -2015,9 +2016,9 @@ mod tests {
         let s = snap(&fx);
         assert_eq!(s.active, Some(id(101)));
         assert_eq!(s.accounts[1].settings.label, "Mastodon");
-        assert_eq!(s.accounts[1].team_label.as_deref(), Some("Instance"));
+        assert_eq!(s.accounts[1].instance_label.as_deref(), Some("Instance"));
         assert_eq!(
-            s.accounts[1].settings.team.as_deref(),
+            s.accounts[1].settings.instance.as_deref(),
             Some("fosstodon.org")
         );
         let fx = c.handle(Input::Ui(UiCommand::Select { account: id(1) }));
@@ -2035,7 +2036,7 @@ mod tests {
         let fx = c.handle(Input::Ui(UiCommand::AddAccount {
             service: "zzz".into(),
             label: "a".into(),
-            team: None,
+            instance: None,
         }));
         assert!(matches!(fx[0], Effect::Log(_)));
         assert!(matches!(fx[1], Effect::EmitSnapshot(_)));
@@ -2411,7 +2412,7 @@ mod tests {
         let fx = c.handle(Input::Ui(UiCommand::AddAccount {
             service: "discord".into(),
             label: "D".into(),
-            team: None,
+            instance: None,
         }));
         assert_eq!(views(&fx).len(), 1);
         assert!(
@@ -2435,7 +2436,7 @@ mod tests {
         let fx = c.handle(Input::Ui(UiCommand::AddAccount {
             service: "discord".into(),
             label: "".into(),
-            team: None,
+            instance: None,
         }));
         let new = snap(&fx).accounts[0].id;
         assert_eq!(snap(&fx).active, Some(new));
@@ -2485,7 +2486,7 @@ mod tests {
     #[test]
     fn snapshot_carries_settings_app_info_and_account_settings() {
         let mut a = acc(1, "mastodon", "Fedi");
-        a.team = Some("fosstodon.org".into());
+        a.instance = Some("fosstodon.org".into());
         a.show_badge = false;
         let mut c = core_with(vec![a, acc(2, "slack", "Slack")]);
         let info = AppInfo {
@@ -2498,11 +2499,11 @@ mod tests {
         let s = c.snapshot();
         assert_eq!(s.app, info);
         assert_eq!(s.settings, AppSettings::default());
-        assert_eq!(s.accounts[0].team_label.as_deref(), Some("Instance"));
-        assert_eq!(s.accounts[1].team_label, None);
+        assert_eq!(s.accounts[0].instance_label.as_deref(), Some("Instance"));
+        assert_eq!(s.accounts[1].instance_label, None);
         let expected = AccountSettings {
             label: "Fedi".into(),
-            team: Some("fosstodon.org".into()),
+            instance: Some("fosstodon.org".into()),
             muted: false,
             show_badge: false,
             in_dock_badge: true,
@@ -2712,13 +2713,13 @@ mod tests {
     }
 
     #[test]
-    fn update_account_team_recreates_view() {
+    fn update_account_instance_recreates_view() {
         let mut a = acc(1, "mastodon", "M");
-        a.team = Some("mastodon.social".into());
+        a.instance = Some("mastodon.social".into());
         let (mut c, _) = started(vec![acc(2, "slack", "S"), a]);
         // inactive account -> recreated hidden
         let fx = update_account(&mut c, 1, |s| {
-            s.team = Some(" https://fosstodon.org/ ".into())
+            s.instance = Some(" https://fosstodon.org/ ".into())
         });
         assert_eq!(fx[0], Effect::Destroy(id(1)));
         let v = views(&fx);
@@ -2728,28 +2729,28 @@ mod tests {
             ("https://fosstodon.org/", *id(1).as_bytes(), false)
         );
         assert_eq!(v[0].0.internal_hosts, vec!["fosstodon.org".to_string()]);
-        assert!(fx.iter().any(|e| matches!(e, Effect::Persist(p) if p.accounts[1].team.as_deref() == Some("fosstodon.org"))));
-        // same team again -> nothing recreated
-        let fx = update_account(&mut c, 1, |s| s.team = Some("fosstodon.org/".into()));
+        assert!(fx.iter().any(|e| matches!(e, Effect::Persist(p) if p.accounts[1].instance.as_deref() == Some("fosstodon.org"))));
+        // same instance again -> nothing recreated
+        let fx = update_account(&mut c, 1, |s| s.instance = Some("fosstodon.org/".into()));
         assert!(views(&fx).is_empty());
         // active account -> visible, unless the dialog is open
         c.handle(Input::Ui(UiCommand::Select { account: id(1) }));
-        let fx = update_account(&mut c, 1, |s| s.team = Some("a.social".into()));
+        let fx = update_account(&mut c, 1, |s| s.instance = Some("a.social".into()));
         assert!(views(&fx)[0].1);
         c.handle(Input::Ui(UiCommand::SetDialog { open: true }));
-        let fx = update_account(&mut c, 1, |s| s.team = Some("b.social".into()));
+        let fx = update_account(&mut c, 1, |s| s.instance = Some("b.social".into()));
         assert!(!views(&fx)[0].1);
     }
 
     #[test]
-    fn update_account_invalid_team_changes_nothing() {
+    fn update_account_invalid_instance_changes_nothing() {
         let mut a = acc(1, "mastodon", "M");
-        a.team = Some("mastodon.social".into());
+        a.instance = Some("mastodon.social".into());
         let (mut c, _) = started(vec![a]);
         let before = c.snapshot();
         let fx = update_account(&mut c, 1, |s| {
             s.label = "New".into();
-            s.team = Some("bad host/x y".into());
+            s.instance = Some("bad host/x y".into());
         });
         assert!(
             matches!(fx.as_slice(), [Effect::Log(_), Effect::EmitSnapshot(_)]),
@@ -2892,7 +2893,7 @@ mod tests {
             name: name.into(),
             url: url.into(),
             color: "#123456".into(),
-            team_label: None,
+            instance_label: None,
             title_regex: None,
             user_agent: None,
         }
@@ -3082,7 +3083,7 @@ mod tests {
         let fx = c.handle(Input::Ui(UiCommand::AddAccount {
             service: "custom-site".into(),
             label: "".into(),
-            team: None,
+            instance: None,
         }));
         assert_eq!(
             policies(&fx),
@@ -3425,7 +3426,7 @@ mod tests {
         let fx = c.handle(Input::Ui(UiCommand::AddAccount {
             service: "custom-my-chat".into(),
             label: "".into(),
-            team: None,
+            instance: None,
         }));
         let (spec, _) = views(&fx)[0];
         assert_eq!(spec.url.as_str(), "https://chat.example.org/app");
@@ -3489,10 +3490,10 @@ mod tests {
     fn custom_services_loaded_from_persisted() {
         let mut bad = custom("Bad", "nope");
         bad.id = "custom-bad".into();
-        let mut good = custom("Good", "https://{team}.good.io/");
+        let mut good = custom("Good", "https://{instance}.good.io/");
         good.id = "custom-good".into();
         let mut a = acc(1, "custom-good", "G");
-        a.team = Some("kit".into());
+        a.instance = Some("kit".into());
         let persisted = Persisted {
             accounts: vec![a],
             custom_services: vec![bad, good],
@@ -3505,7 +3506,10 @@ mod tests {
         });
         assert!(logs(&fx).iter().any(|l| l.contains("Bad")));
         assert_eq!(views(&fx)[0].0.url.as_str(), "https://kit.good.io/");
-        assert_eq!(snap(&fx).accounts[0].team_label.as_deref(), Some("Team"));
+        assert_eq!(
+            snap(&fx).accounts[0].instance_label.as_deref(),
+            Some("Instance")
+        );
     }
 
     #[test]

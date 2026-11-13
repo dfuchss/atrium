@@ -57,11 +57,11 @@ pub enum UiCommand {
     Select {
         account: Uuid,
     },
-    /// `team` fills the `{team}` placeholder of the service URL (workspace, instance host...).
+    /// `instance` fills the `{instance}` placeholder of the service URL (workspace, instance host...).
     AddAccount {
         service: String,
         label: String,
-        team: Option<String>,
+        instance: Option<String>,
     },
     RemoveAccount {
         account: Uuid,
@@ -90,7 +90,7 @@ pub enum UiCommand {
     UpdateSettings {
         settings: AppSettings,
     },
-    /// Replace one account's settings. A changed `team` or `user_agent` recreates the view
+    /// Replace one account's settings. A changed `instance` or `user_agent` recreates the view
     /// (same data store, so the login normally survives).
     UpdateAccount {
         account: Uuid,
@@ -234,8 +234,8 @@ pub enum LinkTarget {
 pub struct AccountSettings {
     /// User-chosen label, e.g. "KIT" or "Work".
     pub label: String,
-    /// Value for the service's `{team}` placeholder (workspace, instance host...).
-    pub team: Option<String>,
+    /// Value for the service's `{instance}` placeholder (workspace, instance host...).
+    pub instance: Option<String>,
     /// No notifications from this account.
     pub muted: bool,
     /// Show the unread badge on the sidebar icon.
@@ -291,12 +291,12 @@ pub struct CustomService {
     /// Empty when adding; the backend assigns `custom-<slug>`.
     pub id: String,
     pub name: String,
-    /// May contain `{team}`.
+    /// May contain `{instance}`.
     pub url: String,
     /// CSS color for the initials icon.
     pub color: String,
-    /// Ask for a team value when adding an account (only meaningful if `url` has `{team}`).
-    pub team_label: Option<String>,
+    /// Ask for an instance value when adding an account (only meaningful if `url` has `{instance}`).
+    pub instance_label: Option<String>,
     /// Regex on the page title; capture group 1 = unread count. None = `^\((\d+)\)`.
     pub title_regex: Option<String>,
     /// "safari" | "chrome" | "default" | literal; None = "safari".
@@ -326,8 +326,8 @@ pub struct AccountView {
     pub unread: u32,
     /// Something unread without a count (channel activity) -> show a dot.
     pub indirect: bool,
-    /// Label of the service's team field, if the service has one (e.g. "Instance").
-    pub team_label: Option<String>,
+    /// Label of the service's instance field, if the service has one (e.g. "Instance").
+    pub instance_label: Option<String>,
     /// Image for the sidebar icon (custom icon, else cached favicon) as `data:`/https URL;
     /// None = draw `initials` on `color`.
     pub icon: Option<String>,
@@ -344,10 +344,10 @@ pub struct ServiceInfo {
     pub id: String,
     pub name: String,
     pub color: String,
-    /// When set, the add dialog asks for a `team` with this label (e.g. "Instance").
-    pub team_label: Option<String>,
-    /// Pre-filled value for the team field.
-    pub team_default: Option<String>,
+    /// When set, the add dialog asks for a `instance` value with this label (e.g. "Instance").
+    pub instance_label: Option<String>,
+    /// Pre-filled value for the instance field.
+    pub instance_default: Option<String>,
     /// User-defined (editable/removable in settings).
     pub custom: bool,
     /// Service default for camera/microphone/screen-capture (see `AccountSettings::allow_media`).

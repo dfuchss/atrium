@@ -138,6 +138,10 @@ pub struct TauriHost<R: Runtime> {
     /// Numbers the labels of popup/app windows.
     popup_counter: Arc<AtomicU64>,
     menus: Mutex<MenuState<R>>,
+    /// Development override of the config folder (see [`TauriHost::with_config_dir`]).
+    config_dir: Option<PathBuf>,
+    /// Development aid appended to every service view's init script.
+    extra_init_script: Option<String>,
 }
 
 impl<R: Runtime> TauriHost<R> {
@@ -153,18 +157,41 @@ impl<R: Runtime> TauriHost<R> {
             policies: Arc::default(),
             popup_counter: Arc::default(),
             menus: Mutex::default(),
+            config_dir: None,
+            extra_init_script: None,
         };
         host.register_notification_clicks();
         host
     }
 
-    /// `<app_config_dir>/services`, the user's service definition files.
+    /// Development: use `dir` instead of the app config folder for the services folder and the
+    /// log file (`<dir>/atrium.log`), and never change the login item, so a second instance
+    /// leaves the regular installation alone.
+    pub fn with_config_dir(mut self, dir: PathBuf) -> Self {
+        self.logger = Logger {
+            file: Some(Arc::new(dir.join("atrium.log"))),
+        };
+        self.config_dir = Some(dir);
+        self
+    }
+
+    /// Development: JavaScript appended to the init script of every service view.
+    pub fn with_extra_init_script(mut self, script: String) -> Self {
+        self.extra_init_script = Some(script);
+        self
+    }
+
+    /// `<config>/services`, the user's service definition files.
     fn services_dir(&self) -> PortResult<PathBuf> {
-        self.app
-            .path()
-            .app_config_dir()
-            .map(|d| d.join("services"))
-            .map_err(port_err)
+        match &self.config_dir {
+            Some(dir) => Ok(dir.join("services")),
+            None => self
+                .app
+                .path()
+                .app_config_dir()
+                .map(|d| d.join("services"))
+                .map_err(port_err),
+        }
     }
 
     /// File the host logger appends to (`<app_log_dir>/atrium.log`), if available.
@@ -297,9 +324,13 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
                 spec.account
             )));
         }
+        let init_script = match &self.extra_init_script {
+            Some(extra) => format!("{}\n{extra}", spec.init_script),
+            None => spec.init_script.clone(),
+        };
         let mut builder = WebviewBuilder::new(label, WebviewUrl::External(spec.url.clone()))
             .data_store_identifier(spec.store_id)
-            .initialization_script(&spec.init_script)
+            .initialization_script(&init_script)
             // Hidden accounts keep running (calls, sockets, timers).
             .background_throttling(BackgroundThrottlingPolicy::Disabled);
         if let Some(ua) = &spec.user_agent {
@@ -476,6 +507,10 @@ impl<R: Runtime> Platform for TauriHost<R> {
     }
 
     fn apply_system_settings(&self, settings: &AppSettings) -> PortResult {
+        if self.config_dir.is_some() {
+            // Development instance: the login item belongs to the regular installation.
+            return Ok(());
+        }
         let autostart = self
             .app
             .try_state::<AutoLaunchManager>()

@@ -15,3 +15,8 @@ Start from `example.toml.disabled`: copy it to `myservice.toml` and edit it. Eve
 is documented there.
 
 Required fields: `id`, `name`, `color`, `url`.
+
+Per-account part of the URL: put `{instance}` in `url` (and `internal_hosts`), e.g.
+`url = "https://{instance}/"` for a self-hosted server or `https://{instance}.slack.com/`
+for a workspace. Each account then asks for it; `instance_label` names the field and
+`instance_default` pre-fills it.

@@ -27,7 +27,7 @@ fn demo_snapshot() -> Snapshot {
                unread,
                indirect,
                muted,
-               team_label: Option<&str>| {
+               instance_label: Option<&str>| {
         AccountView {
             id: Uuid::from_u128(n),
             service: service.into(),
@@ -36,13 +36,13 @@ fn demo_snapshot() -> Snapshot {
             initials: ini.into(),
             unread,
             indirect,
-            team_label: team_label.map(Into::into),
+            instance_label: instance_label.map(Into::into),
             icon: None,
             icon_glyph: false,
             hibernated: false,
             settings: AccountSettings {
                 label: label.into(),
-                team: team_label.map(|_| "example".to_string()),
+                instance: instance_label.map(|_| "example".to_string()),
                 muted,
                 show_badge: true,
                 in_dock_badge: true,
@@ -124,9 +124,9 @@ fn demo_snapshot() -> Snapshot {
     let custom = CustomService {
         id: "custom-wiki".into(),
         name: "Wiki".into(),
-        url: "https://{team}/".into(),
+        url: "https://{instance}/".into(),
         color: "#0f766e".into(),
-        team_label: Some("Host".into()),
+        instance_label: Some("Host".into()),
         title_regex: None,
         user_agent: None,
     };
@@ -138,11 +138,11 @@ fn demo_snapshot() -> Snapshot {
                 id: "slack".into(),
                 name: "Slack".into(),
                 color: "#4A154B".into(),
-                team_label: Some("Workspace".into()),
-                team_default: None,
+                instance_label: Some("Workspace".into()),
+                instance_default: None,
                 custom: false,
                 allow_media: false,
-                url: "https://{team}.slack.com/".into(),
+                url: "https://{instance}.slack.com/".into(),
                 title_regex: Some(r"^\((\d+)\)".into()),
                 user_agent: None,
             },
@@ -150,11 +150,11 @@ fn demo_snapshot() -> Snapshot {
                 id: "element".into(),
                 name: "Element".into(),
                 color: "#0DBD8B".into(),
-                team_label: Some("Instance".into()),
-                team_default: Some("app.element.io".into()),
+                instance_label: Some("Instance".into()),
+                instance_default: Some("app.element.io".into()),
                 custom: false,
                 allow_media: false,
-                url: "https://{team}/".into(),
+                url: "https://{instance}/".into(),
                 title_regex: Some(r"^\[(\d+)\]".into()),
                 user_agent: Some("chrome".into()),
             },
@@ -162,11 +162,11 @@ fn demo_snapshot() -> Snapshot {
                 id: "mastodon".into(),
                 name: "Mastodon".into(),
                 color: "#6364FF".into(),
-                team_label: Some("Instance".into()),
-                team_default: Some("mastodon.social".into()),
+                instance_label: Some("Instance".into()),
+                instance_default: Some("mastodon.social".into()),
                 custom: false,
                 allow_media: false,
-                url: "https://{team}/".into(),
+                url: "https://{instance}/".into(),
                 title_regex: None,
                 user_agent: Some("Mozilla/5.0 (Macintosh) Mastodon".into()),
             },
@@ -174,8 +174,8 @@ fn demo_snapshot() -> Snapshot {
                 id: "discord".into(),
                 name: "Discord".into(),
                 color: "#5865F2".into(),
-                team_label: None,
-                team_default: None,
+                instance_label: None,
+                instance_default: None,
                 custom: false,
                 allow_media: false,
                 url: "https://discord.com/app".into(),
@@ -186,11 +186,11 @@ fn demo_snapshot() -> Snapshot {
                 id: "custom-wiki".into(),
                 name: "Wiki".into(),
                 color: "#0f766e".into(),
-                team_label: Some("Host".into()),
-                team_default: None,
+                instance_label: Some("Host".into()),
+                instance_default: None,
                 custom: true,
                 allow_media: false,
-                url: "https://{team}/".into(),
+                url: "https://{instance}/".into(),
                 title_regex: None,
                 user_agent: None,
             },
@@ -291,9 +291,9 @@ impl Tab {
 struct UiState {
     tab: RwSignal<Tab>,
     focus_add: RwSignal<bool>,
-    /// Demo aid: index of the account whose edit form opens initially (consumed once).
+    /// Screenshot aid (`?edit=`): index of the account whose edit form opens initially (consumed once).
     edit_idx: RwSignal<Option<usize>>,
-    /// Demo aid: open the custom-service add form initially (consumed once).
+    /// Screenshot aid (`?addcustom=1`): open the custom-service add form initially (consumed once).
     add_custom: RwSignal<bool>,
 }
 
@@ -303,26 +303,29 @@ struct Dispatch(WriteSignal<Snapshot>);
 #[component]
 fn App() -> impl IntoView {
     let (snap, set_snap) = signal(Snapshot::default());
-    let mut tab = Tab::Accounts;
-    let mut edit_idx = None;
-    let mut add_custom = false;
+    // `?dialog=<tab>&edit=<index>&addcustom=1` open the settings dialog in a given state, in the
+    // demo and in the app alike (screenshots without clicks, see README "Development").
+    let dialog = query_param("dialog");
+    let tab = dialog
+        .as_deref()
+        .and_then(Tab::from_id)
+        .unwrap_or(Tab::Accounts);
+    let edit_idx = query_param("edit").and_then(|v| v.parse().ok());
+    let add_custom = query_param("addcustom").is_some_and(|v| v != "0");
     if use_tauri() {
         tauri::listen_snapshots(move |s| set_snap.set(s));
+        let open_dialog = dialog.is_some();
         leptos::task::spawn_local(async move {
             if let Some(s) = tauri::get_snapshot().await {
                 set_snap.set(s);
+                if open_dialog {
+                    tauri::send(UiCommand::SetDialog { open: true }).await;
+                }
             }
         });
     } else if is_demo() {
         let mut s = demo_snapshot();
-        if let Some(d) = query_param("dialog") {
-            if let Some(t) = Tab::from_id(&d) {
-                tab = t;
-            }
-            s.dialog_open = true;
-        }
-        edit_idx = query_param("edit").and_then(|v| v.parse().ok());
-        add_custom = query_param("addcustom").is_some_and(|v| v != "0");
+        s.dialog_open = dialog.is_some();
         set_snap.set(s);
     }
 
@@ -397,8 +400,8 @@ fn dispatch(set: WriteSignal<Snapshot>, cmd: UiCommand) {
                 id: service.id.clone(),
                 name: service.name.clone(),
                 color: service.color.clone(),
-                team_label: service.team_label.clone(),
-                team_default: None,
+                instance_label: service.instance_label.clone(),
+                instance_default: None,
                 custom: true,
                 allow_media: false,
                 url: service.url.clone(),
@@ -806,6 +809,15 @@ fn ConfirmButton(
     }
 }
 
+/// Label of the per-account instance field; "Instance" when the service defines none.
+fn field_label(label: String) -> String {
+    if label.trim().is_empty() {
+        "Instance".into()
+    } else {
+        label
+    }
+}
+
 /// One form row: label column + control column (with optional muted helper text under it).
 #[component]
 fn Row(
@@ -1080,7 +1092,7 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
     let ui = expect_context::<UiState>();
     let service = RwSignal::new(String::new());
     let label = RwSignal::new(String::new());
-    let team = RwSignal::new(String::new());
+    let instance = RwSignal::new(String::new());
     // Which account is being edited; its draft lives inside `EditForm`.
     let initial_edit = ui
         .edit_idx
@@ -1101,11 +1113,15 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
         let id = service.get();
         services.with(|l| l.iter().find(|x| x.id == id).or(l.first()).cloned())
     };
-    // Reset the team field only when the effective service changes.
+    // Reset the instance field only when the effective service changes.
     let current_id = Memo::new(move |_| current().map(|s| s.id));
     Effect::new(move |_| {
         if current_id.get().is_some() {
-            team.set(current().and_then(|s| s.team_default).unwrap_or_default());
+            instance.set(
+                current()
+                    .and_then(|s| s.instance_default)
+                    .unwrap_or_default(),
+            );
         }
     });
 
@@ -1113,17 +1129,18 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
     let add = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let Some(sv) = current() else { return };
-        let team_v = team.get_untracked().trim().to_string();
-        let team_opt = (sv.team_label.is_some() && !team_v.is_empty()).then_some(team_v);
+        let instance_v = instance.get_untracked().trim().to_string();
+        let instance_opt =
+            (sv.instance_label.is_some() && !instance_v.is_empty()).then_some(instance_v);
         let l = label.get_untracked().trim().to_string();
         let l = if l.is_empty() { sv.name.clone() } else { l };
         cmd(UiCommand::AddAccount {
             service: sv.id.clone(),
             label: l.clone(),
-            team: team_opt,
+            instance: instance_opt,
         });
         label.set(String::new());
-        team.set(sv.team_default.clone().unwrap_or_default());
+        instance.set(sv.instance_default.clone().unwrap_or_default());
         added.set(Some(l.clone()));
         set_timeout(
             move || {
@@ -1177,10 +1194,10 @@ fn AccountsTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
                     on:input=move |e| label.set(event_target_value(&e))
                 />
             </Row>
-            {move || current().and_then(|s| s.team_label).map(|tl| view! {
-                <Row label=tl>
+            {move || current().and_then(|s| s.instance_label).map(|tl| view! {
+                <Row label=field_label(tl)>
                     <input type="text" autocapitalize="off" spellcheck="false" autocomplete="off"
-                        prop:value=move || team.get() on:input=move |e| team.set(event_target_value(&e)) use:noac />
+                        prop:value=move || instance.get() on:input=move |e| instance.set(event_target_value(&e)) use:noac />
                 </Row>
             })}
             <Row label="">
@@ -1355,7 +1372,7 @@ fn EditForm(
     };
     let (color, initials) = (a.color.clone(), a.initials.clone());
     let label = RwSignal::new(s.label);
-    let team = RwSignal::new(s.team.unwrap_or_default());
+    let instance = RwSignal::new(s.instance.unwrap_or_default());
     let notif = RwSignal::new(!s.muted);
     let badge = RwSignal::new(s.show_badge);
     let dock = RwSignal::new(s.in_dock_badge);
@@ -1389,14 +1406,14 @@ fn EditForm(
     });
     let ua_mode = RwSignal::new(mode);
     let ua_custom = RwSignal::new(custom);
-    let team_label = a.team_label;
-    let has_team = team_label.is_some();
+    let instance_label = a.instance_label;
+    let has_instance = instance_label.is_some();
     let zoom_opts = num_options(&ZOOMS, Some(zoom_pct), |n| format!("{n} %"));
     let hib_opts = num_options(&HIBERNATE, s.hibernate_after_min, minutes_label);
 
     let save = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
-        let team_v = team.get_untracked().trim().to_string();
+        let instance_v = instance.get_untracked().trim().to_string();
         let user_agent = match ua_mode.get_untracked().as_str() {
             "" => None,
             "custom" => {
@@ -1414,7 +1431,7 @@ fn EditForm(
                 } else {
                     l
                 },
-                team: (has_team && !team_v.is_empty()).then_some(team_v),
+                instance: (has_instance && !instance_v.is_empty()).then_some(instance_v),
                 muted: !notif.get_untracked(),
                 show_badge: badge.get_untracked(),
                 in_dock_badge: dock.get_untracked(),
@@ -1455,10 +1472,10 @@ fn EditForm(
             <Row label="Label">
                 <input type="text" spellcheck="false" prop:value=move || label.get() on:input=move |e| label.set(event_target_value(&e)) />
             </Row>
-            {team_label.map(|tl| view! {
-                <Row label=tl hint="Changing the instance reloads the account.">
+            {instance_label.map(|tl| view! {
+                <Row label=field_label(tl) hint="Changing the instance reloads the account.">
                     <input type="text" autocapitalize="off" spellcheck="false" autocomplete="off"
-                        prop:value=move || team.get() on:input=move |e| team.set(event_target_value(&e)) use:noac />
+                        prop:value=move || instance.get() on:input=move |e| instance.set(event_target_value(&e)) use:noac />
                 </Row>
             })}
             <Toggle label="Enabled" hint="Disabled accounts keep their login but are not loaded." checked=enabled on_change=move |v| enabled.set(v) />
@@ -1594,7 +1611,7 @@ fn CustomTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
             <section class="list">
                 <For
                     each=move || list.get()
-                    key=|c| (c.id.clone(), c.name.clone(), c.url.clone(), c.color.clone(), c.team_label.clone(), c.title_regex.clone(), c.user_agent.clone())
+                    key=|c| (c.id.clone(), c.name.clone(), c.url.clone(), c.color.clone(), c.instance_label.clone(), c.title_regex.clone(), c.user_agent.clone())
                     children=move |c| {
                         let c_edit = c.clone();
                         let id = c.id.clone();
@@ -1626,7 +1643,7 @@ fn CustomTab(snap: ReadSignal<Snapshot>) -> impl IntoView {
             Some(existing) => view! { <CustomForm snap=snap existing=existing form=form /> }.into_any(),
         }}
         <h2>"Service definition files"</h2>
-        <p class="note">"Edit or add TOML files here for full control (same format as the built-in services). A file with the same id as a built-in service overrides it. Click Reload to apply."</p>
+        <p class="note">"Edit or add TOML files here for full control (same format as the built-in services). A file with the same id as a built-in service overrides it. Click Reload to apply. Use {instance} in url or internal_hosts for the part that differs per account (e.g. the server host); instance_label sets the field's label and instance_default pre-fills it."</p>
         <div class="form">
             <Row label="Folder"><code>{move || snap.with(|s| s.app.services_dir.clone())}</code></Row>
             <Row label="">
@@ -1660,7 +1677,7 @@ fn CustomForm(
         name: String::new(),
         url: String::new(),
         color: "#6366f1".into(),
-        team_label: None,
+        instance_label: None,
         title_regex: None,
         user_agent: None,
     });
@@ -1670,7 +1687,7 @@ fn CustomForm(
     let name = RwSignal::new(c.name);
     let url = RwSignal::new(c.url);
     let color = RwSignal::new(if color_ok { c.color } else { "#888888".into() });
-    let team_label = RwSignal::new(c.team_label.unwrap_or_default());
+    let instance_label = RwSignal::new(c.instance_label.unwrap_or_default());
     let regex = RwSignal::new(c.title_regex.unwrap_or_default());
     let ua_mode = RwSignal::new(mode);
     let ua_custom = RwSignal::new(custom);
@@ -1696,7 +1713,7 @@ fn CustomForm(
                 format!("{} (custom)", s.name),
                 s.url,
                 s.color,
-                s.team_label,
+                s.instance_label,
                 s.title_regex,
                 s.user_agent,
             ),
@@ -1717,7 +1734,7 @@ fn CustomForm(
         } else {
             "#888888".into()
         });
-        team_label.set(tl.unwrap_or_default());
+        instance_label.set(tl.unwrap_or_default());
         regex.set(re.unwrap_or_default());
         ua_mode.set(mode);
         ua_custom.set(custom);
@@ -1733,8 +1750,8 @@ fn CustomForm(
             id: id.clone(),
             name: name.get_untracked().trim().to_string(),
             color: color.get_untracked(),
-            team_label: if url_v.contains("{team}") {
-                opt(team_label.get_untracked())
+            instance_label: if url_v.contains("{instance}") {
+                opt(instance_label.get_untracked())
             } else {
                 None
             },
@@ -1768,7 +1785,7 @@ fn CustomForm(
             <Row label="Name">
                 <input type="text" spellcheck="false" prop:value=move || name.get() on:input=move |e| name.set(event_target_value(&e)) />
             </Row>
-            <Row label="URL" hint="Use {team} for a per-account part, e.g. https://{team}/">
+            <Row label="URL" hint="Use {instance} for the part that differs per account, e.g. the server host of a self-hosted service (https://{instance}/) or a workspace subdomain. Each account then asks for it.">
                 <input type="url" class="wide" placeholder="https://example.com/"
                     autocapitalize="off" spellcheck="false" autocomplete="off"
                     prop:value=move || url.get() on:input=move |e| url.set(event_target_value(&e)) use:noac />
@@ -1776,10 +1793,10 @@ fn CustomForm(
             <Row label="Color">
                 <input type="color" prop:value=move || color.get() on:input=move |e| color.set(event_target_value(&e)) />
             </Row>
-            {move || url.with(|u| u.contains("{team}")).then(|| view! {
-                <Row label="Team field label" hint="Optional, e.g. Instance.">
+            {move || url.with(|u| u.contains("{instance}")).then(|| view! {
+                <Row label="Instance field label" hint="Optional, e.g. Instance.">
                     <input type="text" placeholder="e.g. Instance" autocapitalize="off" spellcheck="false" autocomplete="off"
-                        prop:value=move || team_label.get() on:input=move |e| team_label.set(event_target_value(&e)) use:noac />
+                        prop:value=move || instance_label.get() on:input=move |e| instance_label.set(event_target_value(&e)) use:noac />
                 </Row>
             })}
             <Row label="Unread title pattern" hint="Optional regular expression on the page title; capture group 1 is the unread count.">

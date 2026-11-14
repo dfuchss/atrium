@@ -1,7 +1,8 @@
 //! Service views: one child webview per account in the main window, with its native hooks.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::Duration;
 
@@ -121,6 +122,25 @@ fn place<R: Runtime>(webview: &Webview<R>, bounds: Bounds) -> PortResult {
         .map_err(port_err)
 }
 
+/// `dir/name`, or `dir/stem (n).ext` for the first `n` that does not exist yet, so a download
+/// never replaces an existing file.
+fn unused_path(dir: &Path, name: &OsStr) -> PathBuf {
+    let candidate = dir.join(name);
+    if !candidate.exists() {
+        return candidate;
+    }
+    let original = Path::new(name);
+    let stem = original.file_stem().unwrap_or(name).to_string_lossy();
+    let extension = original
+        .extension()
+        .map(|extension| format!(".{}", extension.to_string_lossy()))
+        .unwrap_or_default();
+    (1..u32::MAX)
+        .map(|n| dir.join(format!("{stem} ({n}){extension}")))
+        .find(|path| !path.exists())
+        .unwrap_or(candidate)
+}
+
 /// Name a download is saved under: the file name the page suggested, or None for hidden
 /// (dot) files, which would land unseen in Downloads (e.g. `.zshrc`, `.htaccess`).
 fn download_file_name(suggested: &Path) -> Option<String> {
@@ -152,7 +172,7 @@ fn download_hook<R: Runtime>(
                 return false;
             };
             if let Ok(dir) = app.path().download_dir() {
-                *destination = dir.join(&name);
+                *destination = unused_path(&dir, OsStr::new(&name));
             }
             logger.log(&format!(
                 "[{account}] download {shown_url} -> {}",
@@ -545,5 +565,18 @@ mod tests {
     fn view_label_uses_simple_uuid() {
         let id = Uuid::from_u128(0x0123_4567_89ab_cdef_0123_4567_89ab_cdef);
         assert_eq!(view_label(id), "svc-0123456789abcdef0123456789abcdef");
+    }
+
+    #[test]
+    fn downloads_never_replace_existing_files() {
+        let dir = std::env::temp_dir().join(format!("atrium-dl-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let name = OsStr::new("report.pdf");
+        assert_eq!(unused_path(&dir, name), dir.join("report.pdf"));
+        std::fs::write(dir.join("report.pdf"), "x").unwrap();
+        assert_eq!(unused_path(&dir, name), dir.join("report (1).pdf"));
+        std::fs::write(dir.join("report (1).pdf"), "x").unwrap();
+        assert_eq!(unused_path(&dir, name), dir.join("report (2).pdf"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

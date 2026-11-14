@@ -28,9 +28,17 @@ fn download(url: &str) -> Result<String, ureq::Error> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))
         .user_agent(domain::catalog::UA_SAFARI)
+        // Only the requested URL passed the host allow-list (`domain::core::icons`); a redirect
+        // could lead anywhere, so it is returned as is and refused below.
+        .max_redirects(0)
         .build()
         .into();
     let mut response = agent.get(url).call()?;
+    if response.status().is_redirection() {
+        return Err(ureq::Error::Io(std::io::Error::other(
+            "redirects are not followed",
+        )));
+    }
     let content_type = response
         .headers()
         .get("content-type")
@@ -71,7 +79,27 @@ pub(crate) fn data_url(mime: &str, bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+
     use super::*;
+
+    #[test]
+    fn redirects_are_not_followed() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0; 1024];
+            let _ = stream.read(&mut request).unwrap();
+            stream
+                .write_all(b"HTTP/1.1 302 Found\r\nLocation: http://other.example/i.png\r\nContent-Length: 0\r\n\r\n")
+                .unwrap();
+        });
+        let error = download_icon(&format!("http://{address}/favicon.ico")).unwrap_err();
+        assert!(error.contains("redirect"), "{error}");
+        server.join().unwrap();
+    }
 
     #[test]
     fn mime_filter_and_encoding() {

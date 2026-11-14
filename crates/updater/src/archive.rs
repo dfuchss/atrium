@@ -1,6 +1,7 @@
 //! The release zip: its entry names are checked before `ditto` extracts it, and the extracted
 //! tree is checked for symbolic links that leave it (zip slip).
 
+use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
@@ -11,6 +12,8 @@ const CENTRAL_HEADER_LEN: usize = 46;
 const MAX_COMMENT_LEN: usize = 0xFFFF;
 const FILE_TYPE_MASK: u32 = 0o170_000;
 const SYMLINK_TYPE: u32 = 0o120_000;
+/// More links in a row than this are taken as a loop (the kernel's `MAXSYMLINKS` is 32).
+const MAX_LINK_HOPS: usize = 32;
 
 /// One entry of the zip's central directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,27 +108,57 @@ pub(crate) fn check_entries(entries: &[ZipEntry]) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether the link at `link` (relative to the extraction root) pointing to `target` stays
-/// inside the root.
-pub(crate) fn link_stays_inside(link: &Path, target: &Path) -> bool {
-    let mut depth: usize = 0;
-    let parent_parts = link.parent().map(Path::components).into_iter().flatten();
-    for component in parent_parts.chain(target.components()) {
-        match component {
-            Component::Normal(_) => depth += 1,
-            Component::CurDir => {}
-            Component::ParentDir => match depth.checked_sub(1) {
-                Some(up) => depth = up,
-                None => return false,
-            },
-            Component::RootDir | Component::Prefix(_) => return false,
+/// Where `path` (absolute) leads on disk: every symbolic link on the way is followed, also
+/// links to links and links inside a link's target. A part that does not exist is taken as
+/// written, so dangling links resolve too. `None` for a loop.
+fn resolve(path: &Path) -> Option<PathBuf> {
+    let mut resolved = PathBuf::from("/");
+    let mut pending: Vec<OsString> = Vec::new();
+    push_components(&mut pending, path);
+    let mut hops = 0;
+    while let Some(part) = pending.pop() {
+        match Path::new(&part).components().next() {
+            Some(Component::RootDir | Component::Prefix(_)) => resolved = PathBuf::from("/"),
+            Some(Component::ParentDir) => {
+                resolved.pop();
+            }
+            Some(Component::Normal(name)) => {
+                let next = resolved.join(name);
+                match std::fs::read_link(&next) {
+                    Ok(target) => {
+                        hops += 1;
+                        if hops > MAX_LINK_HOPS {
+                            return None;
+                        }
+                        push_components(&mut pending, &target);
+                    }
+                    Err(_) => resolved = next,
+                }
+            }
+            Some(Component::CurDir) | None => {}
         }
     }
-    true
+    Some(resolved)
 }
 
-/// Every symbolic link below `root`, relative to it, with its target.
-fn symlinks_below(root: &Path) -> std::io::Result<Vec<(PathBuf, PathBuf)>> {
+/// Pushes the components of `path` so that the first one is popped first.
+fn push_components(pending: &mut Vec<OsString>, path: &Path) {
+    let start = pending.len();
+    pending.extend(
+        path.components()
+            .map(|part| part.as_os_str().to_os_string()),
+    );
+    pending[start..].reverse();
+}
+
+/// Whether the symbolic link `link` (absolute, below `root`, which is canonical) leads to a
+/// place inside `root` once all links on the way are followed.
+fn link_stays_inside(root: &Path, link: &Path) -> bool {
+    resolve(link).is_some_and(|target| target.starts_with(root))
+}
+
+/// Every symbolic link below `root`.
+fn symlinks_below(root: &Path) -> std::io::Result<Vec<PathBuf>> {
     let mut links = Vec::new();
     let mut pending = vec![root.to_path_buf()];
     while let Some(dir) = pending.pop() {
@@ -133,8 +166,7 @@ fn symlinks_below(root: &Path) -> std::io::Result<Vec<(PathBuf, PathBuf)>> {
             let path = entry?.path();
             let kind = std::fs::symlink_metadata(&path)?.file_type();
             if kind.is_symlink() {
-                let relative = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
-                links.push((relative, std::fs::read_link(&path)?));
+                links.push(path);
             } else if kind.is_dir() {
                 pending.push(path);
             }
@@ -162,14 +194,17 @@ pub(crate) fn extract(zip: &Path, target: &Path) -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    let links = symlinks_below(target).map_err(|error| error.to_string())?;
-    match links
-        .iter()
-        .find(|(link, destination)| !link_stays_inside(link, destination))
-    {
-        Some((link, _)) => Err(format!(
+    check_links(target)
+}
+
+/// Refuses any symbolic link below `root` that leads outside of it.
+fn check_links(root: &Path) -> Result<(), String> {
+    let root = std::fs::canonicalize(root).map_err(|error| error.to_string())?;
+    let links = symlinks_below(&root).map_err(|error| error.to_string())?;
+    match links.iter().find(|link| !link_stays_inside(&root, link)) {
+        Some(link) => Err(format!(
             "refusing symbolic link {} that leaves the archive",
-            link.display()
+            link.strip_prefix(&root).unwrap_or(link).display()
         )),
         None => Ok(()),
     }
@@ -255,31 +290,62 @@ mod tests {
         check_entries(&sibling).unwrap();
     }
 
+    /// An extraction root with `Atrium.app/Contents/MacOS/atrium` and the given links
+    /// (relative to the root) and their targets.
+    fn tree_with_links(links: &[(&str, &str)]) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        let macos = dir.path().join("Atrium.app/Contents/MacOS");
+        std::fs::create_dir_all(&macos).unwrap();
+        std::fs::write(macos.join("atrium"), "binary").unwrap();
+        for (link, target) in links {
+            std::os::unix::fs::symlink(target, dir.path().join(link)).unwrap();
+        }
+        dir
+    }
+
     #[test]
     fn symlinks_must_stay_inside() {
         let inside = [
             ("Atrium.app/Contents/link", "MacOS/atrium"),
             ("Atrium.app/Contents/link", "../Contents/Info.plist"),
             ("Atrium.app/link", "./Contents"),
+            ("Atrium.app/link", "dangling"),
         ];
-        for (link, target) in inside {
-            assert!(
-                link_stays_inside(Path::new(link), Path::new(target)),
-                "{target}"
-            );
+        for link in inside {
+            check_links(tree_with_links(&[link]).path()).unwrap();
         }
         let outside = [
             ("Atrium.app/link", "/etc"),
             ("Atrium.app/link", "../../outside"),
             ("link", ".."),
-            ("Atrium.app/a/link", "../../../x"),
+            ("Atrium.app/Contents/link", "../../../x"),
         ];
-        for (link, target) in outside {
+        for link in outside {
             assert!(
-                !link_stays_inside(Path::new(link), Path::new(target)),
-                "{target}"
+                check_links(tree_with_links(&[link]).path()).is_err(),
+                "{link:?}"
             );
         }
+    }
+
+    #[test]
+    fn link_chains_are_followed() {
+        // Lexically `a/../../x` from `Atrium.app` stays inside; through `a -> .` it leaves.
+        let chain = tree_with_links(&[("Atrium.app/a", "."), ("Atrium.app/b", "a/../../x")]);
+        let error = check_links(chain.path()).unwrap_err();
+        assert!(error.contains("Atrium.app/b"), "{error}");
+        let via_link = tree_with_links(&[("Atrium.app/up", ".."), ("Atrium.app/c", "up/../y")]);
+        assert!(check_links(via_link.path()).is_err());
+        let to_link = tree_with_links(&[("Atrium.app/d", "e"), ("Atrium.app/e", "/etc")]);
+        assert!(check_links(to_link.path()).is_err());
+        let fine = tree_with_links(&[("Atrium.app/a", "."), ("Atrium.app/b", "a/Contents")]);
+        check_links(fine.path()).unwrap();
+    }
+
+    #[test]
+    fn link_loops_are_refused() {
+        let looping = tree_with_links(&[("Atrium.app/a", "b"), ("Atrium.app/b", "a")]);
+        assert!(check_links(looping.path()).is_err());
     }
 
     #[test]

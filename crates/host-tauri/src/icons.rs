@@ -1,5 +1,6 @@
 //! Favicon download: small blocking `ureq` client (rustls), run on a background thread.
 
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, ToSocketAddrs as _};
 use std::time::Duration;
 
 use base64::Engine as _;
@@ -24,7 +25,67 @@ pub(crate) fn download_simple_icon(slug: &str) -> SimpleIconResult {
     }
 }
 
+fn io_error(message: impl Into<String>) -> ureq::Error {
+    ureq::Error::Io(std::io::Error::other(message.into()))
+}
+
+/// True for addresses that belong to the local machine or network, never to a public icon host.
+pub(crate) fn is_local_address(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => is_local_v4(v4),
+        IpAddr::V6(v6) => is_local_v6(v6),
+    }
+}
+
+fn is_local_v4(ip: Ipv4Addr) -> bool {
+    let [a, b, ..] = ip.octets();
+    ip.is_loopback()
+        || ip.is_private()
+        || ip.is_link_local()
+        || ip.is_unspecified()
+        || ip.is_broadcast()
+        || ip.is_multicast()
+        || ip.is_documentation()
+        || a == 0
+        || (a == 100 && (64..128).contains(&b))
+}
+
+fn is_local_v6(ip: Ipv6Addr) -> bool {
+    if let Some(v4) = ip.to_ipv4_mapped() {
+        return is_local_v4(v4);
+    }
+    ip.is_loopback()
+        || ip.is_unspecified()
+        || ip.is_multicast()
+        || (ip.segments()[0] & 0xfe00) == 0xfc00
+        || (ip.segments()[0] & 0xffc0) == 0xfe80
+}
+
+/// Rejects URLs whose host is, or resolves to, a local or private address.
+fn ensure_public_host(url: &url::Url) -> Result<(), ureq::Error> {
+    let host = url.host_str().ok_or_else(|| io_error("no host"))?;
+    let port = url.port_or_known_default().unwrap_or(443);
+    let addresses = (host.trim_matches(['[', ']']), port)
+        .to_socket_addrs()
+        .map_err(ureq::Error::Io)?;
+    for address in addresses {
+        if is_local_address(address.ip()) {
+            return Err(io_error(format!("{host} is a local address")));
+        }
+    }
+    Ok(())
+}
+
 fn download(url: &str) -> Result<String, ureq::Error> {
+    let target = url::Url::parse(url).map_err(|error| io_error(error.to_string()))?;
+    if !matches!(target.scheme(), "http" | "https") {
+        return Err(io_error("scheme not allowed"));
+    }
+    ensure_public_host(&target)?;
+    fetch(url)
+}
+
+fn fetch(url: &str) -> Result<String, ureq::Error> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))
         .user_agent(domain::catalog::UA_SAFARI)
@@ -96,7 +157,9 @@ mod tests {
                 .write_all(b"HTTP/1.1 302 Found\r\nLocation: http://other.example/i.png\r\nContent-Length: 0\r\n\r\n")
                 .unwrap();
         });
-        let error = download_icon(&format!("http://{address}/favicon.ico")).unwrap_err();
+        let error = fetch(&format!("http://{address}/favicon.ico"))
+            .unwrap_err()
+            .to_string();
         assert!(error.contains("redirect"), "{error}");
         server.join().unwrap();
     }
@@ -115,5 +178,33 @@ mod tests {
             data_url("image/png", &[0, 1, 2]),
             "data:image/png;base64,AAEC"
         );
+    }
+
+    #[test]
+    fn local_addresses_are_rejected() {
+        for local in [
+            "127.0.0.1",
+            "10.1.2.3",
+            "172.16.0.1",
+            "192.168.1.1",
+            "169.254.169.254",
+            "100.64.0.1",
+            "0.0.0.0",
+            "::1",
+            "fe80::1",
+            "fd00::1",
+            "::ffff:127.0.0.1",
+        ] {
+            assert!(is_local_address(local.parse().unwrap()), "{local}");
+        }
+        for public in ["8.8.8.8", "1.1.1.1", "2606:4700::1111"] {
+            assert!(!is_local_address(public.parse().unwrap()), "{public}");
+        }
+    }
+
+    #[test]
+    fn loopback_urls_are_not_fetched() {
+        assert!(download_icon("http://127.0.0.1:1/favicon.ico").is_err());
+        assert!(download_icon("http://[::1]/favicon.ico").is_err());
     }
 }

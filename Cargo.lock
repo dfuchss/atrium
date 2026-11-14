@@ -1811,6 +1811,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tempfile",
  "ureq",
+ "url",
  "uuid",
 ]
 

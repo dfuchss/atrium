@@ -12,6 +12,7 @@ domain.workspace = true
 protocol.workspace = true
 macos-dialogs.workspace = true
 uuid.workspace = true
+url.workspace = true
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }
 tauri-plugin-notification.workspace = true
 tauri-plugin-opener.workspace = true

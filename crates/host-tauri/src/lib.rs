@@ -125,15 +125,25 @@ impl<R: Runtime> TauriHost<R> {
     /// once the sidebar webview exists and before the first service view is created (see
     /// `macos_dialogs::install`); without it the pages get the default answers.
     pub fn install_dialogs(&self) {
-        let handler = TauriDialogHandler {
+        let Some(sidebar) = self.app.get_webview(UI_WEBVIEW) else {
+            self.logger
+                .log("JavaScript dialogs unavailable: no sidebar webview yet");
+            return;
+        };
+        let handler = Arc::new(TauriDialogHandler {
             policy: self.dialogs.clone(),
             logger: self.logger.clone(),
-        };
-        match macos_dialogs::install(Arc::new(handler)) {
-            Ok(()) => self.logger.log("JavaScript dialogs installed"),
-            Err(error) => self
-                .logger
-                .log(&format!("JavaScript dialogs unavailable: {error}")),
+        });
+        let logger = self.logger.clone();
+        let scheduled = sidebar.with_webview(move |platform| {
+            match macos_dialogs::install(&platform, handler) {
+                Ok(()) => logger.log("JavaScript dialogs installed"),
+                Err(error) => logger.log(&format!("JavaScript dialogs unavailable: {error}")),
+            }
+        });
+        if let Err(error) = scheduled {
+            self.logger
+                .log(&format!("JavaScript dialogs unavailable: {error}"));
         }
     }
 

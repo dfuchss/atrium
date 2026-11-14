@@ -1,16 +1,17 @@
 //! Native `alert`, `confirm` and `prompt` for pages in service webviews and the windows they
 //! open.
 //!
-//! wry's `WKUIDelegate` class (`WryWebViewUIDelegate`) implements none of `WebKit`'s three
-//! JavaScript panel methods, so `WebKit` answers them itself with the defaults (`confirm` ->
-//! false). [`install`] adds the methods to that class at runtime (`class_addMethod`, the way an
-//! Objective-C category extends a class): everything the delegate already does (new windows,
-//! media permission, file upload) stays untouched, and should a wry upgrade implement the methods
-//! itself, adding them fails and wry's own dialogs are used.
+//! wry's `WKUIDelegate` class implements none of `WebKit`'s three JavaScript panel methods, so
+//! `WebKit` answers them itself with the defaults (`confirm` -> false). [`install`] adds the
+//! methods to that class at runtime (`class_addMethod`, the way an Objective-C category extends
+//! a class): everything the delegate already does (new windows, media permission, file upload)
+//! stays untouched, and should a wry upgrade implement the methods itself, adding them fails and
+//! wry's own dialogs are used. The class is taken from an existing webview's delegate, not
+//! looked up by name: objc2 registers it under a mangled name that changes with wry's version.
 //!
 //! `WebKit` records which methods the delegate implements when the delegate is set, so
-//! [`install`] must run before the first service webview is created; and objc2 registers wry's
-//! class with the first webview, so one webview (the sidebar) must exist already.
+//! [`install`] must run before the first service webview is created; the webview it is given
+//! (the sidebar) keeps its defaults.
 //!
 //! What a dialog shows is decided by the [`DialogHandler`] in safe code (text, suppression, rate
 //! limits); this crate only converts between `WebKit` and `NSAlert`, shown as a sheet on the
@@ -97,8 +98,8 @@ pub trait DialogHandler: Send + Sync {
 #[derive(Debug)]
 pub enum InstallError {
     AlreadyInstalled,
-    /// wry's delegate class is not registered (no webview yet) or was renamed.
-    NoWryDelegateClass,
+    /// The webview given to [`install`] has no UI delegate.
+    NoDelegate,
     DonorClassExists,
     MissingDonorMethod(String),
     /// wry implements the method itself; its own handling is kept.
@@ -109,11 +110,7 @@ impl fmt::Display for InstallError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             InstallError::AlreadyInstalled => write!(formatter, "dialogs are already installed"),
-            InstallError::NoWryDelegateClass => write!(
-                formatter,
-                "class {} not found (no webview created yet, or wry renamed it)",
-                WRY_DELEGATE_CLASS.to_string_lossy()
-            ),
+            InstallError::NoDelegate => write!(formatter, "the webview has no UI delegate"),
             InstallError::DonorClassExists => write!(
                 formatter,
                 "class {} exists already",
@@ -131,17 +128,20 @@ impl fmt::Display for InstallError {
 
 impl std::error::Error for InstallError {}
 
-const WRY_DELEGATE_CLASS: &CStr = c"WryWebViewUIDelegate";
 const DONOR_CLASS: &CStr = c"AtriumDialogMethods";
 const SUPPRESSION_TITLE: &str = "Prevent this page from creating additional dialogs";
 const PROMPT_FIELD_SIZE: (f64, f64) = (300.0, 24.0);
 
 static HANDLER: OnceLock<Arc<dyn DialogHandler>> = OnceLock::new();
 
-/// Adds the three panel methods to wry's delegate class; see the crate documentation for when
-/// to call it. On an error nothing changes: the pages keep getting the default answers.
-pub fn install(handler: Arc<dyn DialogHandler>) -> Result<(), InstallError> {
-    let target = AnyClass::get(WRY_DELEGATE_CLASS).ok_or(InstallError::NoWryDelegateClass)?;
+/// Adds the three panel methods to the class of `webview`'s UI delegate (wry's, shared by all
+/// its webviews); see the crate documentation for when to call it. On an error nothing changes:
+/// the pages keep getting the default answers.
+pub fn install(
+    webview: &PlatformWebview,
+    handler: Arc<dyn DialogHandler>,
+) -> Result<(), InstallError> {
+    let target = delegate_class(webview)?;
     let donor = register_donor_class()?;
     HANDLER
         .set(handler)
@@ -150,6 +150,16 @@ pub fn install(handler: Arc<dyn DialogHandler>) -> Result<(), InstallError> {
         copy_method(donor, target, selector)?;
     }
     Ok(())
+}
+
+fn delegate_class(webview: &PlatformWebview) -> Result<&'static AnyClass, InstallError> {
+    let inner: *const WKWebView = webview.inner().cast();
+    // SAFETY: `inner()` is the `WKWebView` Tauri built for this webview, alive while `webview`
+    // is borrowed; `UIDelegate` is a plain property read on the main thread.
+    let delegate = unsafe { (*inner).UIDelegate() }.ok_or(InstallError::NoDelegate)?;
+    let object: *const AnyObject = Retained::as_ptr(&delegate).cast();
+    // SAFETY: a `ProtocolObject` is an Objective-C object, retained by `delegate`.
+    Ok(unsafe { (*object).class() })
 }
 
 fn panel_selectors() -> [Sel; 3] {

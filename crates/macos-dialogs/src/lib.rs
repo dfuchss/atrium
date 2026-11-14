@@ -19,7 +19,12 @@
 //! exactly once: with the default answer when the dialog is suppressed or its sheet never
 //! completes.
 //!
+//! It also builds the `WebKit` configuration of service webviews (`configuration`), which
+//! needs the same Objective-C calls.
+//!
 //! The only crate of the workspace with `unsafe` code; every block says why it is sound.
+
+mod configuration;
 
 use std::cell::RefCell;
 use std::ffi::CStr;
@@ -39,6 +44,8 @@ use objc2_app_kit::{
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use objc2_web_kit::{WKFrameInfo, WKWebView};
 use tauri::webview::PlatformWebview;
+
+pub use configuration::{forbid_automatic_windows, service_configuration};
 
 /// Which panel the page asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]

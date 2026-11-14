@@ -317,13 +317,44 @@ fn external_links_are_throttled_per_account() {
         matches!(dropped.as_slice(), [Effect::Log(line)] if line.contains("https://x.org/a:") && !line.contains("secret")),
         "{dropped:?}"
     );
+    core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
     assert!(matches!(
         open(&mut core, 2).as_slice(),
         [Effect::OpenExternal { .. }]
     ));
+    core.handle(Input::Ui(UiCommand::Select { account: id(1) }));
     core.handle(Input::Tick { now_ms: 12_000 });
     assert!(matches!(
         open(&mut core, 1).as_slice(),
+        [Effect::OpenExternal { .. }]
+    ));
+}
+
+#[test]
+fn web_links_open_only_for_the_visible_account() {
+    let (mut core, _) = started(vec![account(1, "slack", "S"), account(2, "slack", "T")]);
+    let link = |core: &mut Core, n: u128| {
+        core.handle(Input::ExternalLink {
+            account: id(n),
+            url: "https://x.org/a?secret=1".into(),
+        })
+    };
+    let refused = link(&mut core, 2);
+    assert!(
+        matches!(refused.as_slice(), [Effect::Log(message)] if message.contains("background") && !message.contains("secret")),
+        "{refused:?}"
+    );
+    assert!(matches!(
+        link(&mut core, 1).as_slice(),
+        [Effect::OpenExternal { .. }]
+    ));
+    core.handle(Input::Tick { now_ms: 10_000 });
+    core.handle(Input::Ui(UiCommand::SetDialog { open: true }));
+    assert!(matches!(link(&mut core, 1).as_slice(), [Effect::Log(_)]));
+    core.handle(Input::Ui(UiCommand::SetDialog { open: false }));
+    core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
+    assert!(matches!(
+        link(&mut core, 2).as_slice(),
         [Effect::OpenExternal { .. }]
     ));
 }

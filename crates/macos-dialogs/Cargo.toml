@@ -11,7 +11,7 @@ description.workspace = true
 tauri.workspace = true
 block2 = "0.6"
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSObject", "NSString"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSGeometry", "NSObject", "NSString", "NSUUID"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = [
     "std",
     "objc2-core-foundation",
@@ -30,9 +30,12 @@ objc2-web-kit = { version = "0.3", default-features = false, features = [
     "block2",
     "objc2-app-kit",
     "WKFrameInfo",
+    "WKPreferences",
     "WKSecurityOrigin",
     "WKUIDelegate",
     "WKWebView",
+    "WKWebViewConfiguration",
+    "WKWebsiteDataStore",
 ] }
 
 # The workspace lints, except that `unsafe_code` is allowed: this crate talks to the

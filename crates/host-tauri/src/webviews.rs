@@ -2,17 +2,18 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::Duration;
 
 use domain::ports::{PortError, PortResult, WebviewHost};
 use domain::{Account, Bounds, ViewPolicy, ViewSpec, redact_url, unused_store_ids};
+use macos_dialogs::MainThreadMarker;
 use protocol::UI_WEBVIEW;
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{
     AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, Webview, WebviewBuilder,
-    WebviewUrl,
+    WebviewUrl, Window,
 };
 use uuid::Uuid;
 
@@ -181,6 +182,39 @@ fn download_hook<R: Runtime>(
     }
 }
 
+/// Builds the service view on the main thread (also when called from elsewhere; waits for it),
+/// with the `WebKit` configuration of [`macos_dialogs::service_configuration`]: it can only be
+/// created there and must be in place before the page starts.
+fn add_service_view<R: Runtime>(
+    window: &Window<R>,
+    builder: WebviewBuilder<R>,
+    store_id: [u8; 16],
+    bounds: Bounds,
+) -> PortResult<Webview<R>> {
+    let (sender, receiver) = mpsc::channel();
+    let target = window.clone();
+    window
+        .run_on_main_thread(move || {
+            let created = MainThreadMarker::new()
+                .ok_or_else(|| PortError("not on the main thread".into()))
+                .and_then(|main_thread| {
+                    let configuration = macos_dialogs::service_configuration(main_thread, store_id);
+                    target
+                        .add_child(
+                            builder.with_webview_configuration(configuration),
+                            LogicalPosition::new(bounds.x, bounds.y),
+                            LogicalSize::new(bounds.width, bounds.height),
+                        )
+                        .map_err(port_err)
+                });
+            let _ = sender.send(created);
+        })
+        .map_err(port_err)?;
+    receiver
+        .recv()
+        .map_err(|_| PortError("the view was not created".into()))?
+}
+
 impl<R: Runtime> TauriHost<R> {
     fn webview(&self, account: Uuid) -> PortResult<Webview<R>> {
         self.app
@@ -274,15 +308,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
             builder = builder.user_agent(user_agent);
         }
         let builder = self.hook(spec, builder);
-        // Safe off the main thread: add_child builds on the main thread and waits for it.
-        let webview = self
-            .window()?
-            .add_child(
-                builder,
-                LogicalPosition::new(bounds.x, bounds.y),
-                LogicalSize::new(bounds.width, bounds.height),
-            )
-            .map_err(port_err)?;
+        let webview = add_service_view(&self.window()?, builder, spec.store_id, bounds)?;
         tag_for_dialogs(&webview, &self.logger);
         if !visible {
             webview.hide().map_err(port_err)?;

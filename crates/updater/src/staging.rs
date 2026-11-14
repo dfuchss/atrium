@@ -13,7 +13,7 @@ use sha2::{Digest as _, Sha256};
 use crate::release::{Release, SHA256SUMS, parse_sha256sums};
 use crate::source::ReleaseSource;
 use crate::swap::{new_update_path, partial_update_path};
-use crate::{archive, bundle};
+use crate::{archive, bundle, quarantine};
 
 const MAX_SUMS_BYTES: u64 = 64 * 1024;
 const MAX_ASSET_BYTES: u64 = 512 * 1024 * 1024;
@@ -55,6 +55,7 @@ pub(crate) fn stage(
     archive::extract(&zip, &extracted)?;
     let bundle = bundle::find_bundle(&extracted)?;
     bundle::verify(&bundle, release.version)?;
+    quarantine::remove_quarantine(&bundle)?;
     let staged = place_next_to_install(&bundle, request.install)?;
     let _ = std::fs::remove_dir_all(&extracted);
     let _ = std::fs::remove_file(&zip);
@@ -135,7 +136,7 @@ fn percent(received: u64, length: Option<u64>) -> Option<u8> {
 
 /// Moves the checked bundle to `<install>.new-update`, replacing a leftover. Across volumes
 /// it is copied with `ditto` to a `.partial` sibling first, so a broken copy never looks
-/// complete.
+/// complete; the copy is cleared of the quarantine `ditto` may have set again.
 fn place_next_to_install(bundle: &Path, install: &Path) -> Result<PathBuf, String> {
     let target = new_update_path(install);
     let partial = partial_update_path(install);
@@ -149,7 +150,10 @@ fn place_next_to_install(bundle: &Path, install: &Path) -> Result<PathBuf, Strin
         .arg(&partial)
         .status()
         .is_ok_and(|status| status.success());
-    if copied && std::fs::rename(&partial, &target).is_ok() {
+    if copied
+        && quarantine::remove_quarantine(&partial).is_ok()
+        && std::fs::rename(&partial, &target).is_ok()
+    {
         return Ok(target);
     }
     let _ = remove_if_present(&partial);

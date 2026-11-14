@@ -14,6 +14,7 @@ mod archive;
 mod bundle;
 pub mod helper;
 mod location;
+mod quarantine;
 mod release;
 mod service;
 mod source;

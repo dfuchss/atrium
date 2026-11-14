@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Downloads never replace an existing file: a taken name gets a number, like `report (1).pdf`
+
+### Security
+
+- Site icons are never downloaded from your own computer or local network, even when a host name points there
+
 ## 0.1.0
 
 First release.

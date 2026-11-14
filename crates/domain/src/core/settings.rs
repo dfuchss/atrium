@@ -21,6 +21,9 @@ impl Core {
             self.persist(),
             Effect::ApplySystemSettings(self.settings().clone()),
         ];
+        if previous.theme != self.settings().theme {
+            effects.push(Effect::ApplyTheme(self.settings().theme));
+        }
         if self.started && previous.icon_size != self.settings().icon_size {
             effects.extend(self.layout());
         }

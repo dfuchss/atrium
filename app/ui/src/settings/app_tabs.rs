@@ -1,7 +1,7 @@
 //! Tabs of the app-wide settings: general, notifications, dock badge, links and about.
 
 use leptos::prelude::*;
-use protocol::{DockBadgeMode, IconSize, LinkTarget, Snapshot, UiCommand};
+use protocol::{DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand};
 
 use super::app_toggle;
 use crate::commands::{send_command, update_settings};
@@ -16,6 +16,12 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             <button class="btn" class:on=move || size.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.icon_size = value)>{label}</button>
         }
     };
+    let theme = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.theme));
+    let theme_button = move |value: Theme, label: &'static str| {
+        view! {
+            <button class="btn" class:on=move || theme.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.theme = value)>{label}</button>
+        }
+    };
     let hibernate_after = move || snapshot.with(|snapshot| snapshot.settings.hibernate_after_min);
     view! {
         <h2>"General"</h2>
@@ -25,6 +31,13 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {size_button(IconSize::Small, "Small")}
                     {size_button(IconSize::Medium, "Medium")}
                     {size_button(IconSize::Large, "Large")}
+                </div>
+            </Row>
+            <Row label="Appearance" hint="Auto follows macOS. Service pages follow if they support it.">
+                <div class="btn-group seg">
+                    {theme_button(Theme::Auto, "Auto")}
+                    {theme_button(Theme::Light, "Light")}
+                    {theme_button(Theme::Dark, "Dark")}
                 </div>
             </Row>
             {app_toggle(snapshot, "Launch at login", "", |settings| settings.launch_at_login, |settings, enabled| settings.launch_at_login = enabled)}

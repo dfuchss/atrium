@@ -24,6 +24,7 @@ impl Core {
         let mut effects = vec![
             Effect::ApplySystemSettings(self.settings().clone()),
             Effect::SetUiBounds(self.sidebar_bounds()),
+            Effect::ApplyTheme(self.settings().theme),
         ];
         effects.extend(log_effects(std::mem::take(&mut self.startup_log)));
         let enabled: Vec<Uuid> = self

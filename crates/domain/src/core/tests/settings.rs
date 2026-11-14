@@ -290,3 +290,50 @@ fn settings_of_hibernated_account_apply_on_next_load() {
         }
     ));
 }
+
+fn theme_effects(effects: &[Effect]) -> Vec<Theme> {
+    effects
+        .iter()
+        .filter_map(|effect| match effect {
+            Effect::ApplyTheme(theme) => Some(*theme),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn theme_defaults_to_auto_and_is_applied_at_start() {
+    assert_eq!(AppSettings::default().theme, Theme::Auto);
+    let (_, effects) = started(vec![]);
+    assert_eq!(theme_effects(&effects), vec![Theme::Auto]);
+}
+
+#[test]
+fn persisted_theme_is_applied_at_start() {
+    let mut persisted = Persisted::default();
+    persisted.settings.app.theme = Theme::Dark;
+    let mut core = Core::new(Catalog::builtin(), persisted, Box::new(Uuid::new_v4));
+    let effects = core.handle(Input::Started {
+        width: 1000.0,
+        height: 600.0,
+    });
+    assert_eq!(theme_effects(&effects), vec![Theme::Dark]);
+}
+
+#[test]
+fn changing_the_theme_applies_it_once_and_other_updates_do_not() {
+    let (mut core, _) = started(vec![]);
+    let dark = AppSettings {
+        theme: Theme::Dark,
+        ..AppSettings::default()
+    };
+    let effects = core.handle(Input::Ui(UiCommand::UpdateSettings {
+        settings: dark.clone(),
+    }));
+    assert_eq!(theme_effects(&effects), vec![Theme::Dark]);
+    assert_eq!(last_snapshot(&effects).settings.theme, Theme::Dark);
+    let effects = core.handle(Input::Ui(UiCommand::UpdateSettings {
+        settings: AppSettings { dnd: true, ..dark },
+    }));
+    assert!(theme_effects(&effects).is_empty());
+}

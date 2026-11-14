@@ -114,6 +114,7 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
             "ApplySystemSettings",
             ports.platform.apply_system_settings(&settings),
         ),
+        Effect::ApplyTheme(theme) => ("ApplyTheme", ports.platform.apply_theme(theme)),
         Effect::Persist(persisted) => ("Persist", ports.store.save(&persisted)),
         Effect::EmitSnapshot(snapshot) => ("EmitSnapshot", ports.ui.emit_snapshot(&snapshot)),
         Effect::Log(message) => {
@@ -141,7 +142,7 @@ fn open_checked(url: &str, browser: Option<&str>, ports: &Ports<'_>) -> PortResu
 mod tests {
     use std::sync::Mutex;
 
-    use protocol::{AppSettings, Snapshot};
+    use protocol::{AppSettings, Snapshot, Theme};
     use uuid::Uuid;
 
     use super::*;
@@ -219,6 +220,9 @@ mod tests {
             Ok(())
         }
         fn apply_system_settings(&self, _: &AppSettings) -> PortResult {
+            Ok(())
+        }
+        fn apply_theme(&self, _: Theme) -> PortResult {
             Ok(())
         }
         fn open_services_folder(&self) -> PortResult {

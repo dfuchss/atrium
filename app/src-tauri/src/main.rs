@@ -18,7 +18,7 @@ use host_tauri::{Feed, TauriHost};
 use macos_dialogs::MainThreadMarker;
 use protocol::{AppInfo, AppSettings, Snapshot, UI_WEBVIEW, UiCommand};
 use store_fs::FsStore;
-use tauri::window::{Color, WindowBuilder};
+use tauri::window::WindowBuilder;
 use tauri::{
     App, AppHandle, LogicalPosition, LogicalSize, Manager, RunEvent, State, Theme, TitleBarStyle,
     WebviewBuilder, WebviewUrl, Window, WindowEvent, Wry,
@@ -28,19 +28,6 @@ use tauri_plugin_autostart::MacosLauncher;
 mod service_files;
 
 const MAIN_WINDOW: &str = "main";
-
-/// Sidebar background (`--bg` in `app/ui/styles.css`), shown through the transparent title bar.
-const SIDEBAR_BG_DARK: Color = Color(0x1b, 0x1c, 0x1f, 0xff);
-const SIDEBAR_BG_LIGHT: Color = Color(0xf1, 0xf2, 0xf4, 0xff);
-
-/// Window background for `theme`: the transparent title bar shows it, so it matches the sidebar.
-fn window_background(theme: Theme) -> Color {
-    if theme == Theme::Dark {
-        SIDEBAR_BG_DARK
-    } else {
-        SIDEBAR_BG_LIGHT
-    }
-}
 
 /// Development hooks, read from environment variables in debug builds only (README
 /// "Development"). Used to run a second, isolated instance with demo data, e.g. for screenshots.
@@ -244,7 +231,7 @@ fn build_main_window(app: &App, dev: &DevHooks, start_hidden: bool) -> tauri::Re
         builder = builder.position(x, y);
     }
     let window = builder.build()?;
-    window.set_background_color(Some(window_background(
+    window.set_background_color(Some(host_tauri::window_background(
         window.theme().unwrap_or(Theme::Light),
     )))?;
     Ok(window)
@@ -306,7 +293,7 @@ fn watch_main_window(window: &Window, feed: Feed, snapshot_cache: Arc<Mutex<Snap
             close_requested(&event_window, &snapshot_cache);
         }
         WindowEvent::ThemeChanged(theme) => {
-            let _ = event_window.set_background_color(Some(window_background(*theme)));
+            let _ = event_window.set_background_color(Some(host_tauri::window_background(*theme)));
         }
         WindowEvent::Resized(size) => {
             // A Resized event reports the new physical size; the scale factor is unchanged

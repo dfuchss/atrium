@@ -36,13 +36,28 @@ use std::sync::{Arc, Mutex, PoisonError};
 use domain::Input;
 use domain::ports::{PortError, PortResult, UiSink};
 use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
-use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
+use tauri::window::Color;
+use tauri::{AppHandle, Emitter, Manager, Runtime, Theme, Window};
 
 use crate::dialogs::{DialogPolicy, SharedDialogPolicy, TauriDialogHandler, account_names};
 use crate::links::{PopupQuota, ViewPolicies, new_popup_quota};
 use crate::logger::Logger;
 use crate::menus::MenuState;
 use crate::notifications::NotificationTargets;
+
+/// Sidebar background (`--bg` in `app/ui/styles.css`), shown through the transparent title bar.
+const SIDEBAR_BG_DARK: Color = Color(0x1b, 0x1c, 0x1f, 0xff);
+const SIDEBAR_BG_LIGHT: Color = Color(0xf1, 0xf2, 0xf4, 0xff);
+
+/// Window background for `theme`: the transparent title bar shows it, so it matches the sidebar.
+#[must_use]
+pub fn window_background(theme: Theme) -> Color {
+    if theme == Theme::Dark {
+        SIDEBAR_BG_DARK
+    } else {
+        SIDEBAR_BG_LIGHT
+    }
+}
 
 pub use crate::menus::handle_menu_event;
 pub use crate::quit::{graceful_quit, is_quitting};

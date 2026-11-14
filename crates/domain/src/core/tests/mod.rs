@@ -2,7 +2,9 @@
 
 use super::snapshot::initials;
 use super::*;
-use protocol::{AccountSettings, CustomService, DockBadgeMode, IconSize, LinkTarget, Snapshot};
+use protocol::{
+    AccountSettings, CustomService, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme,
+};
 
 mod accounts;
 mod hibernation;

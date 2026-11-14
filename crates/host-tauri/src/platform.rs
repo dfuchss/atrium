@@ -5,7 +5,7 @@ use std::sync::PoisonError;
 use domain::core::SimpleIconResult;
 use domain::ports::{Platform, PortError, PortResult};
 use domain::{DockBadge, MenuModel, redact_url};
-use protocol::AppSettings;
+use protocol::{AppSettings, Theme};
 use tauri::{Manager, Runtime};
 use tauri_plugin_autostart::AutoLaunchManager;
 use tauri_plugin_opener::OpenerExt;
@@ -73,6 +73,26 @@ impl<R: Runtime> Platform for TauriHost<R> {
             ));
         }
         Ok(())
+    }
+
+    /// `AppHandle::set_theme` sets `NSApp.appearance`, so it covers every window, the menus,
+    /// the tray, alert panels and the web views' `prefers-color-scheme`.
+    fn apply_theme(&self, theme: Theme) -> PortResult {
+        self.app.set_theme(match theme {
+            Theme::Auto => None,
+            Theme::Light => Some(tauri::Theme::Light),
+            Theme::Dark => Some(tauri::Theme::Dark),
+        });
+        // A forced theme sends no system theme-changed event, so refresh the title bar color
+        // ourselves; on the main thread after the theme message, `theme()` is up to date.
+        let window = self.window()?;
+        let target = window.clone();
+        window
+            .run_on_main_thread(move || {
+                let theme = target.theme().unwrap_or(tauri::Theme::Light);
+                let _ = target.set_background_color(Some(crate::window_background(theme)));
+            })
+            .map_err(port_err)
     }
 
     fn open_services_folder(&self) -> PortResult {

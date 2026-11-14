@@ -11,6 +11,7 @@ First release.
 
 ### Added
 
+- Choose Auto, Light or Dark appearance in the settings; service pages that support it follow along
 - All your messengers in one window with a compact sidebar, unread badges, a dock badge and a menu bar icon
 - Every account in its own isolated web view, so several accounts of the same service work side by side
 - App menu with keyboard shortcuts, launch at login, start hidden and keep running in the background

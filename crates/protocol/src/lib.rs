@@ -185,6 +185,18 @@ pub struct Snapshot {
     pub service_errors: Vec<String>,
 }
 
+/// Appearance of the whole app (windows, menus, dialogs and the pages that honour
+/// `prefers-color-scheme`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    /// Follow the macOS appearance.
+    #[default]
+    Auto,
+    Light,
+    Dark,
+}
+
 /// Global settings, persisted by the backend.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -215,6 +227,8 @@ pub struct AppSettings {
     /// being shown; None = never. Accounts can override it (`AccountSettings::hibernate_after_min`).
     /// Sleeping accounts get no notifications or unread updates until they are opened again.
     pub hibernate_after_min: Option<u32>,
+    /// Auto, light or dark appearance.
+    pub theme: Theme,
 }
 
 impl Default for AppSettings {
@@ -233,6 +247,7 @@ impl Default for AppSettings {
             reload_after_wake: true,
             icon_size: IconSize::Small,
             hibernate_after_min: None,
+            theme: Theme::Auto,
         }
     }
 }

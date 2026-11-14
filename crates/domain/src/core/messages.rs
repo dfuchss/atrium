@@ -1,7 +1,7 @@
 //! The messages exchanged with the outside world: [`Input`]s into the core and the
 //! [`Effect`]s it asks the adapters to perform, with their payload types.
 
-use protocol::{AppSettings, LinkTarget, Snapshot, UiCommand};
+use protocol::{AppSettings, LinkTarget, Snapshot, Theme, UiCommand};
 use uuid::Uuid;
 
 use crate::catalog::ServiceDef;
@@ -303,6 +303,8 @@ pub enum Effect {
     LoadServices,
     /// Apply OS-level settings (launch at login, ...). Emitted on start and on every change.
     ApplySystemSettings(AppSettings),
+    /// Set the app-wide appearance. Emitted on start and when the setting changes.
+    ApplyTheme(Theme),
     Persist(Persisted),
     EmitSnapshot(Snapshot),
     /// Something worth logging (bad poll JSON, unknown account, ...).

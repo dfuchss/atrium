@@ -2,7 +2,7 @@
 //! Results that arrive asynchronously (poll results, clicks, title changes) are fed back to
 //! the core as [`crate::Input`] by the adapter, not returned here.
 
-use protocol::{AppSettings, Snapshot};
+use protocol::{AppSettings, Snapshot, Theme};
 use uuid::Uuid;
 
 use crate::core::{Bounds, DockBadge, MenuModel, NotificationReq, ViewPolicy, ViewSpec};
@@ -59,6 +59,8 @@ pub trait Platform: Send + Sync {
     fn open_external(&self, url: &str, browser: Option<&str>) -> PortResult;
     /// Applies OS-level settings (launch at login, ...); must be idempotent.
     fn apply_system_settings(&self, settings: &AppSettings) -> PortResult;
+    /// App-wide appearance: windows, menus, dialogs and the web content's `prefers-color-scheme`.
+    fn apply_theme(&self, theme: Theme) -> PortResult;
     /// Creates `<config>/services/` (with a README and an example if it holds no definitions)
     /// and shows it in the file manager.
     fn open_services_folder(&self) -> PortResult;

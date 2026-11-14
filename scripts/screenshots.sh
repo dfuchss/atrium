@@ -334,7 +334,7 @@ PY
 log "Writing the demo config ($CONFIG)"
 mkdir -p "$CONFIG/services"
 python3 -I - "$REPO/services/element.toml" "$CONFIG" "$ELEMENT_HOST" <<'PY'
-import json, re, sys, uuid
+import base64, json, re, sys, urllib.request, uuid
 element_toml, config, element_host = sys.argv[1:4]
 
 # Local http Element: the built-in definition with an http URL and the local host.
@@ -351,16 +351,34 @@ def account(service, label, **extra):
     return {"id": str(uuid.uuid4()), "service": service, "label": label, **extra}
 
 
+def element_favicon():
+    """The icon the app picks on a real Element web (the largest rel="icon" image), taken from the
+    local Element: the app fetches favicons over https only, so it never loads the http demo's."""
+    page = urllib.request.urlopen(f"http://{element_host}/").read().decode()
+    icons = []
+    for link in re.findall(r"<link\b[^>]*>", page):
+        rel = re.search(r'rel="([^"]*)"', link)
+        href = re.search(r'href="([^"]*)"', link)
+        size = re.search(r'sizes="(\d+)x\d+"', link)
+        if rel and href and size and "icon" in rel.group(1).split():
+            icons.append((int(size.group(1)), href.group(1)))
+    _, href = max(icons)
+    with urllib.request.urlopen(f"http://{element_host}/{href}") as response:
+        mime = response.headers.get_content_type()
+        return f"data:{mime};base64," + base64.b64encode(response.read()).decode()
+
+
+# Site favicons as in a regular installation, no Simple Icons glyphs.
 accounts = [
-    account("element-demo", "Ada", instance=element_host, simple_icon="element"),
-    # Slack and WhatsApp go to sleep one minute after the start (moon and greyscale icon).
-    account("slack", "Workspace", hibernate_after_min=1),
-    account("discord", "Friends", simple_icon="discord"),
+    account("element-demo", "Ada", instance=element_host, favicon=element_favicon()),
+    # No Slack: its sign-in page offers no site icon. WhatsApp goes to sleep one minute after
+    # the start (moon and greyscale icon).
+    account("discord", "Friends"),
     account("mastodon", "mastodon.social", instance="mastodon.social"),
     account("whatsapp", "Family", hibernate_after_min=1),
     # No Microsoft Teams: its sign-in page makes WebKit ask (system dialog) whether related
     # Microsoft sites may share cookies.
-    account("bluesky", "Bluesky", simple_icon="bluesky"),
+    account("bluesky", "Bluesky"),
 ]
 persisted = {
     "accounts": accounts,

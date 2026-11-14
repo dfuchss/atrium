@@ -3,3 +3,5 @@
 .DS_Store
 app/ui/dist/
 app/src-tauri/gen/
+.claude/
+.serena/

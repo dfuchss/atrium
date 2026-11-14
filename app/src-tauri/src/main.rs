@@ -396,6 +396,8 @@ fn setup(
         user_errors.len()
     ));
 
+    // Before the window exists, so a forced theme doesn't flash the system one at start.
+    app.set_theme(host_tauri::native_theme(persisted.settings.app.theme));
     let (window, size) = build_window_with_sidebar(app, &dev, &persisted.settings.app)?;
     // Needs the sidebar webview and must precede the service views: see `install_dialogs`.
     host.install_dialogs();

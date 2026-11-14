@@ -78,11 +78,7 @@ impl<R: Runtime> Platform for TauriHost<R> {
     /// `AppHandle::set_theme` sets `NSApp.appearance`, so it covers every window, the menus,
     /// the tray, alert panels and the web views' `prefers-color-scheme`.
     fn apply_theme(&self, theme: Theme) -> PortResult {
-        self.app.set_theme(match theme {
-            Theme::Auto => None,
-            Theme::Light => Some(tauri::Theme::Light),
-            Theme::Dark => Some(tauri::Theme::Dark),
-        });
+        self.app.set_theme(crate::native_theme(theme));
         // A forced theme sends no system theme-changed event, so refresh the title bar color
         // ourselves; on the main thread after the theme message, `theme()` is up to date.
         let window = self.window()?;

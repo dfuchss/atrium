@@ -59,6 +59,16 @@ pub fn window_background(theme: Theme) -> Color {
     }
 }
 
+/// The native appearance for a theme setting; `None` follows the system.
+#[must_use]
+pub fn native_theme(theme: protocol::Theme) -> Option<Theme> {
+    match theme {
+        protocol::Theme::Auto => None,
+        protocol::Theme::Light => Some(Theme::Light),
+        protocol::Theme::Dark => Some(Theme::Dark),
+    }
+}
+
 pub use crate::menus::handle_menu_event;
 pub use crate::quit::{graceful_quit, is_quitting};
 

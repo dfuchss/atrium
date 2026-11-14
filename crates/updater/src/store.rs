@@ -1,6 +1,8 @@
 //! The updater's files: `<app data>/updater.json` (settings and the staged release) and the
 //! helper's `<app data>/updates/update-result.json`.
 
+use std::io::Write as _;
+use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -9,6 +11,8 @@ const SETTINGS_FILE: &str = "updater.json";
 const UPDATES_DIR: &str = "updates";
 const RESULT_FILE: &str = "update-result.json";
 const HELPER_LOG_FILE: &str = "helper.log";
+/// The updater's files name versions and paths of this Mac: readable by the user only.
+pub(crate) const PRIVATE_FILE_MODE: u32 = 0o600;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -98,13 +102,52 @@ pub(crate) fn write_atomically(path: &Path, contents: &str) -> std::io::Result<(
     }
     let mut temporary = path.as_os_str().to_os_string();
     temporary.push(".tmp");
-    std::fs::write(&temporary, contents)?;
+    let mut file = open_private(&temporary, false)?;
+    file.write_all(contents.as_bytes())?;
+    file.sync_all()?;
+    drop(file);
     std::fs::rename(&temporary, path)
+}
+
+/// Opens `path` for writing (truncated, or appended to with `append`) with mode 0600, also
+/// when it existed with another mode.
+pub(crate) fn open_private(path: impl AsRef<Path>, append: bool) -> std::io::Result<std::fs::File> {
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(append)
+        .truncate(!append)
+        .mode(PRIVATE_FILE_MODE)
+        .open(path)?;
+    file.set_permissions(std::fs::Permissions::from_mode(PRIVATE_FILE_MODE))?;
+    Ok(file)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn files_are_owner_only_even_over_a_leftover() {
+        let dir = tempfile::tempdir().unwrap();
+        let leftover = dir.path().join(format!("{SETTINGS_FILE}.tmp"));
+        std::fs::write(&leftover, "old").unwrap();
+        std::fs::set_permissions(&leftover, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let files = UpdaterFiles::new(dir.path().to_path_buf());
+        files.save_settings(&UpdaterSettings::default()).unwrap();
+        let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&dir.path().join(SETTINGS_FILE)), PRIVATE_FILE_MODE);
+        assert_eq!(files.load_settings(), UpdaterSettings::default());
+        let log = dir.path().join(HELPER_LOG_FILE);
+        std::fs::write(&log, "first\n").unwrap();
+        std::fs::set_permissions(&log, std::fs::Permissions::from_mode(0o644)).unwrap();
+        open_private(&log, true)
+            .unwrap()
+            .write_all(b"second\n")
+            .unwrap();
+        assert_eq!(mode(&log), PRIVATE_FILE_MODE);
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "first\nsecond\n");
+    }
 
     #[test]
     fn settings_round_trip_and_default() {

@@ -4,14 +4,13 @@
 //! Atrium again. It never initialises Tauri.
 
 use std::ffi::OsString;
-use std::fs::OpenOptions;
 use std::io::Write as _;
 use std::os::unix::process::CommandExt as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::store::{SwapResult, UpdaterFiles, write_atomically};
+use crate::store::{SwapResult, UpdaterFiles, open_private, write_atomically};
 use crate::swap::{BundleFs, RealFs, SwapOutcome, swap};
 
 /// First argument that turns the app executable into the swap helper.
@@ -220,11 +219,7 @@ fn append_log(updates_dir: &Path, message: &str) {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since_epoch| since_epoch.as_secs());
     let _ = std::fs::create_dir_all(updates_dir);
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(UpdaterFiles::helper_log(updates_dir))
-    {
+    if let Ok(mut file) = open_private(UpdaterFiles::helper_log(updates_dir), true) {
         let _ = writeln!(file, "[{seconds}] helper: {message}");
     }
 }

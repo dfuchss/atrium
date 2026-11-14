@@ -2,6 +2,7 @@
 //! writes the folder; parsing is the domain's ([`Catalog::parse_user_files`]).
 
 use std::io::Write;
+use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 
 use domain::{Catalog, ServiceDef};
@@ -140,15 +141,21 @@ pub fn new_service_template() -> String {
 
 /// Writes `text` to `path` through a temporary file in the same folder, so a crash never leaves
 /// a half-written definition. Owner-only, like the account file.
+/// Service definitions may hold an instance URL or a user agent: readable by the user only.
+const SERVICE_FILE_MODE: u32 = 0o600;
+
 fn write_atomically(path: &Path, text: &str) -> std::io::Result<()> {
     let mut temporary = path.as_os_str().to_owned();
     temporary.push(".tmp");
     let temporary = PathBuf::from(temporary);
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let mut file = options.open(&temporary)?;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(SERVICE_FILE_MODE)
+        .open(&temporary)?;
+    // A temporary file left by a crash keeps its old mode on open.
+    file.set_permissions(std::fs::Permissions::from_mode(SERVICE_FILE_MODE))?;
     file.write_all(text.as_bytes())?;
     file.sync_all()?;
     drop(file);
@@ -212,6 +219,19 @@ pub fn set_service_file_enabled(dir: &Path, name: &str, enabled: bool) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn written_files_are_owner_only_even_over_a_leftover() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.toml");
+        let leftover = dir.path().join("a.toml.tmp");
+        std::fs::write(&leftover, "old").unwrap();
+        std::fs::set_permissions(&leftover, std::fs::Permissions::from_mode(0o644)).unwrap();
+        write_atomically(&path, "new").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, SERVICE_FILE_MODE);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+    }
 
     fn temp(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("msgr-test-{name}-{}", std::process::id()));

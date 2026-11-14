@@ -140,9 +140,10 @@ fn load_persisted(store: &dyn Store, log: &dyn Platform) -> StartupLoad {
     load
 }
 
-/// Tells the user, once the event loop runs, that this session is read-only: the UI cannot
-/// carry this because it starts after the load, and a modal alert inside `setup` would block
-/// startup.
+/// Tells the user that this session is read-only; the UI cannot carry this because it starts
+/// after the load. `setup` runs on the main thread, where `run_on_main_thread` runs the alert
+/// inline: its modal loop holds the start until the user confirms, before the (empty) window
+/// exists, which is intended.
 fn show_unreadable_settings_alert(app: &AppHandle) {
     let shown = app.run_on_main_thread(|| {
         if let Some(main_thread) = MainThreadMarker::new() {

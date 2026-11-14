@@ -8,7 +8,7 @@ use std::time::Duration;
 use domain::ports::{PortError, PortResult, WebviewHost};
 use domain::{Account, Bounds, ViewPolicy, ViewSpec, redact_url, unused_store_ids};
 use macos_dialogs::MainThreadMarker;
-use protocol::UI_WEBVIEW;
+use protocol::{Snapshot, UI_WEBVIEW};
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{
@@ -431,10 +431,30 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
     }
 }
 
+/// Whether the data store of `account` is in use now: the account is one of `current` (the
+/// accounts of the live snapshot) or one of its views or windows is open (`labels`). The sweep lists the stores while the
+/// app already runs, so an account added meanwhile has a store that the startup list lacks; its
+/// view is open before the snapshot shows the account.
+fn store_in_use<'a>(
+    account: Uuid,
+    current: &[Uuid],
+    mut labels: impl Iterator<Item = &'a str>,
+) -> bool {
+    current.contains(&account) || labels.any(|label| belongs_to_account(label, account))
+}
+
+/// The ids of the accounts in `snapshot`.
+fn account_ids(snapshot: &Mutex<Snapshot>) -> Vec<Uuid> {
+    let snapshot = snapshot.lock().unwrap_or_else(PoisonError::into_inner);
+    snapshot.accounts.iter().map(|view| view.id).collect()
+}
+
 impl<R: Runtime> TauriHost<R> {
     /// Deletes, in the background, the data stores of this app that belong to none of
-    /// `accounts`. Call it only with the complete account list (see `FsStore::lists_all_accounts`).
-    pub fn remove_unused_data_stores(&self, accounts: Vec<Account>) {
+    /// `accounts` and are not in use when they are deleted (see [`store_in_use`]; `current` is
+    /// the live snapshot). Call it only with the complete account list (see
+    /// `FsStore::lists_all_accounts`).
+    pub fn remove_unused_data_stores(&self, accounts: Vec<Account>, current: Arc<Mutex<Snapshot>>) {
         let (app, logger) = (self.app.clone(), self.logger.clone());
         spawn_logged("unused-stores", &self.logger, move || {
             let existing = match tauri::async_runtime::block_on(app.fetch_data_store_identifiers())
@@ -452,7 +472,19 @@ impl<R: Runtime> TauriHost<R> {
                 unused.len()
             ));
             for store_id in unused {
-                remove_data_store_with_retries(&app, store_id, &logger);
+                let account = Uuid::from_bytes(store_id);
+                let in_use = store_in_use(
+                    account,
+                    &account_ids(&current),
+                    app.webviews().keys().map(String::as_str),
+                );
+                if in_use {
+                    logger.log(&format!(
+                        "keeping data store {account}: its account was added"
+                    ));
+                } else {
+                    remove_data_store_with_retries(&app, store_id, &logger);
+                }
             }
         });
     }
@@ -461,6 +493,23 @@ impl<R: Runtime> TauriHost<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stores_of_current_accounts_or_open_views_are_in_use() {
+        let (listed, viewed, orphan) = (Uuid::from_u128(1), Uuid::from_u128(2), Uuid::from_u128(3));
+        let current = [listed];
+        let labels = [view_label(viewed), UI_WEBVIEW.to_string()];
+        let open = || labels.iter().map(String::as_str);
+        assert!(store_in_use(listed, &current, open()));
+        assert!(store_in_use(viewed, &current, open()));
+        assert!(!store_in_use(orphan, &current, open()));
+        let popup = [crate::links::popup_label(orphan, 4)];
+        assert!(store_in_use(
+            orphan,
+            &current,
+            popup.iter().map(String::as_str)
+        ));
+    }
 
     #[test]
     fn hidden_downloads_are_refused() {

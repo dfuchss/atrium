@@ -158,17 +158,18 @@ fn show_unreadable_settings_alert(app: &AppHandle) {
 }
 
 /// Deletes the web data of accounts that no longer exist, but only against an intact
-/// `accounts.json` of the regular installation: a development config folder shares the
-/// app's data stores without listing its accounts.
+/// `accounts.json` of the regular installation (`allowed`: loaded, no development config
+/// folder, which shares the app's data stores without listing its accounts). Stores of
+/// accounts added meanwhile are kept: `snapshot_cache` holds the live accounts.
 fn remove_unused_data_stores(
     host: &TauriHost<Wry>,
     store: &FsStore,
-    dev: &DevHooks,
     persisted: &Persisted,
-    loaded: bool,
+    allowed: bool,
+    snapshot_cache: &Arc<Mutex<Snapshot>>,
 ) {
-    if loaded && dev.config_dir.is_none() && store.lists_all_accounts() {
-        host.remove_unused_data_stores(persisted.accounts.clone());
+    if allowed && store.lists_all_accounts() {
+        host.remove_unused_data_stores(persisted.accounts.clone(), snapshot_cache.clone());
     } else {
         host.log("not removing unused data stores: no complete, intact account list");
     }
@@ -391,7 +392,8 @@ fn setup(
         show_unreadable_settings_alert(app.handle());
     }
     let persisted = load.into_persisted();
-    remove_unused_data_stores(&host, &store, &dev, &persisted, !read_only);
+    let sweep_allowed = !read_only && dev.config_dir.is_none();
+    remove_unused_data_stores(&host, &store, &persisted, sweep_allowed, snapshot_cache);
     let services_dir = config_dir.join("services");
     app.manage(service_files::ServiceFiles {
         dir: services_dir.clone(),

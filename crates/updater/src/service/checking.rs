@@ -125,8 +125,11 @@ impl Updater {
     }
 
     /// Reports the previous swap, keeps a still useful staged update and removes the rest:
-    /// download folders, `<install>.old-update` and an unowned `<install>.new-update`.
+    /// download folders, `<install>.old-update` and an unowned `<install>.new-update`. Holds the
+    /// check lock, so a "Check now" right after the start neither has its download removed nor
+    /// its staged update taken for a leftover.
     pub(crate) fn clean_up_after_previous_run(&self) {
+        let _checking = locked(&self.shared.checking);
         self.report_previous_swap();
         let updates_dir = self.shared.files.updates_dir();
         if let Ok(entries) = std::fs::read_dir(&updates_dir) {

@@ -359,3 +359,18 @@ fn automatic_checks_follow_the_setting() {
     let path = Path::new(&fixture.data_dir()).join("updater.json");
     assert!(path.exists());
 }
+
+#[test]
+fn clean_up_waits_for_a_running_check() {
+    let fixture = Fixture::new();
+    let updater = fixture.updater(valid_source(&fixture), fixture.self_updatable(), "0.1.0");
+    std::fs::create_dir(old_update_path(&fixture.install())).unwrap();
+    let running_check = updater.shared.checking.lock().unwrap();
+    let cleaner = updater.clone();
+    let clean_up = std::thread::spawn(move || cleaner.clean_up_after_previous_run());
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(old_update_path(&fixture.install()).exists());
+    drop(running_check);
+    clean_up.join().unwrap();
+    assert!(!old_update_path(&fixture.install()).exists());
+}

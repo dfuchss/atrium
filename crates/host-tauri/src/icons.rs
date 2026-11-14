@@ -194,12 +194,34 @@ mod tests {
             "fe80::1",
             "fd00::1",
             "::ffff:127.0.0.1",
+            "224.0.0.1",
+            "255.255.255.255",
+            "192.0.2.1",
+            "0.1.2.3",
+            "100.127.255.255",
+            "ff02::1",
+            "fc00::1",
+            "febf::1",
+            "::",
         ] {
             assert!(is_local_address(local.parse().unwrap()), "{local}");
         }
-        for public in ["8.8.8.8", "1.1.1.1", "2606:4700::1111"] {
+        for public in [
+            "8.8.8.8",
+            "1.1.1.1",
+            "100.63.255.255",
+            "100.128.0.1",
+            "2606:4700::1111",
+            "::ffff:8.8.8.8",
+        ] {
             assert!(!is_local_address(public.parse().unwrap()), "{public}");
         }
+    }
+
+    #[test]
+    fn only_http_urls_are_fetched() {
+        assert!(download_icon("ftp://8.8.8.8/icon.ico").is_err());
+        assert!(download_icon("file:///etc/hosts").is_err());
     }
 
     #[test]

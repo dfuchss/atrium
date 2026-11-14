@@ -1,6 +1,7 @@
 //! The swap helper. Atrium starts its own (installed, already trusted) executable again with
 //! [`APPLY_UPDATE_ARGUMENT`] right before it exits; that process waits until Atrium is gone,
-//! swaps the bundle, records the result and opens Atrium again. It never initialises Tauri.
+//! swaps the bundle unless another process still runs from it, records the result and opens
+//! Atrium again. It never initialises Tauri.
 
 use std::ffi::OsString;
 use std::fs::OpenOptions;
@@ -94,6 +95,7 @@ pub fn run_if_requested() -> Option<i32> {
             let io = HelperIo {
                 fs: &RealFs,
                 app_alive: &process_alive,
+                running_from: &processes_running_from,
                 relaunch: &relaunch,
                 exit_timeout: EXIT_TIMEOUT,
             };
@@ -107,27 +109,23 @@ pub fn run_if_requested() -> Option<i32> {
 pub(crate) struct HelperIo<'a> {
     pub(crate) fs: &'a dyn BundleFs,
     pub(crate) app_alive: &'a dyn Fn(u32) -> bool,
+    /// Ids of the other processes whose executable lies in the given folder.
+    pub(crate) running_from: &'a dyn Fn(&Path) -> Result<Vec<u32>, String>,
     pub(crate) relaunch: &'a dyn Fn(&Path),
     pub(crate) exit_timeout: Duration,
 }
 
-/// Waits for Atrium to exit, swaps, writes the result file and opens Atrium again (the
-/// update, or the restored previous version). When Atrium does not exit, nothing is touched
-/// and nothing is opened.
+/// Waits for Atrium to exit, swaps, writes the result file and opens Atrium again: the
+/// update, the restored previous version, or the untouched install when Atrium did not exit
+/// or another process still runs from the bundle (the update stays staged for next time).
 pub(crate) fn run(plan: &HelperPlan, io: &HelperIo<'_>) -> SwapResult {
     let log = |message: &str| append_log(&plan.updates_dir, message);
     log(&format!(
         "waiting for Atrium (pid {}) to exit",
         plan.app_pid
     ));
-    let started = Instant::now();
-    let mut exited = !(io.app_alive)(plan.app_pid);
-    while !exited && started.elapsed() < io.exit_timeout {
-        std::thread::sleep(EXIT_POLL);
-        exited = !(io.app_alive)(plan.app_pid);
-    }
-    let outcome = if exited {
-        swap(&plan.install, io.fs)
+    let outcome = if wait_for_exit(plan.app_pid, io) {
+        swap_unless_in_use(&plan.install, io)
     } else {
         SwapOutcome::NotStarted("Atrium did not exit in time".into())
     };
@@ -141,10 +139,66 @@ pub(crate) fn run(plan: &HelperPlan, io: &HelperIo<'_>) -> SwapResult {
     if let Err(error) = write_atomically(&UpdaterFiles::result_file(&plan.updates_dir), &json) {
         log(&format!("cannot write the result: {error}"));
     }
-    if exited {
-        (io.relaunch)(&plan.install);
-    }
+    // Even without a swap: the user asked for a restart and should not be left without Atrium
+    // (`open` only activates an instance that still runs).
+    (io.relaunch)(&plan.install);
     result
+}
+
+/// Whether `pid` exited within the timeout.
+fn wait_for_exit(pid: u32, io: &HelperIo<'_>) -> bool {
+    let started = Instant::now();
+    let mut exited = !(io.app_alive)(pid);
+    while !exited && started.elapsed() < io.exit_timeout {
+        std::thread::sleep(EXIT_POLL);
+        exited = !(io.app_alive)(pid);
+    }
+    exited
+}
+
+/// Swaps only when no other process (a second instance started from the same bundle) runs
+/// from `<install>/Contents/MacOS`; the helper itself does, and is not counted.
+fn swap_unless_in_use(install: &Path, io: &HelperIo<'_>) -> SwapOutcome {
+    match (io.running_from)(&install.join("Contents/MacOS")) {
+        Ok(pids) if pids.is_empty() => swap(install, io.fs),
+        Ok(pids) => SwapOutcome::NotStarted(format!(
+            "Atrium still runs from the installation (pid {pids:?}); the update stays staged"
+        )),
+        Err(error) => SwapOutcome::NotStarted(format!(
+            "cannot check for running copies of Atrium: {error}"
+        )),
+    }
+}
+
+/// Processes other than this one whose executable lies in `macos_dir`, from `ps`.
+fn processes_running_from(macos_dir: &Path) -> Result<Vec<u32>, String> {
+    let output = Command::new("/bin/ps")
+        .args(["-axo", "pid=,comm="])
+        .stderr(Stdio::null())
+        .output()
+        .map_err(|error| format!("cannot run ps: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("ps failed: {}", output.status));
+    }
+    Ok(pids_running_from(
+        &String::from_utf8_lossy(&output.stdout),
+        macos_dir,
+        std::process::id(),
+    ))
+}
+
+/// The ids in `ps -o pid=,comm=` output (`comm` is the executable's full path on macOS) of
+/// processes other than `own_pid` running an executable below `macos_dir`.
+pub(crate) fn pids_running_from(ps_output: &str, macos_dir: &Path, own_pid: u32) -> Vec<u32> {
+    ps_output
+        .lines()
+        .filter_map(|line| {
+            let (pid, executable) = line.trim_start().split_once(' ')?;
+            let pid: u32 = pid.parse().ok()?;
+            let inside = Path::new(executable.trim_start()).starts_with(macos_dir);
+            (inside && pid != own_pid).then_some(pid)
+        })
+        .collect()
 }
 
 /// `ps -p` exits with 0 while the process exists.
@@ -238,6 +292,7 @@ mod tests {
                 *alive_checks.borrow_mut() += 1;
                 *alive_checks.borrow() < 3
             },
+            running_from: &|_| Ok(Vec::new()),
             relaunch: &|path| relaunched.borrow_mut().push(path.to_path_buf()),
             exit_timeout: Duration::from_secs(5),
         };
@@ -255,7 +310,7 @@ mod tests {
     }
 
     #[test]
-    fn running_app_is_never_touched() {
+    fn running_app_is_never_touched_but_opened_again() {
         let dir = tempfile::tempdir().unwrap();
         staged_install(dir.path());
         let plan = plan(dir.path());
@@ -263,6 +318,7 @@ mod tests {
         let io = HelperIo {
             fs: &RealFs,
             app_alive: &|_| true,
+            running_from: &|_| Ok(Vec::new()),
             relaunch: &|_| *relaunched.borrow_mut() = true,
             exit_timeout: Duration::from_millis(300),
         };
@@ -270,7 +326,62 @@ mod tests {
         assert!(!result.success);
         assert!(result.message.contains("did not exit"));
         assert!(!plan.install.join("new").exists());
-        assert!(!*relaunched.borrow());
+        assert!(*relaunched.borrow());
+    }
+
+    #[test]
+    fn another_running_copy_keeps_the_update_staged() {
+        let dir = tempfile::tempdir().unwrap();
+        staged_install(dir.path());
+        let plan = plan(dir.path());
+        let asked = RefCell::new(Vec::new());
+        let relaunched = RefCell::new(false);
+        let io = HelperIo {
+            fs: &RealFs,
+            app_alive: &|_| false,
+            running_from: &|dir| {
+                asked.borrow_mut().push(dir.to_path_buf());
+                Ok(vec![815])
+            },
+            relaunch: &|_| *relaunched.borrow_mut() = true,
+            exit_timeout: Duration::from_millis(300),
+        };
+        let result = run(&plan, &io);
+        assert!(!result.success);
+        assert!(result.message.contains("815"), "{}", result.message);
+        assert_eq!(*asked.borrow(), vec![plan.install.join("Contents/MacOS")]);
+        assert!(!plan.install.join("new").exists());
+        assert!(new_update_path(&plan.install).join("new").exists());
+        assert!(*relaunched.borrow());
+        let failing = HelperIo {
+            running_from: &|_| Err("no ps".into()),
+            ..io
+        };
+        assert!(!run(&plan, &failing).success);
+        assert!(new_update_path(&plan.install).join("new").exists());
+    }
+
+    #[test]
+    fn finds_other_processes_running_from_the_bundle() {
+        let ps_output = "\
+    1 /sbin/launchd
+  815 /Applications/Atrium.app/Contents/MacOS/atrium
+  900 /Applications/Atrium.app/Contents/MacOS/atrium
+  901 /Applications/Atrium.app.new-update/Contents/MacOS/atrium
+  902 /Applications/Atrium Beta.app/Contents/MacOS/atrium
+garbage
+";
+        let macos_dir = Path::new("/Applications/Atrium.app/Contents/MacOS");
+        assert_eq!(pids_running_from(ps_output, macos_dir, 900), vec![815]);
+        let beta = Path::new("/Applications/Atrium Beta.app/Contents/MacOS");
+        assert_eq!(pids_running_from(ps_output, beta, 900), vec![902]);
+    }
+
+    #[test]
+    fn the_own_process_is_not_counted() {
+        let executable = std::env::current_exe().unwrap();
+        let running = processes_running_from(executable.parent().unwrap()).unwrap();
+        assert!(!running.contains(&std::process::id()), "{running:?}");
     }
 
     #[test]

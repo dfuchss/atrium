@@ -28,12 +28,13 @@ use std::ptr::{self, null_mut};
 use std::sync::{Arc, OnceLock};
 
 use block2::{DynBlock, RcBlock};
+pub use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyClass, AnyObject, Bool, ClassBuilder, NSObject, Sel};
-use objc2::{ClassType, MainThreadMarker, ffi, sel};
+use objc2::{ClassType, ffi, sel};
 use objc2_app_kit::{
-    NSAlert, NSAlertFirstButtonReturn, NSButton, NSControlStateValueOn, NSModalResponse,
-    NSTextField,
+    NSAlert, NSAlertFirstButtonReturn, NSAlertStyle, NSButton, NSControlStateValueOn,
+    NSModalResponse, NSTextField,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use objc2_web_kit::{WKFrameInfo, WKWebView};
@@ -387,6 +388,18 @@ impl PanelControls {
         };
         (answer, suppress_further)
     }
+}
+
+/// Shows an app-modal warning with one OK button and returns once it is dismissed. Needs the
+/// main thread (the marker proves it); blocks that thread, so call it from the running event
+/// loop, not from a state the app needs to continue.
+pub fn show_warning(mtm: MainThreadMarker, title: &str, message: &str) {
+    let alert = NSAlert::new(mtm);
+    alert.setAlertStyle(NSAlertStyle::Warning);
+    alert.setMessageText(&NSString::from_str(title));
+    alert.setInformativeText(&NSString::from_str(message));
+    let _ok_button = alert.addButtonWithTitle(&NSString::from_str("OK"));
+    alert.runModal();
 }
 
 fn build_alert(

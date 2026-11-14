@@ -230,6 +230,7 @@ version = "0.1.0"
 dependencies = [
  "domain",
  "host-tauri",
+ "macos-dialogs",
  "protocol",
  "serde_json",
  "store-fs",

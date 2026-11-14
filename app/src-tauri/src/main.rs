@@ -15,6 +15,7 @@ use domain::ports::{Platform, Store};
 use domain::runtime::{Ports, StartupLoad, apply};
 use domain::{Catalog, Core, Effect, Input, Persisted};
 use host_tauri::{Feed, TauriHost};
+use macos_dialogs::MainThreadMarker;
 use protocol::{AppInfo, AppSettings, Snapshot, UI_WEBVIEW, UiCommand};
 use store_fs::FsStore;
 use tauri::window::{Color, WindowBuilder};
@@ -135,21 +136,25 @@ fn load_persisted(store: &dyn Store, log: &dyn Platform) -> StartupLoad {
         log.log(&format!(
             "cannot read accounts, running read-only and not saving: {error}"
         ));
-        show_unreadable_settings_alert();
     }
     load
 }
 
-/// Native alert (macOS only): the UI cannot carry this, it starts after the load. Runs on its
-/// own thread so the alert does not block startup.
-fn show_unreadable_settings_alert() {
-    const SCRIPT: &str = "display alert \"Atrium cannot read its settings\" message \"Your accounts could not be loaded, so Atrium started empty. Changes made in this session will not be saved, and your saved accounts stay untouched. Quit and check the permissions of accounts.json, then start Atrium again.\" as critical";
-    std::thread::spawn(|| {
-        // The alert is a courtesy; the log already holds the reason.
-        let _ = std::process::Command::new("osascript")
-            .args(["-e", SCRIPT])
-            .status();
+/// Tells the user, once the event loop runs, that this session is read-only: the UI cannot
+/// carry this because it starts after the load, and a modal alert inside `setup` would block
+/// startup.
+fn show_unreadable_settings_alert(app: &AppHandle) {
+    let shown = app.run_on_main_thread(|| {
+        if let Some(main_thread) = MainThreadMarker::new() {
+            macos_dialogs::show_warning(
+                main_thread,
+                "Atrium cannot read its settings",
+                "Your accounts could not be loaded, so Atrium started empty. Changes made in this session will not be saved, and your saved accounts stay untouched. Quit and check the permissions of accounts.json, then start Atrium again.",
+            );
+        }
     });
+    // The alert is a courtesy; the log already holds the reason.
+    drop(shown);
 }
 
 /// Deletes the web data of accounts that no longer exist, but only against an intact
@@ -382,6 +387,9 @@ fn setup(
     updates::start(app, config_dir.clone(), host.log_sink())?;
     let load = load_persisted(&store, &host);
     let read_only = load.is_read_only();
+    if read_only {
+        show_unreadable_settings_alert(app.handle());
+    }
     let persisted = load.into_persisted();
     remove_unused_data_stores(&host, &store, &dev, &persisted, !read_only);
     let services_dir = config_dir.join("services");

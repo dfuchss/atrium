@@ -2,6 +2,7 @@
 //! helper's `<app data>/updates/update-result.json`.
 
 use std::io::Write as _;
+#[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 
@@ -12,6 +13,7 @@ const UPDATES_DIR: &str = "updates";
 const RESULT_FILE: &str = "update-result.json";
 const HELPER_LOG_FILE: &str = "helper.log";
 /// The updater's files name versions and paths of this Mac: readable by the user only.
+#[cfg(unix)]
 pub(crate) const PRIVATE_FILE_MODE: u32 = 0o600;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,15 +112,19 @@ pub(crate) fn write_atomically(path: &Path, contents: &str) -> std::io::Result<(
 }
 
 /// Opens `path` for writing (truncated, or appended to with `append`) with mode 0600, also
-/// when it existed with another mode.
+/// when it existed with another mode. Elsewhere the app data folder in the user profile is
+/// private to the user already.
 pub(crate) fn open_private(path: impl AsRef<Path>, append: bool) -> std::io::Result<std::fs::File> {
-    let file = std::fs::OpenOptions::new()
+    let mut options = std::fs::OpenOptions::new();
+    options
         .write(true)
         .create(true)
         .append(append)
-        .truncate(!append)
-        .mode(PRIVATE_FILE_MODE)
-        .open(path)?;
+        .truncate(!append);
+    #[cfg(unix)]
+    options.mode(PRIVATE_FILE_MODE);
+    let file = options.open(path)?;
+    #[cfg(unix)]
     file.set_permissions(std::fs::Permissions::from_mode(PRIVATE_FILE_MODE))?;
     Ok(file)
 }
@@ -127,6 +133,7 @@ pub(crate) fn open_private(path: impl AsRef<Path>, append: bool) -> std::io::Res
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn files_are_owner_only_even_over_a_leftover() {
         let dir = tempfile::tempdir().unwrap();

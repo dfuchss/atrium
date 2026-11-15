@@ -3,9 +3,7 @@
 //! Callers log URLs only through [`domain::redact_url`] and page titles only when title
 //! logging is switched on (see `Core::set_log_page_titles`).
 
-use std::fs::{OpenOptions, Permissions};
 use std::io::Write as _;
-use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -14,13 +12,13 @@ use domain::RateLimiter;
 use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
 
+use crate::private_file;
+
 const LOG_FILE_NAME: &str = "atrium.log";
 /// The previous log after a rotation (one generation is kept).
 const ROTATED_LOG_FILE_NAME: &str = "atrium.log.1";
 /// Size at which the log is rotated.
 const LOG_ROTATE_BYTES: u64 = 5 * 1024 * 1024;
-/// The log names accounts, hosts and paths: readable by the user only.
-const LOG_FILE_MODE: u32 = 0o600;
 const SECONDS_PER_DAY: u64 = 86_400;
 /// Navigation lines per account and window; single-page apps and ad frames navigate a lot.
 const NAVIGATION_LINES_PER_WINDOW: usize = 20;
@@ -36,7 +34,7 @@ struct LogFile {
 impl LogFile {
     fn new(path: PathBuf, rotate_bytes: u64) -> LogFile {
         // Files written before the log became owner-only keep their mode on append.
-        let _ = std::fs::set_permissions(&path, Permissions::from_mode(LOG_FILE_MODE));
+        let _ = private_file::restrict(&path);
         LogFile {
             path,
             rotate_bytes,
@@ -52,12 +50,7 @@ impl LogFile {
         if std::fs::metadata(&self.path).is_ok_and(|meta| meta.len() >= self.rotate_bytes) {
             let _ = std::fs::rename(&self.path, self.path.with_file_name(ROTATED_LOG_FILE_NAME));
         }
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .mode(LOG_FILE_MODE)
-            .open(&self.path)
-        {
+        if let Ok(mut file) = private_file::open(&self.path, true) {
             // Nowhere left to report a failing log write.
             let _ = writeln!(file, "{line}");
         }
@@ -173,14 +166,20 @@ fn civil_date(days: u64) -> (u64, u64, u64) {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    fn mode(path: &Path) -> u32 {
+        std::os::unix::fs::PermissionsExt::mode(&std::fs::metadata(path).unwrap().permissions())
+            & 0o777
+    }
+
     #[test]
-    fn log_file_is_owner_only_and_rotates() {
+    fn log_file_rotates() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(LOG_FILE_NAME);
         let file = LogFile::new(path.clone(), 64);
         file.append(&"a".repeat(80));
-        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
-        assert_eq!(mode & 0o777, LOG_FILE_MODE);
+        #[cfg(unix)]
+        assert_eq!(mode(&path), private_file::PRIVATE_MODE);
         file.append("second");
         let rotated = dir.path().join(ROTATED_LOG_FILE_NAME);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "second\n");
@@ -197,15 +196,16 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn existing_log_becomes_owner_only() {
+        use std::os::unix::fs::PermissionsExt as _;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(LOG_FILE_NAME);
         std::fs::write(&path, "old\n").unwrap();
-        std::fs::set_permissions(&path, Permissions::from_mode(0o644)).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
         LogFile::new(path.clone(), LOG_ROTATE_BYTES);
-        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
-        assert_eq!(mode & 0o777, LOG_FILE_MODE);
+        assert_eq!(mode(&path), private_file::PRIVATE_MODE);
     }
 
     #[test]

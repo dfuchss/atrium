@@ -1,4 +1,5 @@
-//! Self-update from GitHub Releases for macOS.
+//! Self-update from GitHub Releases for macOS; on other systems new releases are only
+//! announced.
 //!
 //! A check fetches the latest release, picks the zip for this Mac's architecture, verifies it
 //! against the release's `SHA256SUMS`, extracts and checks the bundle under
@@ -23,8 +24,10 @@ mod store;
 mod swap;
 mod version;
 
-pub use location::{InstallLocation, can_replace};
-pub use release::asset_name_for_arch;
+pub use location::InstallLocation;
+#[cfg(unix)]
+pub use location::can_replace;
+pub use release::asset_name;
 pub use service::{LogSink, StatusSink, Updater, UpdaterAction, UpdaterConfig};
 pub use source::{Download, GitHubSource, ReleaseSource};
 pub use version::Version;

@@ -10,7 +10,6 @@ description.workspace = true
 [dependencies]
 domain.workspace = true
 protocol.workspace = true
-macos-dialogs.workspace = true
 uuid.workspace = true
 url.workspace = true
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }
@@ -19,6 +18,13 @@ tauri-plugin-opener.workspace = true
 tauri-plugin-autostart = "2.7.0"
 ureq = { version = "3.1", default-features = false, features = ["rustls"] }
 base64 = "0.23"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+macos-dialogs.workspace = true
+
+# The version Tauri's GTK backend uses, so the widget types are the same.
+[target.'cfg(not(any(target_os = "macos", windows)))'.dependencies]
+gtk = "0.18.2"
 
 [dev-dependencies]
 tempfile.workspace = true

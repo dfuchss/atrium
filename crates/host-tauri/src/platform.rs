@@ -30,7 +30,27 @@ fn describe_simple_icon(result: &SimpleIconResult) -> String {
     }
 }
 
+/// Red dot for the Windows taskbar overlay, which shows an icon instead of a count.
+#[cfg(windows)]
+fn badge_dot() -> tauri::image::Image<'static> {
+    const SIZE: u32 = 32;
+    let radius = f64::from(SIZE) / 2.0;
+    let pixels = (0..SIZE * SIZE)
+        .flat_map(|index| {
+            let (x, y) = (f64::from(index % SIZE) + 0.5, f64::from(index / SIZE) + 0.5);
+            let inside = (x - radius).hypot(y - radius) <= radius;
+            if inside {
+                [0xe5, 0x3e, 0x3e, 0xff]
+            } else {
+                [0; 4]
+            }
+        })
+        .collect();
+    tauri::image::Image::new_owned(pixels, SIZE, SIZE)
+}
+
 impl<R: Runtime> Platform for TauriHost<R> {
+    #[cfg(target_os = "macos")]
     fn set_dock_badge(&self, badge: DockBadge) -> PortResult {
         let window = self.window()?;
         match badge {
@@ -39,6 +59,25 @@ impl<R: Runtime> Platform for TauriHost<R> {
             DockBadge::None | DockBadge::Count(_) => window.set_badge_label(None),
         }
         .map_err(port_err)
+    }
+
+    #[cfg(windows)]
+    fn set_dock_badge(&self, badge: DockBadge) -> PortResult {
+        let overlay = match badge {
+            DockBadge::Count(0) | DockBadge::None => None,
+            DockBadge::Count(_) | DockBadge::Dot => Some(badge_dot()),
+        };
+        self.window()?.set_overlay_icon(overlay).map_err(port_err)
+    }
+
+    /// The launcher count of the Unity launcher API (GNOME docks, KDE); it has no dot.
+    #[cfg(not(any(target_os = "macos", windows)))]
+    fn set_dock_badge(&self, badge: DockBadge) -> PortResult {
+        let count = match badge {
+            DockBadge::Count(count) if count > 0 => Some(i64::from(count)),
+            DockBadge::None | DockBadge::Count(_) | DockBadge::Dot => None,
+        };
+        self.window()?.set_badge_count(count).map_err(port_err)
     }
 
     fn open_external(&self, url: &str, browser: Option<&str>) -> PortResult {

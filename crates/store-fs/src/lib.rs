@@ -1,9 +1,10 @@
 //! File-based [`domain::ports::Store`]: `<dir>/accounts.json`.
 
-use std::fs::{self, OpenOptions, Permissions};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::Persisted;
@@ -38,6 +39,7 @@ impl FsStore {
 }
 
 /// The file names the user's accounts and workspaces: readable by the user only.
+#[cfg(unix)]
 const ACCOUNTS_FILE_MODE: u32 = 0o600;
 
 /// Name prefix of a corrupt `accounts.json` kept for inspection.
@@ -45,6 +47,30 @@ const CORRUPT_FILE_PREFIX: &str = "accounts.json.corrupt-";
 
 fn port_error(action: &str, error: impl std::fmt::Display) -> PortError {
     PortError(format!("{action}: {error}"))
+}
+
+/// Creates or truncates `path` with [`ACCOUNTS_FILE_MODE`]; a file left by a crash keeps its
+/// old mode on open, so the mode is set again.
+#[cfg(unix)]
+fn create_private(path: &Path) -> std::io::Result<File> {
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(ACCOUNTS_FILE_MODE)
+        .open(path)?;
+    file.set_permissions(fs::Permissions::from_mode(ACCOUNTS_FILE_MODE))?;
+    Ok(file)
+}
+
+/// The config folder in the user profile is private to the user already.
+#[cfg(not(unix))]
+fn create_private(path: &Path) -> std::io::Result<File> {
+    OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)
 }
 
 impl Store for FsStore {
@@ -76,16 +102,8 @@ impl Store for FsStore {
         let json =
             serde_json::to_vec_pretty(data).map_err(|error| port_error("serialize", error))?;
         let temporary = self.dir.join("accounts.json.tmp");
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(ACCOUNTS_FILE_MODE)
-            .open(&temporary)
-            .map_err(|error| port_error("create tmp", error))?;
-        // A temporary file left by a crash keeps its old mode on open.
-        file.set_permissions(Permissions::from_mode(ACCOUNTS_FILE_MODE))
-            .map_err(|error| port_error("restrict tmp", error))?;
+        let mut file =
+            create_private(&temporary).map_err(|error| port_error("create tmp", error))?;
         file.write_all(&json)
             .map_err(|error| port_error("write tmp", error))?;
         file.sync_all()
@@ -207,13 +225,14 @@ mod tests {
         assert!(!d.path().join("nested/accounts.json.tmp").exists());
     }
 
+    #[cfg(unix)]
     #[test]
     fn saved_file_is_owner_only() {
         let d = tempfile::tempdir().unwrap();
         fs::write(d.path().join("accounts.json.tmp"), "left over").unwrap();
         fs::set_permissions(
             d.path().join("accounts.json.tmp"),
-            Permissions::from_mode(0o644),
+            fs::Permissions::from_mode(0o644),
         )
         .unwrap();
         FsStore::new(d.path()).save(&sample()).unwrap();

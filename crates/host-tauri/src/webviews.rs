@@ -3,24 +3,25 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError, mpsc};
+#[cfg(target_os = "macos")]
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use domain::ports::{PortError, PortResult, WebviewHost};
 use domain::{Account, Bounds, ViewPolicy, ViewSpec, redact_url, unused_store_ids};
+#[cfg(target_os = "macos")]
 use macos_dialogs::MainThreadMarker;
 use protocol::{Snapshot, UI_WEBVIEW};
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::{DownloadEvent, PageLoadEvent};
-use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, Webview, WebviewBuilder,
-    WebviewUrl, Window,
-};
+use tauri::{AppHandle, Manager, Runtime, Url, Webview, WebviewBuilder, WebviewUrl, Window};
 use uuid::Uuid;
 
+#[cfg(target_os = "macos")]
 use crate::dialogs::tag_for_dialogs;
 use crate::links::{LinkPolicy, navigation_hook, permission_hook, popup_label_prefix};
-use crate::{Feed, Input, Logger, TauriHost, port_err};
+use crate::{Feed, Input, Logger, TauriHost, port_err, profiles};
 
 /// Time `WebKit` gets to delete the browsing data before the view reloads.
 const CLEAR_DATA_RELOAD_DELAY: Duration = Duration::from_millis(800);
@@ -81,7 +82,7 @@ fn remove_data_store_with_retries<R: Runtime>(
     logger: &Logger,
 ) {
     let store = Uuid::from_bytes(store_id);
-    let mut result = tauri::async_runtime::block_on(app.remove_data_store(store_id));
+    let mut result = profiles::remove(app, store_id);
     for delay in REMOVE_STORE_RETRY_DELAYS {
         let Err(error) = &result else {
             break;
@@ -91,7 +92,7 @@ fn remove_data_store_with_retries<R: Runtime>(
             delay.as_secs()
         ));
         std::thread::sleep(delay);
-        result = tauri::async_runtime::block_on(app.remove_data_store(store_id));
+        result = profiles::remove(app, store_id);
     }
     match result {
         Ok(()) => logger.log(&format!("deleted data store {store}")),
@@ -114,12 +115,7 @@ pub(crate) fn view_label(account: Uuid) -> String {
 }
 
 fn place<R: Runtime>(webview: &Webview<R>, bounds: Bounds) -> PortResult {
-    webview
-        .set_position(LogicalPosition::new(bounds.x, bounds.y))
-        .map_err(port_err)?;
-    webview
-        .set_size(LogicalSize::new(bounds.width, bounds.height))
-        .map_err(port_err)
+    crate::place_child(webview, bounds).map_err(port_err)
 }
 
 /// `dir/name`, or `dir/stem (n).ext` for the first `n` that does not exist yet, so a download
@@ -204,6 +200,7 @@ fn download_hook<R: Runtime>(
 /// Builds the service view on the main thread (also when called from elsewhere; waits for it),
 /// with the `WebKit` configuration of [`macos_dialogs::service_configuration`]: it can only be
 /// created there and must be in place before the page starts.
+#[cfg(target_os = "macos")]
 fn add_service_view<R: Runtime>(
     window: &Window<R>,
     builder: WebviewBuilder<R>,
@@ -218,13 +215,8 @@ fn add_service_view<R: Runtime>(
                 .ok_or_else(|| PortError("not on the main thread".into()))
                 .and_then(|main_thread| {
                     let configuration = macos_dialogs::service_configuration(main_thread, store_id);
-                    target
-                        .add_child(
-                            builder.with_webview_configuration(configuration),
-                            LogicalPosition::new(bounds.x, bounds.y),
-                            LogicalSize::new(bounds.width, bounds.height),
-                        )
-                        .map_err(port_err)
+                    let builder = builder.with_webview_configuration(configuration);
+                    crate::add_child(&target, builder, bounds).map_err(port_err)
                 });
             let _ = sender.send(created);
         })
@@ -232,6 +224,16 @@ fn add_service_view<R: Runtime>(
     receiver
         .recv()
         .map_err(|_| PortError("the view was not created".into()))?
+}
+
+#[cfg(not(target_os = "macos"))]
+fn add_service_view<R: Runtime>(
+    window: &Window<R>,
+    builder: WebviewBuilder<R>,
+    _store_id: [u8; 16],
+    bounds: Bounds,
+) -> PortResult<Webview<R>> {
+    crate::add_child(window, builder, bounds).map_err(port_err)
 }
 
 impl<R: Runtime> TauriHost<R> {
@@ -263,7 +265,9 @@ impl<R: Runtime> TauriHost<R> {
             logger: self.logger.clone(),
         });
         let (feed_title, feed_load) = (self.feed.clone(), self.feed.clone());
-        let (load_logger, load_dialogs) = (self.logger.clone(), self.dialogs.clone());
+        let load_logger = self.logger.clone();
+        #[cfg(target_os = "macos")]
+        let load_dialogs = self.dialogs.clone();
         builder
             .on_document_title_changed(move |_, title| {
                 feed_title(Input::TitleChanged { account, title });
@@ -274,6 +278,7 @@ impl<R: Runtime> TauriHost<R> {
                         "[{account}] loaded {}",
                         redact_url(payload.url().as_str())
                     ));
+                    #[cfg(target_os = "macos")]
                     load_dialogs
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
@@ -318,8 +323,16 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
                 spec.account
             )));
         }
-        let mut builder = WebviewBuilder::new(label, WebviewUrl::External(spec.url.clone()))
-            .data_store_identifier(spec.store_id)
+        let builder = WebviewBuilder::new(label, WebviewUrl::External(spec.url.clone()));
+        #[cfg(target_os = "macos")]
+        let builder = builder.data_store_identifier(spec.store_id);
+        #[cfg(not(target_os = "macos"))]
+        let builder = builder
+            .data_directory(profiles::directory(&self.app, spec.store_id).map_err(PortError)?);
+        // Tauri's file drop handler would keep dropped files from the page (e.g. an upload).
+        #[cfg(windows)]
+        let builder = builder.disable_drag_drop_handler();
+        let mut builder = builder
             .initialization_script(self.init_script(spec))
             // Hidden accounts keep running (calls, sockets, timers).
             .background_throttling(BackgroundThrottlingPolicy::Disabled);
@@ -328,6 +341,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         }
         let builder = self.hook(spec, builder);
         let webview = add_service_view(&self.window()?, builder, spec.store_id, bounds)?;
+        #[cfg(target_os = "macos")]
         tag_for_dialogs(&webview, &self.logger);
         if !visible {
             webview.hide().map_err(port_err)?;
@@ -476,8 +490,7 @@ impl<R: Runtime> TauriHost<R> {
     pub fn remove_unused_data_stores(&self, accounts: Vec<Account>, current: Arc<Mutex<Snapshot>>) {
         let (app, logger) = (self.app.clone(), self.logger.clone());
         spawn_logged("unused-stores", &self.logger, move || {
-            let existing = match tauri::async_runtime::block_on(app.fetch_data_store_identifiers())
-            {
+            let existing = match profiles::list(&app) {
                 Ok(existing) => existing,
                 Err(error) => {
                     logger.log(&format!("cannot list data stores: {error}"));

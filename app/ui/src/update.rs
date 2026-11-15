@@ -85,7 +85,7 @@ pub(crate) fn UpdateSection() -> impl IntoView {
             <p class="note">"Atrium quits, replaces itself with the new version and starts again."</p>
         </Show>
         {move || manual_reason().map(|reason| view! {
-            <p class="note">{format!("Atrium installs updates itself only from the Applications folder, but {reason}. Download new versions from the release page.")}</p>
+            <p class="note">{format!("Atrium cannot install updates itself here: {reason}. Download new versions from the release page.")}</p>
         })}
         {move || last_failure().map(|failure| view! {
             <p class="note update-failure">{format!("The last update was not installed ({failure}).")}</p>

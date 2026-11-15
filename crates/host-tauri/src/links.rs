@@ -31,6 +31,7 @@ use tauri::webview::{
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
+#[cfg(target_os = "macos")]
 use crate::dialogs::tag_for_dialogs;
 use crate::logger::now_ms;
 use crate::webviews::popup_labels;
@@ -268,46 +269,15 @@ impl<R: Runtime> LinkPolicy<R> {
             account,
             self.popup_counter.fetch_add(1, Ordering::Relaxed) + 1,
         );
-        let popup_policy = self.clone();
-        let title_on_change = Arc::new(PopupTitle::new(self.clone()));
-        let title_on_load = title_on_change.clone();
-        let blank = Url::parse("about:blank").expect("valid URL");
-        // Like the account's view: `window.open` only from a click (see `macos_dialogs`).
-        macos_dialogs::forbid_automatic_windows(&features.opener().target_configuration);
-        let mut builder = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(blank))
-            // Requested size/position and, on macOS, the opener's WKWebViewConfiguration, which
-            // WebKit requires for the returned view (it also carries the opener's data store).
-            .window_features(features)
-            .data_store_identifier(self.spec.store_id)
-            .title(self.window_title_for("", url))
-            .initialization_script(CLOSE_HOOK)
-            .on_new_window(move |url, features| popup_policy.on_new_window(&url, features))
-            .on_document_title_changed(move |window, title| {
-                title_on_change.title_changed(&window, title);
-            })
-            .on_page_load(move |window, payload| title_on_load.page_loading(&window, &payload))
-            .on_navigation(navigation_hook(
-                account,
-                self.logger.clone(),
-                self.feed.clone(),
-            ))
-            .on_permission_request(permission_hook(
-                self.spec.clone(),
-                self.policies.clone(),
-                self.logger.clone(),
-                "popup",
-            ));
-        if let Some((width, height)) = size {
-            builder = builder.inner_size(width, height).center();
-        }
-        if let Some(user_agent) = &self.spec.user_agent {
-            builder = builder.user_agent(user_agent);
-        }
-        match builder.build() {
+        let built = self
+            .window_builder(&label, url, features, size)
+            .and_then(|builder| builder.build().map_err(|error| error.to_string()));
+        match built {
             Ok(window) => {
                 self.logger.log(&format!(
                     "[{account}] opened window {label} for {shown_url}"
                 ));
+                #[cfg(target_os = "macos")]
                 tag_for_dialogs(window.as_ref(), &self.logger);
                 watch_close(self.app.clone(), label, &self.logger);
                 NewWindowResponse::Create { window }
@@ -319,6 +289,68 @@ impl<R: Runtime> LinkPolicy<R> {
                 NewWindowResponse::Deny
             }
         }
+    }
+
+    /// The in-app window `label` with the hooks, browsing data and user agent of the account.
+    #[cfg_attr(
+        target_os = "macos",
+        expect(
+            clippy::unnecessary_wraps,
+            reason = "only the profile folder of other systems can be missing"
+        )
+    )]
+    fn window_builder(
+        self: &Arc<Self>,
+        label: &str,
+        url: &Url,
+        features: NewWindowFeatures,
+        size: Option<(f64, f64)>,
+    ) -> Result<WebviewWindowBuilder<'_, R, AppHandle<R>>, String> {
+        let popup_policy = self.clone();
+        let title_on_change = Arc::new(PopupTitle::new(self.clone()));
+        let title_on_load = title_on_change.clone();
+        let blank = Url::parse("about:blank").expect("valid URL");
+        // Like the account's view: `window.open` only from a click (see `macos_dialogs`).
+        // WebKitGTK forbids it by default; WebView2 reports it to `on_new_window` like any other.
+        #[cfg(target_os = "macos")]
+        macos_dialogs::forbid_automatic_windows(&features.opener().target_configuration);
+        let builder = WebviewWindowBuilder::new(&self.app, label, WebviewUrl::External(blank))
+            // Requested size/position and the opener's engine context, which the engine
+            // requires for the returned view (on macOS it also carries the opener's data store).
+            .window_features(features)
+            .title(self.window_title_for("", url))
+            .initialization_script(CLOSE_HOOK)
+            .on_new_window(move |url, features| popup_policy.on_new_window(&url, features))
+            .on_document_title_changed(move |window, title| {
+                title_on_change.title_changed(&window, title);
+            })
+            .on_page_load(move |window, payload| title_on_load.page_loading(&window, &payload))
+            .on_navigation(navigation_hook(
+                self.spec.account,
+                self.logger.clone(),
+                self.feed.clone(),
+            ))
+            .on_permission_request(permission_hook(
+                self.spec.clone(),
+                self.policies.clone(),
+                self.logger.clone(),
+                "popup",
+            ));
+        // Like the account's view (see `webviews`).
+        #[cfg(windows)]
+        let builder = builder.disable_drag_drop_handler();
+        #[cfg(target_os = "macos")]
+        let mut builder = builder.data_store_identifier(self.spec.store_id);
+        #[cfg(not(target_os = "macos"))]
+        let mut builder =
+            builder.data_directory(crate::profiles::directory(&self.app, self.spec.store_id)?);
+        if let Some((width, height)) = size {
+            builder = builder.inner_size(width, height).center();
+        }
+        if let Some(user_agent) = &self.spec.user_agent {
+            builder = builder.user_agent(user_agent);
+        }
+        Ok(builder)
     }
 }
 

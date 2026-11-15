@@ -210,7 +210,9 @@ fn check_links(root: &Path) -> Result<(), String> {
     }
 }
 
+// The fixtures are Unix symbolic links.
 #[cfg(test)]
+#[cfg(unix)]
 mod tests {
     use super::*;
 
@@ -222,6 +224,7 @@ mod tests {
     }
 
     /// Zips `source` with `ditto -c -k --keepParent`, like the release workflow.
+    #[cfg(target_os = "macos")]
     fn ditto_zip(source: &Path, zip: &Path) {
         let status = Command::new("/usr/bin/ditto")
             .args(["-c", "-k", "--keepParent"])
@@ -232,6 +235,7 @@ mod tests {
         assert!(status.success());
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn lists_the_entries_of_a_ditto_zip() {
         let dir = tempfile::tempdir().unwrap();
@@ -348,6 +352,7 @@ mod tests {
         assert!(check_links(looping.path()).is_err());
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn extraction_refuses_links_out_of_the_archive() {
         let dir = tempfile::tempdir().unwrap();

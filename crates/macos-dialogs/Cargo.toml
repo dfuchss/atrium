@@ -7,7 +7,8 @@ repository.workspace = true
 authors.workspace = true
 description.workspace = true
 
-[dependencies]
+# Builds empty on other platforms, so the workspace stays buildable everywhere.
+[target.'cfg(target_os = "macos")'.dependencies]
 tauri.workspace = true
 block2 = "0.6"
 objc2 = "0.6"

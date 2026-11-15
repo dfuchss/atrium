@@ -34,3 +34,13 @@ xattr -cr /Applications/Atrium.app
 
 An Atrium in the Applications folder updates itself: Settings > About shows new versions and
 **Restart and update** installs them.
+
+### Linux and Windows
+
+| System | File |
+|---|---|
+| Debian, Ubuntu | `atrium-linux-amd64.deb` (`sudo apt install ./atrium-linux-amd64.deb`) |
+| Other Linux | `atrium-linux-amd64.AppImage` (make it executable and run it) |
+| Windows 10/11 | `atrium-windows-x64-setup.exe` (unsigned: SmartScreen > **More info** > **Run anyway**) |
+
+These versions do not update themselves; Settings > About shows when a new one is out.

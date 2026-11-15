@@ -1,6 +1,8 @@
 //! Where Atrium runs from, and whether that installation may replace itself.
 
+#[cfg(unix)]
 use std::fs::OpenOptions;
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
 
@@ -61,6 +63,7 @@ fn bundle_of(executable: &Path) -> Option<PathBuf> {
 
 /// Whether the user can create files next to `bundle` (needed for the renames) and owns it
 /// (needed to remove the old version). The probe file never goes inside the bundle.
+#[cfg(unix)]
 pub fn can_replace(bundle: &Path) -> bool {
     let Some(parent) = bundle.parent() else {
         return false;
@@ -171,6 +174,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn own_bundle_in_a_writable_folder_can_be_replaced() {
         let dir = tempfile::tempdir().unwrap();

@@ -172,6 +172,7 @@ fn about_metadata<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<AboutMetadata
         .build())
 }
 
+#[cfg(target_os = "macos")]
 fn atrium_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     SubmenuBuilder::new(app, "Atrium")
         .about(Some(about_metadata(app)?))
@@ -192,6 +193,7 @@ fn atrium_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
 }
 
 /// Without an Edit menu, Cmd+C/V/X/A/Z do not reach the webviews on macOS.
+#[cfg(target_os = "macos")]
 fn edit_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     SubmenuBuilder::new(app, "Edit")
         .undo()
@@ -230,6 +232,23 @@ fn view_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
         .build()
 }
 
+/// The app menu's place elsewhere; the webviews handle Ctrl+C/V/X/A/Z themselves.
+#[cfg(not(target_os = "macos"))]
+fn file_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    SubmenuBuilder::new(app, "File")
+        .item(&shortcut_item(app, ID_SETTINGS, "Settings…", "Ctrl+,")?)
+        .separator()
+        .item(&shortcut_item(app, ID_QUIT, "Quit", "Ctrl+Q")?)
+        .build()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn help_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
+    SubmenuBuilder::new(app, "Help")
+        .about(Some(about_metadata(app)?))
+        .build()
+}
+
 fn accounts_submenu<R: Runtime>(
     app: &AppHandle<R>,
     model: &MenuModel,
@@ -254,6 +273,7 @@ fn accounts_submenu<R: Runtime>(
 
 /// Close = performClose: on the key window -> `CloseRequested`, so the main window follows
 /// close-to-background and popups simply close.
+#[cfg(target_os = "macos")]
 fn window_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     SubmenuBuilder::new(app, "Window")
         .minimize()
@@ -261,6 +281,7 @@ fn window_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
         .build()
 }
 
+#[cfg(target_os = "macos")]
 fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<Menu<R>> {
     MenuBuilder::new(app)
         .items(&[
@@ -269,6 +290,19 @@ fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::R
             &view_submenu(app)?,
             &accounts_submenu(app, model)?,
             &window_submenu(app)?,
+        ])
+        .build()
+}
+
+/// The menu bar of every window.
+#[cfg(not(target_os = "macos"))]
+fn build_app_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<Menu<R>> {
+    MenuBuilder::new(app)
+        .items(&[
+            &file_submenu(app)?,
+            &view_submenu(app)?,
+            &accounts_submenu(app, model)?,
+            &help_submenu(app)?,
         ])
         .build()
 }
@@ -293,9 +327,18 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::
         .build()
 }
 
+/// macOS tints the monochrome template for the menu bar; other panels show icons as they are,
+/// where the colored app icon stays visible on light and dark ones.
+fn tray_icon<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Image<'static>> {
+    match app.default_window_icon() {
+        Some(icon) if !cfg!(target_os = "macos") => Ok(icon.clone().to_owned()),
+        _ => Image::from_bytes(TRAY_ICON),
+    }
+}
+
 fn build_tray<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<TrayIcon<R>> {
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(Image::from_bytes(TRAY_ICON)?)
+        .icon(tray_icon(app)?)
         .icon_as_template(true)
         .tooltip("Atrium")
         .menu(&build_tray_menu(app, model)?)

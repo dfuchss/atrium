@@ -14,7 +14,14 @@ use crate::{Input, TauriHost, port_err};
 /// Sound name that makes `NSUserNotification` play the user's default notification sound
 /// (mac-notification-sys maps exactly this string to `NSUserNotificationDefaultSoundName`;
 /// other strings are looked up as named system sounds, unknown names play nothing).
+#[cfg(target_os = "macos")]
 const DEFAULT_SOUND: &str = "NSUserNotificationDefaultSoundName";
+/// The toast's default audio.
+#[cfg(windows)]
+const DEFAULT_SOUND: &str = "Default";
+/// The freedesktop sound theme's name for an incoming message.
+#[cfg(not(any(target_os = "macos", windows)))]
+const DEFAULT_SOUND: &str = "message-new-instant";
 
 /// Native notifications remembered for click routing; older ones are forgotten.
 const MAX_TRACKED_NOTIFICATIONS: u16 = 512;

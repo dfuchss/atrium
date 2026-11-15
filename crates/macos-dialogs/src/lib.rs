@@ -23,6 +23,10 @@
 //! needs the same Objective-C calls.
 //!
 //! The only crate of the workspace with `unsafe` code; every block says why it is sound.
+//!
+//! Empty on other platforms, where the engines show their own dialogs.
+
+#![cfg(target_os = "macos")]
 
 mod configuration;
 

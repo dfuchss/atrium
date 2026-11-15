@@ -296,5 +296,7 @@ impl Updater {
 
 mod checking;
 
+// The fixtures zip with `ditto`.
 #[cfg(test)]
+#[cfg(target_os = "macos")]
 mod tests;

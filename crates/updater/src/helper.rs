@@ -5,6 +5,7 @@
 
 use std::ffi::OsString;
 use std::io::Write as _;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -73,15 +74,16 @@ impl HelperPlan {
     /// Starts the helper detached from Atrium (own process group, no terminal), so it outlives
     /// the app; output goes nowhere, the helper writes its own log.
     pub fn spawn(&self, executable: &Path) -> std::io::Result<()> {
-        Command::new(executable)
+        let mut command = Command::new(executable);
+        command
             .args(self.to_args())
             .current_dir("/")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .process_group(0)
-            .spawn()
-            .map(|_| ())
+            .stderr(Stdio::null());
+        #[cfg(unix)]
+        command.process_group(0);
+        command.spawn().map(|_| ())
     }
 }
 

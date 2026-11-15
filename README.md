@@ -10,9 +10,9 @@
   <img src="docs/screenshots/main.png" alt="Atrium with a Matrix chat open and several accounts in the sidebar" width="800">
 </p>
 
-Atrium is a lightweight messenger aggregator for macOS. It puts Element, Slack, Discord, WhatsApp, Teams and any other web app into one window with a compact sidebar. Every account runs in its own isolated web view, so you can stay signed in to several accounts of the same service side by side.
+Atrium is a lightweight messenger aggregator for macOS, Linux and Windows. It puts Element, Slack, Discord, WhatsApp, Teams and any other web app into one window with a compact sidebar. Every account runs in its own isolated web view, so you can stay signed in to several accounts of the same service side by side.
 
-It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's WebKit instead of bundling Chromium.
+It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's web engine (WebKit on macOS, WebKitGTK on Linux, WebView2 on Windows) instead of bundling Chromium.
 
 ## Features
 
@@ -74,9 +74,13 @@ Download `atrium-macos-arm64.zip` (Apple silicon) or `atrium-macos-x86_64.zip` (
 
 The builds are not signed, so macOS blocks the first start: open Atrium once, then allow it in System Settings → Privacy & Security → *Open Anyway*. If macOS reports the app as "damaged", remove the download quarantine with `xattr -cr /Applications/Atrium.app`.
 
+**Linux:** install `atrium-linux-amd64.deb` (`sudo apt install ./atrium-linux-amd64.deb`) or make `atrium-linux-amd64.AppImage` executable and run it. Atrium needs WebKitGTK 4.1 and, for the tray icon, `libayatana-appindicator3-1`.
+
+**Windows:** run `atrium-windows-x64-setup.exe`; it installs Atrium for the current user. The installer is not signed, so SmartScreen asks once (*More info* → *Run anyway*). Atrium needs the WebView2 runtime, which Windows 10 and 11 include.
+
 ### Updates
 
-Atrium checks for a new release on startup and every six hours (Settings → About; the check can be switched off there). An update is downloaded, verified against the release's `SHA256SUMS` and placed next to the app; *Restart and update* quits Atrium, swaps in the new version and starts it again. This works only for an Atrium in `/Applications` or `~/Applications`; development builds and other locations just point to the release page.
+Atrium checks for a new release on startup and every six hours (Settings → About; the check can be switched off there). An update is downloaded, verified against the release's `SHA256SUMS` and placed next to the app; *Restart and update* quits Atrium, swaps in the new version and starts it again. This works only for an Atrium in `/Applications` or `~/Applications`; development builds, other locations and Linux and Windows just point to the release page.
 
 Releases are built by `.github/workflows/release.yml` when a tag `v<version>` is pushed; the tag must match the version in the workspace `Cargo.toml`, the only place the version is set.
 
@@ -84,6 +88,8 @@ Releases are built by `.github/workflows/release.yml` when a tag `v<version>` is
 
 Requirements:
 - macOS 14 or later. Per-account data stores need WebKit's `WKWebsiteDataStore(forIdentifier:)`.
+- Or Linux with WebKitGTK 4.1, e.g. on Debian/Ubuntu: `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev`.
+- Or Windows 10/11 with the WebView2 runtime and the MSVC build tools.
 - [Rust](https://rustup.rs/) (stable) with the `wasm32-unknown-unknown` target.
 - [Trunk](https://trunkrs.dev/) and the [Tauri CLI](https://v2.tauri.app/reference/cli/).
 
@@ -93,7 +99,7 @@ cargo install trunk tauri-cli --locked   # or: brew install trunk
 
 git clone https://github.com/dfuchss/atrium.git
 cd atrium/app/src-tauri
-cargo tauri build                        # → target/release/bundle/macos/Atrium.app
+cargo tauri build                        # → target/release/bundle/macos/Atrium.app, deb/, appimage/ or nsis/
 ```
 
 Copy `Atrium.app` to `/Applications`. The app is not signed; the first time, open it as described above.
@@ -110,6 +116,8 @@ Copy `Atrium.app` to `/Applications`. The app is not signed; the first time, ope
   - Links
   - About
 
+On Linux and Windows, use <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>; the menu sits in the window.
+
 | Shortcut | Action |
 |---|---|
 | <kbd>⌘</kbd><kbd>1</kbd> … <kbd>⌘</kbd><kbd>9</kbd> | Switch to account 1–9 |
@@ -117,7 +125,7 @@ Copy `Atrium.app` to `/Applications`. The app is not signed; the first time, ope
 | <kbd>⌘</kbd><kbd>[</kbd> / <kbd>⌘</kbd><kbd>]</kbd> | Back / forward |
 | <kbd>⌘</kbd><kbd>=</kbd> / <kbd>⌘</kbd><kbd>-</kbd> / <kbd>⌘</kbd><kbd>0</kbd> | Zoom in / out / reset (per account) |
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>O</kbd> | Open the current page in the browser |
-| <kbd>⌘</kbd><kbd>W</kbd> | Close the window (Atrium keeps running in the background) |
+| <kbd>⌘</kbd><kbd>W</kbd> | Close the window (Atrium keeps running in the background; macOS only) |
 | <kbd>⌘</kbd><kbd>Q</kbd> | Quit |
 
 ### Service definitions (expert mode)
@@ -141,16 +149,17 @@ title_regex = '^\((\d+)\)'          # capture group 1 = unread count
 
 ## Privacy and security
 
-- **Isolation:** every service view runs in its own sandboxed WebKit content process with its own data store. Service pages get **no access** to Atrium's internal API.
+- **Isolation:** every service view runs in its own sandboxed web content process with its own data store (on Linux and Windows a data folder per account). Service pages get **no access** to Atrium's internal API.
 - **Minimal script injection:** Atrium injects only a small script that forwards web notifications and routes new-window links, plus optional custom CSS. Unread counts are read from the page title in Rust.
-- **Links:** only `http(s)` and `mailto` links are handed to macOS, and in-page navigation is limited to web schemes.
-- **Local only:** the settings UI runs under a strict Content Security Policy. Atrium has no telemetry and no server; everything stays on your Mac. The update check asks the GitHub API for the latest release (with the Atrium version in the user agent); it can be switched off.
+- **Links:** only `http(s)` and `mailto` links are handed to the system, and in-page navigation is limited to web schemes.
+- **Local only:** the settings UI runs under a strict Content Security Policy. Atrium has no telemetry and no server; everything stays on your computer. The update check asks the GitHub API for the latest release (with the Atrium version in the user agent); it can be switched off.
 
 ## Known limitations
 
 - **Passkeys/WebAuthn don't work** inside embedded WebKit views for third-party sites. Apple restricts this to apps with a special browser entitlement. Use password + TOTP or SSO instead.
 - **Some sites don't render in WebKit at all.** If a service stays blank in Safari too, Atrium can't show it either. A Chromium-based engine is on the roadmap.
 - **Sleeping services** don't deliver notifications until they are opened again.
+- **Linux and Windows:** no self-update; page dialogs (`alert`, `confirm`, `prompt`) are the web engine's own; the Linux launcher badge shows counts only, no dot. Windows builds are compiled and linted in CI but not yet tried by hand.
 
 ## Architecture
 
@@ -162,8 +171,8 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 | `crates/protocol` | Types shared by the backend and the UI (`UiCommand`, `Snapshot`). Compiles to wasm. |
 | `crates/host-tauri` | Adapter: implements the ports on Tauri multi-webview (webviews, notifications, dock badge, tray, menus, links). |
 | `crates/store-fs` | Adapter: atomic JSON store (`accounts.json`). |
-| `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting. |
-| `crates/macos-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, added to the system webview's delegate at runtime. The only crate with `unsafe` code. |
+| `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting (macOS; elsewhere only the check). |
+| `crates/macos-dialogs` | Adapter (macOS, empty elsewhere): native `alert`/`confirm`/`prompt` panels for the service pages, added to the system webview's delegate at runtime. The only crate with `unsafe` code. |
 | `app/src-tauri` | Composition root: window, actor thread, Tauri commands. |
 | `app/ui` | Sidebar and settings in [Leptos](https://leptos.dev/) (CSR, built with Trunk). |
 | `services/*.toml` | Built-in service definitions. |
@@ -174,6 +183,8 @@ Data locations:
 - **Config:** `~/Library/Application Support/org.fuchss.atrium/`
 - **Log:** `~/Library/Logs/org.fuchss.atrium/atrium.log` (readable by you only, rotated to `atrium.log.1` at 5 MB). URLs are logged without query and fragment, page titles not at all.
 - **Web data (per account):** `~/Library/WebKit/org.fuchss.atrium/`
+
+On Linux the config is in `~/.config/org.fuchss.atrium/`, log and web data (`profiles/<account>`) in `~/.local/share/org.fuchss.atrium/`; on Windows in `%APPDATA%\org.fuchss.atrium\` and `%LOCALAPPDATA%\org.fuchss.atrium\`.
 
 ## Development
 

@@ -74,12 +74,12 @@ impl Release {
     }
 }
 
-/// The release asset for a Mac of the given architecture (`std::env::consts::ARCH`); the
-/// names are fixed by `.github/workflows/release.yml`.
-pub fn asset_name_for_arch(arch: &str) -> Option<&'static str> {
-    match arch {
-        "aarch64" => Some("atrium-macos-arm64.zip"),
-        "x86_64" => Some("atrium-macos-x86_64.zip"),
+/// The self-update asset for the given system and architecture (`std::env::consts::OS` and
+/// `ARCH`): only Macs update themselves. The names are fixed by `.github/workflows/release.yml`.
+pub fn asset_name(os: &str, arch: &str) -> Option<&'static str> {
+    match (os, arch) {
+        ("macos", "aarch64") => Some("atrium-macos-arm64.zip"),
+        ("macos", "x86_64") => Some("atrium-macos-x86_64.zip"),
         _ => None,
     }
 }
@@ -156,16 +156,18 @@ mod tests {
     }
 
     #[test]
-    fn picks_the_asset_of_the_architecture() {
+    fn picks_the_asset_of_the_mac_architecture() {
         assert_eq!(
-            asset_name_for_arch("aarch64"),
+            asset_name("macos", "aarch64"),
             Some("atrium-macos-arm64.zip")
         );
         assert_eq!(
-            asset_name_for_arch("x86_64"),
+            asset_name("macos", "x86_64"),
             Some("atrium-macos-x86_64.zip")
         );
-        assert_eq!(asset_name_for_arch("riscv64"), None);
+        assert_eq!(asset_name("macos", "riscv64"), None);
+        assert_eq!(asset_name("linux", "x86_64"), None);
+        assert_eq!(asset_name("windows", "x86_64"), None);
     }
 
     #[test]

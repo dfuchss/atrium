@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Linux (`.deb`, AppImage) and Windows (installer) versions; each account keeps its web data in its own folder there
+
 ### Fixed
 
 - Downloads never replace an existing file: a taken name gets a number, like `report (1).pdf`

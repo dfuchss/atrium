@@ -43,6 +43,7 @@ pub(crate) fn get_update_status(state: State<'_, UpdaterState>) -> UpdateStatus 
 }
 
 /// Where the running executable is installed, and whether it may replace itself.
+#[cfg(target_os = "macos")]
 fn install_location() -> InstallLocation {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     match std::env::current_exe() {
@@ -58,13 +59,21 @@ fn install_location() -> InstallLocation {
     }
 }
 
+/// Installed by a package manager or installer, which also does the updates.
+#[cfg(not(target_os = "macos"))]
+fn install_location() -> InstallLocation {
+    InstallLocation::ManualOnly {
+        reason: "self-update is available only on macOS".into(),
+    }
+}
+
 /// Creates the updater (state in `data_dir`), registers it with the app and starts it.
 pub(crate) fn start(app: &App, data_dir: PathBuf, log: LogSink) -> std::io::Result<()> {
     let version = app.package_info().version.to_string();
     let config = UpdaterConfig {
         current_version: Version::parse(&version),
         location: install_location(),
-        asset_name: updater::asset_name_for_arch(std::env::consts::ARCH),
+        asset_name: updater::asset_name(std::env::consts::OS, std::env::consts::ARCH),
         data_dir,
     };
     log(&format!("updater: installation {:?}", config.location));

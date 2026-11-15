@@ -11,34 +11,48 @@
 //! Blocking calls (`add_child`, menu and tray building) wait for the main thread, so the main
 //! thread must never wait on the caller.
 //!
-//! New-window policy: see `links`. JavaScript dialogs: see `dialogs`. Native menus and tray:
-//! see `menus`. Quitting: see [`graceful_quit`].
+//! New-window policy: see `links`. JavaScript dialogs: see `dialogs` (macOS; elsewhere the
+//! engine's own). Per-account browsing data: see `profiles`. Native menus and tray: see `menus`.
+//! Quitting: see [`graceful_quit`].
 //!
 //! [`WebviewHost`]: domain::ports::WebviewHost
 //! [`Notifier`]: domain::ports::Notifier
 //! [`Platform`]: domain::ports::Platform
 
+#[cfg(target_os = "macos")]
 mod dialogs;
+#[cfg(not(any(target_os = "macos", windows)))]
+mod gtk_layout;
 mod icons;
 mod links;
 mod logger;
 mod menus;
 mod notifications;
 mod platform;
+mod private_file;
+mod profiles;
 mod quit;
 pub mod services;
 mod webviews;
 
 use std::path::PathBuf;
+#[cfg(target_os = "macos")]
+use std::sync::PoisonError;
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
-use domain::Input;
 use domain::ports::{PortError, PortResult, UiSink};
+use domain::{Bounds, Input};
 use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
+#[cfg(any(target_os = "macos", windows))]
+use tauri::WindowEvent;
 use tauri::window::Color;
-use tauri::{AppHandle, Emitter, Manager, Runtime, Theme, Window};
+use tauri::{
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Runtime, Theme, Webview,
+    WebviewBuilder, Window,
+};
 
+#[cfg(target_os = "macos")]
 use crate::dialogs::{DialogPolicy, SharedDialogPolicy, TauriDialogHandler, account_names};
 use crate::links::{PopupQuota, ViewPolicies, new_popup_quota};
 use crate::logger::Logger;
@@ -79,6 +93,68 @@ fn port_err(error: impl std::fmt::Display) -> PortError {
     PortError(error.to_string())
 }
 
+/// Adds the child webview `builder` to `window` at `bounds`; move it with [`place_child`].
+pub fn add_child<R: Runtime>(
+    window: &Window<R>,
+    builder: WebviewBuilder<R>,
+    bounds: Bounds,
+) -> tauri::Result<Webview<R>> {
+    let webview = window.add_child(
+        builder,
+        LogicalPosition::new(bounds.x, bounds.y),
+        LogicalSize::new(bounds.width, bounds.height),
+    )?;
+    #[cfg(not(any(target_os = "macos", windows)))]
+    gtk_layout::adopt(&webview, bounds)?;
+    Ok(webview)
+}
+
+/// Reports the logical size of the area the child webviews of `window` share whenever it
+/// changes. On Linux that is the window without its menu bar (see `gtk_layout`); call it on
+/// the main thread.
+pub fn watch_content_size<R: Runtime>(
+    window: &Window<R>,
+    on_resize: impl Fn(f64, f64) + Send + 'static,
+) -> tauri::Result<()> {
+    #[cfg(not(any(target_os = "macos", windows)))]
+    return gtk_layout::track_content_size(window, on_resize);
+    #[cfg(any(target_os = "macos", windows))]
+    {
+        let event_window = window.clone();
+        window.on_window_event(move |event| match event {
+            // The new physical size; the scale factor is unchanged (ScaleFactorChanged carries
+            // its own).
+            WindowEvent::Resized(size) => {
+                if let Ok(scale) = event_window.scale_factor() {
+                    let size = size.to_logical::<f64>(scale);
+                    on_resize(size.width, size.height);
+                }
+            }
+            WindowEvent::ScaleFactorChanged {
+                scale_factor,
+                new_inner_size,
+                ..
+            } => {
+                let size = new_inner_size.to_logical::<f64>(*scale_factor);
+                on_resize(size.width, size.height);
+            }
+            _ => {}
+        });
+        Ok(())
+    }
+}
+
+/// Moves and sizes a webview added with [`add_child`].
+pub fn place_child<R: Runtime>(webview: &Webview<R>, bounds: Bounds) -> tauri::Result<()> {
+    #[cfg(not(any(target_os = "macos", windows)))]
+    return gtk_layout::place(webview, bounds);
+    #[cfg(any(target_os = "macos", windows))]
+    {
+        webview.set_position(LogicalPosition::new(bounds.x, bounds.y))?;
+        webview.set_size(LogicalSize::new(bounds.width, bounds.height))
+    }
+}
+
 /// Unminimizes, shows and focuses `window`; tries every step and reports the first error.
 pub fn bring_to_front<R: Runtime>(window: &Window<R>) -> tauri::Result<()> {
     let unminimized = window.unminimize();
@@ -95,6 +171,7 @@ pub struct TauriHost<R: Runtime> {
     notifications: Arc<Mutex<NotificationTargets>>,
     logger: Logger,
     policies: ViewPolicies,
+    #[cfg(target_os = "macos")]
     dialogs: SharedDialogPolicy,
     /// Numbers the labels of popup/app windows.
     popup_counter: Arc<AtomicU64>,
@@ -118,6 +195,7 @@ impl<R: Runtime> TauriHost<R> {
             feed,
             notifications: Arc::default(),
             policies: Arc::default(),
+            #[cfg(target_os = "macos")]
             dialogs: Arc::new(Mutex::new(DialogPolicy::new())),
             popup_counter: Arc::default(),
             popup_quota: new_popup_quota(),
@@ -148,7 +226,9 @@ impl<R: Runtime> TauriHost<R> {
 
     /// Makes `alert`, `confirm` and `prompt` of the service views show native panels. Call it
     /// once the sidebar webview exists and before the first service view is created (see
-    /// `macos_dialogs::install`); without it the pages get the default answers.
+    /// `macos_dialogs::install`); without it the pages get the default answers. Elsewhere the
+    /// engines show their own dialogs.
+    #[cfg(target_os = "macos")]
     pub fn install_dialogs(&self) {
         let Some(sidebar) = self.app.get_webview(UI_WEBVIEW) else {
             self.logger
@@ -170,6 +250,12 @@ impl<R: Runtime> TauriHost<R> {
             self.logger
                 .log(&format!("JavaScript dialogs unavailable: {error}"));
         }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn install_dialogs(&self) {
+        self.logger
+            .log("JavaScript dialogs: shown by the web engine");
     }
 
     /// File the host logger appends to (`<app_log_dir>/atrium.log`), if available.
@@ -201,6 +287,7 @@ impl<R: Runtime> TauriHost<R> {
 
 impl<R: Runtime> UiSink for TauriHost<R> {
     fn emit_snapshot(&self, snapshot: &Snapshot) -> PortResult {
+        #[cfg(target_os = "macos")]
         self.dialogs
             .lock()
             .unwrap_or_else(PoisonError::into_inner)

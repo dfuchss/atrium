@@ -6,6 +6,7 @@
 
 use std::path::Path;
 
+#[cfg(unix)]
 const QUARANTINE_ATTRIBUTE: &str = "com.apple.quarantine";
 
 /// Removes `com.apple.quarantine` from `root` and everything below it. Symbolic links are
@@ -29,6 +30,7 @@ pub(crate) fn remove_quarantine(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn clear_attribute(path: &Path) -> Result<(), String> {
     let failed = |error: std::io::Error| {
         format!(
@@ -46,7 +48,18 @@ fn clear_attribute(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Extended attributes, and with them the quarantine, exist only on Unix file systems.
+#[cfg(not(unix))]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "the signature of the Unix version"
+)]
+fn clear_attribute(_path: &Path) -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg(test)]
+#[cfg(target_os = "macos")]
 mod tests {
     use super::*;
 

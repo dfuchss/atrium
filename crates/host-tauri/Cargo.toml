@@ -18,7 +18,7 @@ tauri-plugin-notification.workspace = true
 tauri-plugin-opener.workspace = true
 tauri-plugin-autostart = "2.7.0"
 ureq = { version = "3.1", default-features = false, features = ["rustls"] }
-base64 = "0.22"
+base64 = "0.23"
 
 [dev-dependencies]
 tempfile.workspace = true

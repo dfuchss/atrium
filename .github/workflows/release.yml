@@ -1,7 +1,7 @@
 name: release
 
-# Builds unsigned macOS bundles for Apple silicon and Intel, a Linux .deb and AppImage and a
-# Windows installer on a version tag and publishes them as a GitHub Release with a SHA256SUMS
+# Builds unsigned macOS bundles for Apple silicon and Intel, Linux AppImages for x86_64 and
+# arm64 and a Windows installer on a version tag and publishes them as a GitHub Release with a SHA256SUMS
 # file, which the in-app updater requires.
 on:
   push:
@@ -83,11 +83,15 @@ jobs:
     strategy:
       matrix:
         include:
+          # The oldest supported runners, as an AppImage runs only on systems with this glibc or newer.
           - os: ubuntu-22.04
-            name: linux
-            bundles: deb,appimage
+            name: linux-x86_64
+            bundles: appimage
+          - os: ubuntu-22.04-arm
+            name: linux-arm64
+            bundles: appimage
           - os: windows-latest
-            name: windows
+            name: windows-x64
             bundles: nsis
     steps:
       - uses: actions/checkout@v5
@@ -115,11 +119,10 @@ jobs:
         run: |
           mkdir dist
           bundle=target/release/bundle
-          if [ "${{ matrix.name }}" = linux ]; then
-            cp "$bundle"/deb/*.deb "dist/atrium-linux-amd64.deb"
-            cp "$bundle"/appimage/*.AppImage "dist/atrium-linux-amd64.AppImage"
+          if [ "${{ runner.os }}" = Linux ]; then
+            cp "$bundle"/appimage/*.AppImage "dist/atrium-${{ matrix.name }}.AppImage"
           else
-            cp "$bundle"/nsis/*-setup.exe "dist/atrium-windows-x64-setup.exe"
+            cp "$bundle"/nsis/*-setup.exe "dist/atrium-${{ matrix.name }}-setup.exe"
           fi
       - uses: actions/upload-artifact@v4
         with:

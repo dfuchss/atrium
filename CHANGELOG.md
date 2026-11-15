@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Linux (`.deb`, AppImage) and Windows (installer) versions; each account keeps its web data in its own folder there
+- Linux (AppImage for x86_64 and ARM) and Windows (installer) versions; each account keeps its web data in its own folder there
 
 ### Fixed
 

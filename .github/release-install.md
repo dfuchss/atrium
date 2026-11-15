@@ -39,8 +39,9 @@ An Atrium in the Applications folder updates itself: Settings > About shows new 
 
 | System | File |
 |---|---|
-| Debian, Ubuntu | `atrium-linux-amd64.deb` (`sudo apt install ./atrium-linux-amd64.deb`) |
-| Other Linux | `atrium-linux-amd64.AppImage` (make it executable and run it) |
+| Linux (x86_64) | `atrium-linux-x86_64.AppImage` |
+| Linux (ARM) | `atrium-linux-arm64.AppImage` |
 | Windows 10/11 | `atrium-windows-x64-setup.exe` (unsigned: SmartScreen > **More info** > **Run anyway**) |
 
+On Linux, make the AppImage executable (`chmod +x atrium-linux-*.AppImage`) and start it.
 These versions do not update themselves; Settings > About shows when a new one is out.

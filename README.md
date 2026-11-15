@@ -74,7 +74,7 @@ Download `atrium-macos-arm64.zip` (Apple silicon) or `atrium-macos-x86_64.zip` (
 
 The builds are not signed, so macOS blocks the first start: open Atrium once, then allow it in System Settings → Privacy & Security → *Open Anyway*. If macOS reports the app as "damaged", remove the download quarantine with `xattr -cr /Applications/Atrium.app`.
 
-**Linux:** install `atrium-linux-amd64.deb` (`sudo apt install ./atrium-linux-amd64.deb`) or make `atrium-linux-amd64.AppImage` executable and run it. Atrium needs WebKitGTK 4.1 and, for the tray icon, `libayatana-appindicator3-1`.
+**Linux:** download `atrium-linux-x86_64.AppImage` or `atrium-linux-arm64.AppImage`, make it executable (`chmod +x atrium-linux-*.AppImage`) and start it. It needs a system from 2022 or newer (glibc 2.35, e.g. Ubuntu 22.04).
 
 **Windows:** run `atrium-windows-x64-setup.exe`; it installs Atrium for the current user. The installer is not signed, so SmartScreen asks once (*More info* → *Run anyway*). Atrium needs the WebView2 runtime, which Windows 10 and 11 include.
 
@@ -99,7 +99,7 @@ cargo install trunk tauri-cli --locked   # or: brew install trunk
 
 git clone https://github.com/dfuchss/atrium.git
 cd atrium/app/src-tauri
-cargo tauri build                        # → target/release/bundle/macos/Atrium.app, deb/, appimage/ or nsis/
+cargo tauri build                        # → target/release/bundle/macos/Atrium.app, appimage/ or nsis/
 ```
 
 Copy `Atrium.app` to `/Applications`. The app is not signed; the first time, open it as described above.

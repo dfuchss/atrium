@@ -69,7 +69,7 @@ jobs:
           mkdir dist
           # ditto keeps the bundle structure, modes and symbolic links.
           ditto -c -k --keepParent "$app" "dist/atrium-macos-${{ matrix.arch }}.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: atrium-macos-${{ matrix.arch }}
           path: dist/atrium-macos-${{ matrix.arch }}.zip
@@ -83,7 +83,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

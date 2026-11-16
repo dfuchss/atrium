@@ -5,7 +5,7 @@ How to build, check and release Atrium. For using it, see the [README](README.md
 ## Building from source
 
 Requirements:
-- macOS 14 or later. Per-account data stores need WebKit's `WKWebsiteDataStore(forIdentifier:)`.
+- macOS 14 or later (release builds). On Linux, see [Linux](#linux). Per-account data stores need WebKit's `WKWebsiteDataStore(forIdentifier:)`.
 - [Rust](https://rustup.rs/) (stable) with the `wasm32-unknown-unknown` target.
 - [Trunk](https://trunkrs.dev/) and the [Tauri CLI](https://v2.tauri.app/reference/cli/).
 
@@ -20,6 +20,27 @@ cargo tauri build                        # → target/release/bundle/macos/Atriu
 
 Copy `Atrium.app` to `/Applications`. The app is not signed; the first time, open it as described in the [README](README.md#installation).
 
+### Linux
+
+Atrium runs on Linux with WebKitGTK 4.1 when built from source. Install the development packages:
+
+```sh
+# Debian/Ubuntu
+sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+# Fedora
+sudo dnf install webkit2gtk4.1-devel gtk3-devel libsoup3-devel libappindicator-gtk3-devel librsvg2-devel libxdo-devel
+```
+
+Then install [Rust](https://rustup.rs/) with the `wasm32-unknown-unknown` target, [Trunk](https://trunkrs.dev/) and the [Tauri CLI](https://v2.tauri.app/reference/cli/) as above, and build or run:
+
+```sh
+cd atrium/app/src-tauri
+cargo tauri build --debug --no-bundle    # → target/debug/atrium (the bundle target is macOS-only for now)
+cargo tauri dev                          # run with live-reloading UI
+```
+
+On immutable distributions, build inside a distrobox or toolbox container. `scripts/linux-check.sh` runs the Linux checks (formatting, clippy, tests) on a Linux host or in such a container, e.g. `distrobox enter atrium-dev -- scripts/linux-check.sh`. Set `CARGO_TARGET_DIR` to keep the Linux build apart from a macOS `target/` folder on a shared checkout.
+
 ## Architecture
 
 Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
@@ -28,7 +49,7 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 |---|---|
 | `crates/domain` | Pure core: service catalog, reducer `Core::handle(Input) -> Vec<Effect>`, port traits, effect runner. No Tauri, no IO. |
 | `crates/protocol` | Types shared by the backend and the UI (`UiCommand`, `Snapshot`). Compiles to wasm. |
-| `crates/host-tauri` | Adapter: implements the ports on Tauri multi-webview (webviews, notifications, dock badge, tray, menus, links). |
+| `crates/host-tauri` | Adapter: implements the ports on Tauri multi-webview (webviews, notifications, dock badge, tray, menus, links); platform-specific code in `native/`. |
 | `crates/store-fs` | Adapter: atomic JSON store (`accounts.json`). |
 | `crates/fs-util` | File operations shared by the crates: atomic writes with a fixed mode. |
 | `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting. |

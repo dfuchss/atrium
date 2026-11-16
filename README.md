@@ -10,9 +10,9 @@
   <img src="docs/screenshots/main.png" alt="Atrium with a Matrix chat open and several accounts in the sidebar" width="800">
 </p>
 
-Atrium is a lightweight messenger aggregator for macOS. It puts Element, Slack, Discord, WhatsApp, Teams and any other web app into one window with a compact sidebar. Every account runs in its own isolated web view, so you can stay signed in to several accounts of the same service side by side.
+Atrium is a lightweight messenger aggregator for macOS and Linux. It puts Element, Slack, Discord, WhatsApp, Teams and any other web app into one window with a compact sidebar. Every account runs in its own isolated web view, so you can stay signed in to several accounts of the same service side by side.
 
-It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's WebKit instead of bundling Chromium.
+It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's WebKit (WebKitGTK on Linux) instead of bundling Chromium. Release builds exist for macOS only; on Linux, build from source (see [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md).
 
 ## Features
 
@@ -21,7 +21,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
   - Pick small, medium or large icons.
 - **Isolated sessions.** Each account has its own persistent WebKit data store (cookies, storage, caches), e.g. two Slack workspaces or a work and a private Element account.
 - **Notifications.**
-  - Native macOS notifications; clicking one jumps to the right account.
+  - Native notifications; clicking one jumps to the right account.
   - Dock badge and menu bar icon with the total unread count.
   - Do Not Disturb, and per-account mute.
   - Optional hiding of message text.
@@ -38,8 +38,8 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
   - Per account: zoom, user agent, custom CSS, camera and microphone permission, enable/disable, force reload without the cache.
   - Custom services can be created in the settings, optionally starting from a built-in one.
   - **Expert mode:** edit service definitions as TOML files in the services folder and reload them without restarting.
-- **macOS integration.**
-  - App menu with shortcuts.
+- **Desktop integration.**
+  - App menu with shortcuts (macOS).
   - Launch at login, start hidden, keep running in the background.
   - After you wake your Mac from sleep, reload only the services that stopped responding, or all of them, per account (not on Power Nap background wakes).
 
@@ -71,7 +71,7 @@ The screenshots use a local demo Matrix server with made-up users (see [DEVELOPM
 
 ## Installation
 
-Download `atrium-macos-arm64.zip` (Apple silicon) or `atrium-macos-x86_64.zip` (Intel) from the [latest release](https://github.com/dfuchss/atrium/releases/latest), unzip it and move `Atrium.app` to the Applications folder.
+On macOS, download `atrium-macos-arm64.zip` (Apple silicon) or `atrium-macos-x86_64.zip` (Intel) from the [latest release](https://github.com/dfuchss/atrium/releases/latest), unzip it and move `Atrium.app` to the Applications folder.
 
 The builds are not signed, so macOS blocks the first start: open Atrium once, then allow it in System Settings → Privacy & Security → *Open Anyway*. If macOS reports the app as "damaged", remove the download quarantine with `xattr -cr /Applications/Atrium.app`.
 
@@ -79,7 +79,28 @@ The builds are not signed, so macOS blocks the first start: open Atrium once, th
 
 Atrium checks for a new release on startup and every six hours (Settings → About; the check can be switched off there). An update is downloaded, verified against the release's `SHA256SUMS` and placed next to the app; *Restart and update* quits Atrium, swaps in the new version and starts it again. This works only for an Atrium in `/Applications` or `~/Applications`; development builds and other locations just point to the release page.
 
+Linux has no release builds and no self-update yet; see [Linux](#linux).
+
 To build Atrium yourself, see [Building from source](DEVELOPMENT.md#building-from-source) in [DEVELOPMENT.md](DEVELOPMENT.md).
+
+### Linux
+
+Atrium runs on Linux with WebKitGTK 4.1 when built from source; how to build it is described under [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md.
+
+Data locations on Linux:
+- **Config:** `~/.config/org.fuchss.atrium/` (`accounts.json`, `services/`)
+- **Web data (per account):** `~/.local/share/org.fuchss.atrium/webdata/<account id>/`. WebKitGTK keeps the cookies there as plain text, and its content processes run without WebKit's bubblewrap sandbox, so a page that breaks out of one could read the web data of every account.
+- **Log:** the app log folder, `~/.local/share/org.fuchss.atrium/logs/atrium.log`
+
+Known limitations on Linux:
+- JavaScript dialogs are WebKitGTK's own: no per-account title, suppression or rate limit.
+- Sign-in popups open like other links (by default in the system browser): on Linux the new-window request does not carry the size a page asks for.
+- There is no app menu, so no keyboard shortcuts for settings or quit; use the tray menu.
+- The unread count appears as the tray label only where the panel supports it. The launcher badge works only where the desktop supports the Unity launcher API.
+- "Open links in" takes a command name (e.g. `firefox`) instead of an application name.
+- No self-update.
+- A second launch is not prevented yet.
+- Session cookies are stored unencrypted in the per-account web data folder (mode `0700`): exclude `webdata/` from backups and sync.
 
 ## Usage
 
@@ -124,10 +145,10 @@ title_regex = '^\((\d+)\)'          # capture group 1 = unread count
 
 ## Privacy and security
 
-- **Isolation:** every service view runs in its own sandboxed WebKit content process with its own data store. Service pages get **no access** to Atrium's internal API.
+- **Isolation:** every service view runs in its own WebKit content process (sandboxed on macOS, see [Linux](#linux)) with its own data store. Service pages get **no access** to Atrium's internal API.
 - **Minimal script injection:** Atrium injects only a small script that forwards web notifications and routes new-window links, plus optional custom CSS. Unread counts are read from the page title in Rust.
-- **Links:** only `http(s)` and `mailto` links are handed to macOS, and in-page navigation is limited to web schemes.
-- **Local only:** the settings UI runs under a strict Content Security Policy. Atrium has no telemetry and no server; everything stays on your Mac. The update check asks the GitHub API for the latest release (with the Atrium version in the user agent); it can be switched off.
+- **Links:** only `http(s)` and `mailto` links are handed to the system, and in-page navigation is limited to web schemes.
+- **Local only:** the settings UI runs under a strict Content Security Policy. Atrium has no telemetry and no server; everything stays on your computer. The update check asks the GitHub API for the latest release (with the Atrium version in the user agent); it can be switched off.
 
 ## Known limitations
 
@@ -137,9 +158,10 @@ title_regex = '^\((\d+)\)'          # capture group 1 = unread count
 
 ## Data locations
 
-- **Config:** `~/Library/Application Support/org.fuchss.atrium/`
-- **Log:** `~/Library/Logs/org.fuchss.atrium/atrium.log` (readable by you only, rotated to `atrium.log.1` at 5 MB). URLs are logged without query and fragment, page titles not at all.
-- **Web data (per account):** `~/Library/WebKit/org.fuchss.atrium/`
+- **Config (macOS):** `~/Library/Application Support/org.fuchss.atrium/`
+- **Log (macOS):** `~/Library/Logs/org.fuchss.atrium/atrium.log` (readable by you only, rotated to `atrium.log.1` at 5 MB). URLs are logged without query and fragment, page titles not at all.
+- **Web data (macOS, per account):** `~/Library/WebKit/org.fuchss.atrium/`
+- Linux: see [Linux](#linux).
 
 ## Development
 

@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  check:
+  check-macos:
+    name: Check macOS arm64
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
@@ -24,12 +25,33 @@ jobs:
       - name: Run checks
         run: scripts/check.sh
 
+  check-linux:
+    name: Check Linux x86_64
+    # The oldest Ubuntu LTS the release builds on, so that its packages are what the release is checked with.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Trunk
+        run: .github/scripts/install-trunk-linux.sh
+      - name: Run checks
+        run: scripts/check.sh
+
   # Every push to main and every pull request also gets an unsigned debug bundle to try out, kept
   # for two weeks under the run's artifacts. A debug build never updates itself and shares its data
   # with an installed Atrium.
-  debug-build:
-    name: Debug build ${{ matrix.arch }}
-    needs: check
+  debug-build-macos:
+    name: Debug build macOS ${{ matrix.arch }}
+    needs: [check-macos, check-linux]
     runs-on: macos-latest
     strategy:
       matrix:
@@ -65,5 +87,51 @@ jobs:
         with:
           name: atrium-macos-${{ matrix.arch }}-debug-${{ github.sha }}
           path: dist/atrium-macos-${{ matrix.arch }}-debug.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # The Linux debug build of every push to main and every pull request: the bare binary, which
+  # needs WebKitGTK 4.1 on the system (e.g. the build box of the README).
+  debug-build-linux:
+    name: Debug build Linux ${{ matrix.arch }}
+    needs: [check-macos, check-linux]
+    # Built natively for each architecture, on the same runners as the release.
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: debug-${{ matrix.arch }}-unknown-linux-gnu
+      - name: Install Trunk and the Tauri CLI
+        run: |
+          .github/scripts/install-trunk-linux.sh
+          cargo install tauri-cli --version '=2.12.4' --locked
+      - name: Build the debug binary
+        working-directory: app/src-tauri
+        run: cargo tauri build --debug --no-bundle
+      - name: Pack the binary
+        run: |
+          mkdir dist
+          tar -C target/debug -czf dist/atrium-linux-${{ matrix.arch }}-debug.tar.gz atrium
+      - uses: actions/upload-artifact@v7
+        with:
+          name: atrium-linux-${{ matrix.arch }}-debug-${{ github.sha }}
+          path: dist/atrium-linux-${{ matrix.arch }}-debug.tar.gz
           if-no-files-found: error
           retention-days: 14

@@ -23,3 +23,47 @@ jobs:
         run: brew install trunk
       - name: Run checks
         run: scripts/check.sh
+
+  # Every push to main also gets an unsigned debug bundle to try out, kept for two weeks under the
+  # run's artifacts. A debug build never updates itself and shares its data with an installed Atrium.
+  debug-build:
+    name: Debug build ${{ matrix.arch }}
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch: arm64
+          - target: x86_64-apple-darwin
+            arch: x86_64
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: debug-${{ matrix.target }}
+      - name: Install Trunk and the Tauri CLI
+        run: |
+          brew install trunk
+          cargo install tauri-cli --version '^2' --locked
+      - name: Build the debug bundle
+        working-directory: app/src-tauri
+        run: cargo tauri build --debug --target ${{ matrix.target }} --bundles app
+      - name: Zip the bundle
+        run: |
+          mkdir dist
+          # ditto keeps the bundle structure, modes and symbolic links.
+          ditto -c -k --keepParent "target/${{ matrix.target }}/debug/bundle/macos/Atrium.app" \
+            "dist/atrium-macos-${{ matrix.arch }}-debug.zip"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: atrium-macos-${{ matrix.arch }}-debug-${{ github.sha }}
+          path: dist/atrium-macos-${{ matrix.arch }}-debug.zip
+          if-no-files-found: error
+          retention-days: 14

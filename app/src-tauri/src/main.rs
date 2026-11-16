@@ -5,6 +5,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod desktop;
+mod desktop_entry;
 mod updates;
 
 use std::path::{Path, PathBuf};
@@ -401,6 +402,7 @@ fn setup(
     let config_dir = config_dir(app, dev, &host)?;
     let store = FsStore::new(config_dir.clone());
     updates::start(app, &config_dir, host.log_sink(), dev.release_dir.clone())?;
+    app.manage(desktop::DesktopLog(host.log_sink()));
     let load = load_persisted(&store, &host);
     let read_only = load.is_read_only();
     if read_only {
@@ -513,6 +515,9 @@ fn main() {
             service_files::save_service_file,
             service_files::delete_service_file,
             service_files::set_service_file_enabled,
+            desktop::get_desktop_entry,
+            desktop::install_desktop_entry,
+            desktop::uninstall_desktop_entry,
             desktop::list_browsers,
             updates::update_command,
             updates::get_update_status,

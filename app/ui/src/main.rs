@@ -6,6 +6,7 @@
 mod commands;
 mod demo;
 mod demo_files;
+mod desktop;
 mod glyphs;
 mod platform_texts;
 mod query;

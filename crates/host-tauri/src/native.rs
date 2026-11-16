@@ -16,7 +16,8 @@
 //!   view whose web process died.
 //! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_resume`],
 //!   [`guard_single_instance`], [`NOTIFICATION_SOUND`], the tray icon and whether an app menu
-//!   is shown; [`Shortcuts`] where there is no app menu to carry them.
+//!   is shown; [`Shortcuts`] where there is no app menu to carry them; [`announce_new_icons`]
+//!   after the desktop entry's icons changed.
 //! - Settings: [`open_url_with`] opens links in the chosen browser, [`installed_browsers`]
 //!   lists the browsers to choose from; [`clean_launch_environment`] removes what the launcher
 //!   set that would override the theme.

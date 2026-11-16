@@ -25,6 +25,12 @@ pub(crate) const NOTIFICATION_SOUND: &str = "NSUserNotificationDefaultSoundName"
 /// Nothing to do: macOS knows the app by its bundle.
 pub(crate) fn set_app_id(_identifier: &str) {}
 
+/// Nothing to announce: Atrium installs no icons on macOS.
+#[expect(clippy::unnecessary_wraps, reason = "same signature as on Linux")]
+pub(crate) fn announce_new_icons() -> Result<(), String> {
+    Ok(())
+}
+
 /// The platform part of the user agent presets, as Safari reports it on every Mac, Apple
 /// silicon included.
 pub(crate) fn user_agent_platform() -> String {

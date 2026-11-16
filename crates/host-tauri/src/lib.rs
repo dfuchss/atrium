@@ -148,6 +148,12 @@ pub fn guard_single_instance<R: Runtime>(
     native::guard_single_instance(builder, window_label)
 }
 
+/// Tells the desktop that Atrium added or removed icons of its desktop entry (Linux: KDE does
+/// not notice new icon size folders by itself); the error, if any, as text for the log.
+pub fn announce_new_icons() -> Result<(), String> {
+    native::announce_new_icons()
+}
+
 /// The installed browsers to choose from for links, or `None` where the platform offers no list
 /// (the browser is then typed by name).
 pub fn installed_browsers() -> Option<Vec<protocol::BrowserChoice>> {

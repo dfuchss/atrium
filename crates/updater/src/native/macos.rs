@@ -8,7 +8,7 @@ mod quarantine;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::location::{InstallLocation, can_replace};
+use crate::location::{InstallLocation, RunningAppImage, can_replace};
 use crate::staging::remove_if_present;
 use crate::swap::{new_update_path, partial_update_path};
 use crate::version::Version;
@@ -37,6 +37,12 @@ pub fn install_location(debug_build: bool) -> InstallLocation {
             reason: format!("cannot locate Atrium: {error}"),
         },
     }
+}
+
+/// An app bundle is not an `AppImage`.
+#[must_use]
+pub fn running_appimage() -> Option<RunningAppImage> {
+    None
 }
 
 /// Decides for the running `executable` (`<bundle>/Contents/MacOS/<name>`). Only bundles

@@ -20,6 +20,7 @@ use std::fs::{DirBuilder, Permissions};
 use std::io;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use domain::ports::PortResult;
 use domain::{Bounds, DockBadge};
@@ -49,6 +50,17 @@ pub(crate) use shortcuts::Shortcuts;
 pub(crate) use single_instance::guard_single_instance;
 pub(crate) use theme::clean_launch_environment;
 
+/// How long a D-Bus method call may take; a desktop without the service answers at once, a
+/// hanging one must not keep the caller waiting.
+const BUS_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// A session bus connection whose method calls time out: a stuck bus must not freeze the caller.
+fn session_connection() -> zbus::Result<zbus::blocking::Connection> {
+    zbus::blocking::connection::Builder::session()?
+        .method_timeout(BUS_TIMEOUT)
+        .build()
+}
+
 /// Freedesktop sound theme name of an instant message.
 pub(crate) const NOTIFICATION_SOUND: &str = "message-new-instant";
 
@@ -57,6 +69,25 @@ pub(crate) const NOTIFICATION_SOUND: &str = "message-new-instant";
 /// the entry `<identifier>.desktop` or to an entry with `StartupWMClass=<identifier>`.
 pub(crate) fn set_app_id(identifier: &str) {
     gtk::glib::set_prgname(Some(identifier));
+}
+
+/// Tells the running KDE programs (Plasma's app menu, `KWin`) that icons were added or removed:
+/// they read the icon folders once and do not see a size folder created later. Elsewhere nobody
+/// listens; GTK notices new icons by itself.
+pub(crate) fn announce_new_icons() -> Result<(), String> {
+    emit_icon_changed().map_err(|error| error.to_string())
+}
+
+fn emit_icon_changed() -> zbus::Result<()> {
+    let connection = session_connection()?;
+    connection.emit_signal(
+        None::<zbus::names::BusName<'_>>,
+        "/KIconLoader",
+        "org.kde.KIconLoader",
+        "iconChanged",
+        // The icon group; every group reloads.
+        &0_i32,
+    )
 }
 
 /// The platform part of the user agent presets, as `WebKitGTK` reports it: X11 and the

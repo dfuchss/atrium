@@ -229,6 +229,7 @@ name = "atrium"
 version = "0.2.0"
 dependencies = [
  "domain",
+ "fs-util",
  "host-tauri",
  "protocol",
  "serde_json",
@@ -238,6 +239,7 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-notification",
  "tauri-plugin-opener",
+ "tempfile",
  "updater",
  "uuid",
 ]

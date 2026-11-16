@@ -6,6 +6,7 @@ use protocol::{AfterWake, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, 
 use super::app_toggle;
 use super::browser_row::BrowserRow;
 use crate::commands::{send_command, update_settings};
+use crate::desktop::DesktopIntegration;
 use crate::platform_texts;
 use crate::update::UpdateSection;
 use crate::widgets::{HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, number_options};
@@ -62,6 +63,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                 </select>
             </Row>
         </div>
+        <DesktopIntegration />
     }
 }
 

@@ -91,7 +91,7 @@ Releases include AppImages for x86_64 and aarch64 (`atrium-linux-x86_64.AppImage
 
 Running it needs FUSE 2 (`libfuse2` on Debian/Ubuntu, `fuse` on Fedora), or start it with `--appimage-extract-and-run`.
 
-The window icon and launcher entry come from a desktop entry that matches the window's app id `org.fuchss.atrium`: by its name, `org.fuchss.atrium.desktop`, or by `StartupWMClass=org.fuchss.atrium`. The AppImage contains one (`atrium.desktop`, matched by its `StartupWMClass`), which an AppImage manager such as Gear Lever installs.
+The window icon and launcher entry come from a desktop entry that matches the window's app id `org.fuchss.atrium`: by its name, `org.fuchss.atrium.desktop`, or by `StartupWMClass=org.fuchss.atrium`. The AppImage contains one (`atrium.desktop`, matched by its `StartupWMClass`), which an AppImage manager such as Gear Lever installs. Without one, open Settings > General > Desktop integration in the running AppImage and press **Install** (it writes `~/.local/share/applications/org.fuchss.atrium.desktop` and the icons `org.fuchss.atrium.png` below `~/.local/share/icons/hicolor/`); **Update** points the entry at the AppImage again after you moved it, and **Uninstall** removes the entry and these icons.
 
 Data locations on Linux:
 - **Config:** `~/.config/org.fuchss.atrium/` (`accounts.json`, `services/`)

@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Releases include Linux AppImages for x86_64 and aarch64 (`atrium-linux-x86_64.AppImage`, `atrium-linux-aarch64.AppImage`); they play H.264 and AAC videos
 - `cargo tauri build` on Linux produces an AppImage with a desktop entry and icon
 - The Linux AppImage updates itself: *Quit and update* swaps in the verified new version after Atrium has quit; open Atrium again afterwards
+- On Linux, Settings > General > Desktop integration installs or removes the launcher entry and icons of the running AppImage (*Install*, *Update*, *Uninstall*)
 - On Linux, starting Atrium again brings the running Atrium to the front instead of opening a second one
 - On Linux, `alert`, `confirm` and `prompt` of service pages show Atrium's own dialogs, as on macOS: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
 - On Linux, the keyboard shortcuts of the macOS menu work with Ctrl: settings, reload, back and forward, zoom (also Ctrl++ and Ctrl with the numeric keypad's +, - and 0), open in browser, close, quit and switching accounts with Ctrl+1 to Ctrl+9

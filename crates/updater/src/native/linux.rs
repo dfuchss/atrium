@@ -6,7 +6,7 @@ use std::io;
 use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 
-use crate::location::{InstallLocation, can_replace};
+use crate::location::{InstallLocation, RunningAppImage, can_replace};
 use crate::staging::remove_if_present;
 use crate::swap::{new_update_path, partial_update_path};
 use crate::version::Version;
@@ -65,11 +65,20 @@ pub fn install_location(debug_build: bool) -> InstallLocation {
     }
 }
 
-/// The `AppImage` file this process runs from, if it does. The executable has to lie below
+/// The `AppImage` this process runs from, if it does. The executable has to lie below
 /// `$APPDIR`, so an `APPIMAGE` variable inherited by another program does not count.
-fn running_from(env: &AppImageEnv) -> Option<&PathBuf> {
+fn running_from(env: &AppImageEnv) -> Option<RunningAppImage> {
     let (file, dir) = (env.appimage.as_ref()?, env.appdir.as_ref()?);
-    env.executable.starts_with(dir).then_some(file)
+    env.executable.starts_with(dir).then(|| RunningAppImage {
+        file: file.clone(),
+        dir: dir.clone(),
+    })
+}
+
+/// The `AppImage` Atrium runs from, or `None` (a source build, or the file is gone).
+pub fn running_appimage() -> Option<RunningAppImage> {
+    running_from(&AppImageEnv::from_env().ok()?)
+        .filter(|running| running.file.is_absolute() && running.file.is_file())
 }
 
 /// Only an `AppImage` updates itself, in place, and only when `can_replace(appimage)` says the
@@ -83,7 +92,7 @@ fn resolve(
     if debug_build {
         return manual("this is a development build".into());
     }
-    let Some(appimage) = running_from(env) else {
+    let Some(RunningAppImage { file: appimage, .. }) = running_from(env) else {
         return manual("Atrium is not running as an AppImage".into());
     };
     if !appimage.is_absolute() || !appimage.is_file() {
@@ -92,12 +101,10 @@ fn resolve(
             appimage.display()
         ));
     }
-    if !can_replace(appimage) {
+    if !can_replace(&appimage) {
         return manual("the folder of the AppImage is not writable for you".into());
     }
-    InstallLocation::SelfUpdatable {
-        bundle: appimage.clone(),
-    }
+    InstallLocation::SelfUpdatable { bundle: appimage }
 }
 
 /// Why a release without the file for this machine is only announced.

@@ -41,7 +41,7 @@ chmod +x atrium-linux-x86_64.AppImage
 ./atrium-linux-x86_64.AppImage
 ```
 
-AppImages need FUSE 2 (`libfuse2` on Debian/Ubuntu, `fuse` on Fedora); without it, start Atrium with `--appimage-extract-and-run`. To get a launcher entry and the window icon, integrate the AppImage with an AppImage manager such as Gear Lever. `SHA256SUMS` holds the checksums (`sha256sum -c SHA256SUMS --ignore-missing`).
+AppImages need FUSE 2 (`libfuse2` on Debian/Ubuntu, `fuse` on Fedora); without it, start Atrium with `--appimage-extract-and-run`. To get a launcher entry and the window icon, press **Install** under Settings > General > Desktop integration (**Uninstall** removes it again), or integrate the AppImage with an AppImage manager such as Gear Lever. `SHA256SUMS` holds the checksums (`sha256sum -c SHA256SUMS --ignore-missing`).
 
 ### Updating
 

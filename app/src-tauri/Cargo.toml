@@ -9,6 +9,7 @@ description.workspace = true
 
 [dependencies]
 domain.workspace = true
+fs-util.workspace = true
 protocol.workspace = true
 store-fs.workspace = true
 host-tauri.workspace = true
@@ -21,6 +22,7 @@ tauri-plugin-autostart = "2.7.0"
 
 [dev-dependencies]
 serde_json.workspace = true
+tempfile.workspace = true
 
 [build-dependencies]
 tauri-build.workspace = true

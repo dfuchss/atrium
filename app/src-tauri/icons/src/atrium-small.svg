@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 824 824" width="1024" height="1024">
+  <title>Atrium (small sizes)</title>
+  <!-- Same silhouette as atrium.svg, cropped tight; no windows, no side doors, bolder forms -->
+  <defs>
+    <path id="hexagon" d="M460.6,140.9 Q512,110 563.4,140.9 L848.6,312.3 Q888,336 888,382 L888,712 Q888,756 847.4,773 L585.8,883 Q512,914 438.2,883 L176.6,773 Q136,756 136,712 L136,382 Q136,336 175.4,312.3 Z"/>
+    <clipPath id="clip-hexagon"><use href="#hexagon"/></clipPath>
+    <linearGradient id="grad-rim" gradientUnits="userSpaceOnUse" x1="512" y1="110" x2="512" y2="380">
+      <stop offset="0" stop-color="#3CC8FD"/>
+      <stop offset="1" stop-color="#1F66FC"/>
+    </linearGradient>
+    <linearGradient id="grad-floor" gradientUnits="userSpaceOnUse" x1="0" y1="680" x2="0" y2="850">
+      <stop offset="0" stop-color="#FFD58A"/>
+      <stop offset="1" stop-color="#FEA458"/>
+    </linearGradient>
+  </defs>
+
+  <use href="#hexagon" fill="url(#grad-rim)"/>
+  <g clip-path="url(#clip-hexagon)">
+    <path id="upper-wall" fill="#0B4BCF" d="M250,390 L470,296 Q512,278 554,296 L774,390 L652,452 L372,452 Z"/>
+    <rect id="back-wall" fill="#6573C6" x="372" y="440" width="280" height="260"/>
+    <path id="door-centre" fill="#FFF8E8" d="M428,700 V532 A84,84 0 0 1 596,532 V700 Z"/>
+    <path id="wall-left" fill="#8A4FF7" d="M100,330 L372,452 V720 L100,820 Z"/>
+    <path id="wall-right" fill="#1CC6C9" d="M924,330 L652,452 V720 L924,820 Z"/>
+    <path id="floor-lip" fill="#FD6534" d="M100,802 L350,690 Q372,680 395,680 H629 Q652,680 674,690 L924,802 V1000 H100 Z"/>
+    <path id="floor" fill="url(#grad-floor)" d="M230,740 L350,690 Q372,680 395,680 H629 Q652,680 674,690 L794,740 L560,834 Q512,852 464,834 Z"/>
+  </g>
+</svg>

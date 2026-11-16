@@ -182,7 +182,8 @@ h3.spaced { margin-top: 22px; }
 
 /* About tab */
 .about-head { display: flex; align-items: center; gap: 18px; margin: 4px 0 14px; }
-.about-logo { display: block; width: 96px; height: 96px; flex: none; }
+/* The logo file has a 10 % margin around the hexagon; the negative margin keeps it 96 px visually. */
+.about-logo { display: block; width: 116px; height: 116px; margin: -10px; flex: none; }
 .about-name { margin: 0; font-size: 22px; }
 .about-version { color: var(--sub); margin-top: 2px; }
 .about-tagline { margin-top: 6px; }

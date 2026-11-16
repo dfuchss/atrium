@@ -181,16 +181,13 @@ fn BrowserRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     }
 }
 
-/// The Atrium logo (see `app/src-tauri/icons/src/atrium.svg`), inline so it needs no asset.
-const LOGO_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 824 824" width="96" height="96" aria-hidden="true"><defs><linearGradient id="ab-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f766e"/><stop offset="1" stop-color="#312e81"/></linearGradient><radialGradient id="ab-light" cx="0.5" cy="0.4" r="0.7"><stop offset="0" stop-color="#fffbeb"/><stop offset="0.45" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/></radialGradient><clipPath id="ab-roof"><rect x="232" y="232" width="560" height="560" rx="70"/></clipPath></defs><rect x="100" y="100" width="824" height="824" rx="185" fill="url(#ab-bg)"/><g clip-path="url(#ab-roof)"><polygon points="232,232 792,232 642,382 382,382" fill="#fff" fill-opacity="0.97"/><polygon points="792,232 792,792 642,642 642,382" fill="#fff" fill-opacity="0.72"/><polygon points="232,792 792,792 642,642 382,642" fill="#fff" fill-opacity="0.55"/><polygon points="232,232 232,792 382,642 382,382" fill="#fff" fill-opacity="0.84"/></g><rect x="382" y="382" width="260" height="260" rx="22" fill="url(#ab-light)"/><rect x="382" y="382" width="260" height="260" rx="22" fill="none" stroke="#fff" stroke-opacity="0.5" stroke-width="6"/></svg>"##;
-
 #[component]
 pub(super) fn AboutTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     let app = Memo::new(move |_| snapshot.with(|snapshot| snapshot.app.clone()));
     view! {
         <h2>"About"</h2>
         <div class="about-head">
-            <span class="about-logo" inner_html=LOGO_SVG></span>
+            <img class="about-logo" src="atrium.svg" alt="" />
             <div>
                 <h3 class="about-name">"Atrium"</h3>
                 <div class="about-version">{move || format!("Version {}", app.get().version)}</div>

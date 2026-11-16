@@ -1,6 +1,6 @@
 //! Linux (`WebKitGTK` 4.1, GTK 3): a web data folder per account, child webviews laid out in a
-//! `gtk::Layout`, and `WebKitGTK`'s own JavaScript dialogs. A second start hands over to the
-//! running Atrium (`single_instance`).
+//! `gtk::Layout`, and Atrium's own JavaScript dialogs (`dialogs`). A second start hands over to
+//! the running Atrium (`single_instance`).
 //!
 //! Layout: Tauri builds every child webview into the window's vertical `gtk::Box`, where wry
 //! packs it to fill (the views would stack) and cannot move or resize it. So each new child
@@ -18,7 +18,6 @@ use std::fs::{DirBuilder, Permissions};
 use std::io;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use domain::ports::PortResult;
 use domain::{Bounds, DockBadge};
@@ -31,12 +30,13 @@ use tauri::{
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 use webkit2gtk::WebViewExt;
-use webview_dialogs::DialogHandler;
 
-use crate::{Logger, port_err};
+use crate::port_err;
 
+mod dialogs;
 mod single_instance;
 
+pub(crate) use dialogs::{attach_dialogs, install_dialogs};
 pub(crate) use single_instance::guard_single_instance;
 
 /// Freedesktop sound theme name of an instant message.
@@ -262,19 +262,6 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>) -> PortResult {
         .with_webview(|platform| platform.inner().reload_bypass_cache())
         .map_err(port_err)
 }
-
-/// Leaves `alert`, `confirm` and `prompt` to `WebKitGTK`, which shows its own dialogs titled
-/// with the asking page's origin: the policy of `dialogs` is not applied.
-pub(crate) fn install_dialogs<R: Runtime>(
-    _app: &AppHandle<R>,
-    _handler: Arc<dyn DialogHandler>,
-    logger: &Logger,
-) {
-    logger.log("JavaScript dialogs: WebKitGTK's own");
-}
-
-/// Nothing to attach: `WebKitGTK` handles the dialogs of every webview itself.
-pub(crate) fn attach_dialogs<R: Runtime>(_webview: &Webview<R>, _logger: &Logger) {}
 
 /// Nothing to prepare: `WebKitGTK`'s `javascript-can-open-windows-automatically` is off by
 /// default and wry leaves it, so pages open windows only from a user gesture.

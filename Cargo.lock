@@ -5725,11 +5725,14 @@ name = "webview-dialogs"
 version = "0.2.0"
 dependencies = [
  "block2",
+ "gtk",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
  "objc2-web-kit",
  "tauri",
+ "url",
+ "webkit2gtk",
 ]
 
 [[package]]

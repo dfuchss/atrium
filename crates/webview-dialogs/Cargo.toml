@@ -49,6 +49,11 @@ objc2-web-kit = { version = "0.3", default-features = false, features = [
     "WKWebsiteDataStore",
 ] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = { version = "2.0", features = ["v2_40"] }
+url.workspace = true
+
 # The workspace lints, except that `unsafe_code` is allowed: on macOS this crate talks to the
 # Objective-C runtime and AppKit, which no safe binding covers. Keep it in sync with the
 # workspace table in the root Cargo.toml.

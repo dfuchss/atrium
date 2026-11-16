@@ -14,6 +14,7 @@ use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{AppHandle, Manager, Runtime, Url, Webview, WebviewBuilder, WebviewUrl, Window};
 use uuid::Uuid;
 
+use crate::dialogs::Dialogs;
 use crate::links::{LinkPolicy, navigation_hook, permission_hook, popup_label_prefix};
 use crate::native;
 use crate::{Feed, Input, Logger, TauriHost, port_err};
@@ -259,10 +260,7 @@ impl<R: Runtime> TauriHost<R> {
                         "[{account}] loaded {}",
                         redact_url(payload.url().as_str())
                     ));
-                    load_dialogs
-                        .lock()
-                        .unwrap_or_else(PoisonError::into_inner)
-                        .page_loaded(account);
+                    load_dialogs.page_loaded(account);
                     feed_load(Input::PageLoaded {
                         account,
                         url: payload.url().to_string(),
@@ -314,7 +312,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         }
         let builder = self.hook(spec, builder);
         let webview = add_service_view(&self.window()?, builder, spec.store_id, bounds)?;
-        native::attach_dialogs(&webview, &self.logger);
+        Dialogs::attach(&webview, &self.logger);
         if !visible {
             native::set_visible(&webview, false)?;
         }

@@ -1,7 +1,8 @@
 //! JavaScript dialogs (`alert`, `confirm`, `prompt`) of the system webviews: the
 //! platform-neutral request and answer types, decided by a [`DialogHandler`], and the glue to
-//! the engine of each platform. On macOS (`macos`) it also holds the other `WebKit` calls Tauri
-//! has no API for: the service view configuration, reloads from origin and display wakes.
+//! the engine of each platform: `WKWebView` on macOS (`macos`), `WebKitGTK` on Linux (`linux`).
+//! On macOS it also holds the other `WebKit` calls Tauri has no API for: the service view
+//! configuration, reloads from origin and display wakes.
 //!
 //! The only crate of the workspace with `unsafe` code (the macOS glue); every block says why it
 //! is sound.
@@ -11,6 +12,12 @@ mod macos;
 
 #[cfg(target_os = "macos")]
 pub use macos::*;
+
+#[cfg(target_os = "linux")]
+mod linux;
+
+#[cfg(target_os = "linux")]
+pub use linux::*;
 
 /// Which panel the page asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]

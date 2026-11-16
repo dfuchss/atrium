@@ -93,7 +93,7 @@ Data locations on Linux:
 - **Log:** the app log folder, `~/.local/share/org.fuchss.atrium/logs/atrium.log`
 
 Known limitations on Linux:
-- JavaScript dialogs are WebKitGTK's own: no per-account title, suppression or rate limit.
+- JavaScript dialogs name the host of the page, not of an embedded frame that asks (WebKitGTK does not tell which frame asked).
 - Sign-in popups open like other links (by default in the system browser): on Linux the new-window request does not carry the size a page asks for.
 - There is no app menu, so no keyboard shortcuts for settings or quit; use the tray menu.
 - The unread count appears as the tray label only where the panel supports it. The launcher badge works only where the desktop supports the Unity launcher API.

@@ -1,6 +1,7 @@
 //! JavaScript dialogs (`alert`, `confirm`, `prompt`) of the service views and the windows they
-//! open: what the native panel says and when a page gets none. The panels are shown by
-//! `webview_dialogs`, which calls [`DialogHandler`] on the main thread.
+//! open: what the native panel says and when a page gets none. [`Dialogs`] hands the policy to
+//! the native dialog hooks (`native::install_dialogs`, `native::attach_dialogs`), whose panels
+//! call [`DialogHandler`] on the main thread.
 //!
 //! - The title names the account (its sidebar label) and the host of the asking frame, taken
 //!   from `WebKit`'s security origin so a page cannot pose as another.
@@ -18,12 +19,14 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use domain::RateLimiter;
 use protocol::Snapshot;
+use tauri::{AppHandle, Runtime, Webview};
 use uuid::Uuid;
 use webview_dialogs::{
     DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
 };
 
 use crate::logger::{Logger, now_ms};
+use crate::native;
 
 pub(crate) const MAX_DIALOGS_PER_MINUTE: usize = 10;
 const MS_PER_MINUTE: u64 = 60_000;
@@ -34,7 +37,7 @@ const OFFER_SUPPRESSION_FROM: u32 = 2;
 
 /// Shared policy state: written by the actor (snapshots, page loads) and the main thread
 /// (dialogs), held only briefly.
-pub(crate) type SharedDialogPolicy = Arc<Mutex<DialogPolicy>>;
+type SharedDialogPolicy = Arc<Mutex<DialogPolicy>>;
 
 /// Account id in a service view label (`svc-<id>`) or a popup window label (`popup-<id>-<n>`).
 pub(crate) fn account_of_label(label: &str) -> Option<Uuid> {
@@ -84,7 +87,7 @@ pub(crate) fn display_name(label: &str, service_name: &str) -> String {
 }
 
 /// The accounts of `snapshot` with their names for the dialog titles.
-pub(crate) fn account_names(snapshot: &Snapshot) -> impl Iterator<Item = (Uuid, String)> + '_ {
+fn account_names(snapshot: &Snapshot) -> impl Iterator<Item = (Uuid, String)> + '_ {
     snapshot.accounts.iter().map(|account| {
         (
             account.id,
@@ -188,11 +191,11 @@ fn answer_name(answer: &DialogAnswer) -> String {
     }
 }
 
-/// The `webview_dialogs` handler: applies the [`DialogPolicy`] and logs each dialog, never its
-/// message.
-pub(crate) struct TauriDialogHandler {
-    pub(crate) policy: SharedDialogPolicy,
-    pub(crate) logger: Logger,
+/// The [`DialogHandler`] of the native hooks: applies the [`DialogPolicy`] and logs each dialog,
+/// never its message.
+struct TauriDialogHandler {
+    policy: SharedDialogPolicy,
+    logger: Logger,
 }
 
 impl TauriDialogHandler {
@@ -245,6 +248,53 @@ impl DialogHandler for TauriDialogHandler {
             TauriDialogHandler::describe(request),
             answer_name(answer)
         ));
+    }
+}
+
+/// JavaScript dialogs of the service views and their popups: native panels that follow the
+/// [`DialogPolicy`], shown by the native dialog hooks.
+#[derive(Clone)]
+pub(crate) struct Dialogs {
+    policy: SharedDialogPolicy,
+}
+
+impl Dialogs {
+    pub(crate) fn new() -> Dialogs {
+        Dialogs {
+            policy: Arc::new(Mutex::new(DialogPolicy::new())),
+        }
+    }
+
+    /// Makes `alert`, `confirm` and `prompt` of the service views follow the policy (see
+    /// `native::install_dialogs` for when to call it).
+    pub(crate) fn install<R: Runtime>(&self, app: &AppHandle<R>, logger: &Logger) {
+        let handler = Arc::new(TauriDialogHandler {
+            policy: self.policy.clone(),
+            logger: logger.clone(),
+        });
+        native::install_dialogs(app, handler, logger);
+    }
+
+    /// Makes the dialogs of `webview` (a service view or a popup window) follow the policy, as
+    /// dialogs of the account in its label (see [`account_of_label`]).
+    pub(crate) fn attach<R: Runtime>(webview: &Webview<R>, logger: &Logger) {
+        native::attach_dialogs(webview, logger);
+    }
+
+    /// The view of `account` loaded a page: earlier dialogs and a suppression no longer count.
+    pub(crate) fn page_loaded(&self, account: Uuid) {
+        self.policy
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .page_loaded(account);
+    }
+
+    /// Takes the account names for the dialog titles from `snapshot`.
+    pub(crate) fn set_names(&self, snapshot: &Snapshot) {
+        self.policy
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .set_names(account_names(snapshot));
     }
 }
 

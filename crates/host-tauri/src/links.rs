@@ -31,6 +31,7 @@ use tauri::webview::{
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
+use crate::dialogs::Dialogs;
 use crate::logger::now_ms;
 use crate::native;
 use crate::webviews::popup_labels;
@@ -353,7 +354,7 @@ impl<R: Runtime> LinkPolicy<R> {
                 self.logger.log(&format!(
                     "[{account}] opened window {label} for {shown_url}"
                 ));
-                native::attach_dialogs(window.as_ref(), &self.logger);
+                Dialogs::attach(window.as_ref(), &self.logger);
                 watch_close(self.app.clone(), label, &self.logger);
                 NewWindowResponse::Create { window }
             }

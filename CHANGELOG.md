@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Atrium runs on Linux (WebKitGTK 4.1) when built from source; each account keeps its web data in a folder of its own; WebKit's web process sandbox is not available on Linux builds (Settings > About says so)
 - On Linux, starting Atrium again brings the running Atrium to the front instead of opening a second one
+- On Linux, `alert`, `confirm` and `prompt` of service pages show Atrium's own dialogs, as on macOS: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
 - On Linux the settings say tray icon, launcher badge and desktop light or dark setting instead of menu bar, dock badge and macOS
 
 ### Changed

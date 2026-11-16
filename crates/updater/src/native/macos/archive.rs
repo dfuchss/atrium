@@ -233,6 +233,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "macos"), ignore = "needs macOS ditto")]
     fn lists_the_entries_of_a_ditto_zip() {
         let dir = tempfile::tempdir().unwrap();
         let app = dir.path().join("Atrium.app");
@@ -349,6 +350,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "macos"), ignore = "needs macOS ditto")]
     fn extraction_refuses_links_out_of_the_archive() {
         let dir = tempfile::tempdir().unwrap();
         let app = dir.path().join("Atrium.app");

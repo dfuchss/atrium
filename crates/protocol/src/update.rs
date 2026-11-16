@@ -56,8 +56,8 @@ pub struct UpdateStatus {
     pub state: UpdateState,
     /// Check on startup and periodically.
     pub auto_check: bool,
-    /// Why updates have to be installed by hand (development build, not in Applications...);
-    /// `None` when Atrium can update itself.
+    /// Why updates have to be installed by hand (development build, not in Applications...),
+    /// as a whole sentence; `None` when Atrium can update itself.
     pub manual_reason: Option<String>,
     /// The previous "Restart and update" did not install the update, with the reason.
     pub last_failure: Option<String>,

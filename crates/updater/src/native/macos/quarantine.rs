@@ -53,6 +53,7 @@ mod tests {
     const VALUE: &[u8] = b"0083;00000000;Atrium;";
 
     #[test]
+    #[cfg_attr(not(target_os = "macos"), ignore = "needs macOS quarantine xattr")]
     fn clears_the_whole_tree_without_following_links() {
         let dir = tempfile::tempdir().unwrap();
         let outside = dir.path().join("outside");

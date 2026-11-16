@@ -9,6 +9,7 @@ use protocol::{UpdateCommand, UpdateState, UpdateStatus};
 
 use crate::helper::HelperPlan;
 use crate::location::InstallLocation;
+use crate::native;
 use crate::release::{RELEASES_PAGE, Release};
 use crate::source::ReleaseSource;
 use crate::staging::{StageRequest, remove_if_present, stage};
@@ -84,7 +85,7 @@ pub(crate) fn decide(
         .filter(|name| release.assets.contains_key(*name))
     else {
         return CheckDecision::ManualOnly {
-            reason: "the release has no download for this Mac".into(),
+            reason: native::NO_DOWNLOAD_REASON.into(),
         };
     };
     if staged == Some(release.version) {
@@ -151,10 +152,10 @@ impl Updater {
         let status = UpdateStatus {
             state: UpdateState::Idle,
             auto_check: settings.auto_check,
-            manual_reason: match &config.location {
-                InstallLocation::ManualOnly { reason } => Some(reason.clone()),
-                InstallLocation::SelfUpdatable { .. } => None,
-            },
+            manual_reason: config
+                .location
+                .manual_reason()
+                .map(native::manual_only_text),
             last_failure: None,
         };
         let shared = Shared {
@@ -297,4 +298,5 @@ impl Updater {
 mod checking;
 
 #[cfg(test)]
+#[cfg(target_os = "macos")]
 mod tests;

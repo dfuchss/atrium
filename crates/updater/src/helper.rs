@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use crate::native::{process_alive, processes_running_from, relaunch};
 use crate::store::{SwapResult, UpdaterFiles, open_private, write_atomically};
 use crate::swap::{BundleFs, RealFs, SwapOutcome, swap};
 
@@ -108,7 +109,7 @@ pub fn run_if_requested() -> Option<i32> {
 pub(crate) struct HelperIo<'a> {
     pub(crate) fs: &'a dyn BundleFs,
     pub(crate) app_alive: &'a dyn Fn(u32) -> bool,
-    /// Ids of the other processes whose executable lies in the given folder.
+    /// Ids of the other processes running from the given installation.
     pub(crate) running_from: &'a dyn Fn(&Path) -> Result<Vec<u32>, String>,
     pub(crate) relaunch: &'a dyn Fn(&Path),
     pub(crate) exit_timeout: Duration,
@@ -156,9 +157,9 @@ fn wait_for_exit(pid: u32, io: &HelperIo<'_>) -> bool {
 }
 
 /// Swaps only when no other process (a second instance started from the same bundle) runs
-/// from `<install>/Contents/MacOS`; the helper itself does, and is not counted.
+/// from `install`; the helper itself does, and is not counted.
 fn swap_unless_in_use(install: &Path, io: &HelperIo<'_>) -> SwapOutcome {
-    match (io.running_from)(&install.join("Contents/MacOS")) {
+    match (io.running_from)(install) {
         Ok(pids) if pids.is_empty() => swap(install, io.fs),
         Ok(pids) => SwapOutcome::NotStarted(format!(
             "Atrium still runs from the installation (pid {pids:?}); the update stays staged"
@@ -167,51 +168,6 @@ fn swap_unless_in_use(install: &Path, io: &HelperIo<'_>) -> SwapOutcome {
             "cannot check for running copies of Atrium: {error}"
         )),
     }
-}
-
-/// Processes other than this one whose executable lies in `macos_dir`, from `ps`.
-fn processes_running_from(macos_dir: &Path) -> Result<Vec<u32>, String> {
-    let output = Command::new("/bin/ps")
-        .args(["-axo", "pid=,comm="])
-        .stderr(Stdio::null())
-        .output()
-        .map_err(|error| format!("cannot run ps: {error}"))?;
-    if !output.status.success() {
-        return Err(format!("ps failed: {}", output.status));
-    }
-    Ok(pids_running_from(
-        &String::from_utf8_lossy(&output.stdout),
-        macos_dir,
-        std::process::id(),
-    ))
-}
-
-/// The ids in `ps -o pid=,comm=` output (`comm` is the executable's full path on macOS) of
-/// processes other than `own_pid` running an executable below `macos_dir`.
-pub(crate) fn pids_running_from(ps_output: &str, macos_dir: &Path, own_pid: u32) -> Vec<u32> {
-    ps_output
-        .lines()
-        .filter_map(|line| {
-            let (pid, executable) = line.trim_start().split_once(' ')?;
-            let pid: u32 = pid.parse().ok()?;
-            let inside = Path::new(executable.trim_start()).starts_with(macos_dir);
-            (inside && pid != own_pid).then_some(pid)
-        })
-        .collect()
-}
-
-/// `ps -p` exits with 0 while the process exists.
-fn process_alive(pid: u32) -> bool {
-    Command::new("/bin/ps")
-        .args(["-p", &pid.to_string()])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
-}
-
-fn relaunch(install: &Path) {
-    let _ = Command::new("/usr/bin/open").arg(install).status();
 }
 
 fn append_log(updates_dir: &Path, message: &str) {
@@ -344,7 +300,7 @@ mod tests {
         let result = run(&plan, &io);
         assert!(!result.success);
         assert!(result.message.contains("815"), "{}", result.message);
-        assert_eq!(*asked.borrow(), vec![plan.install.join("Contents/MacOS")]);
+        assert_eq!(*asked.borrow(), vec![plan.install.clone()]);
         assert!(!plan.install.join("new").exists());
         assert!(new_update_path(&plan.install).join("new").exists());
         assert!(*relaunched.borrow());
@@ -354,29 +310,6 @@ mod tests {
         };
         assert!(!run(&plan, &failing).success);
         assert!(new_update_path(&plan.install).join("new").exists());
-    }
-
-    #[test]
-    fn finds_other_processes_running_from_the_bundle() {
-        let ps_output = "\
-    1 /sbin/launchd
-  815 /Applications/Atrium.app/Contents/MacOS/atrium
-  900 /Applications/Atrium.app/Contents/MacOS/atrium
-  901 /Applications/Atrium.app.new-update/Contents/MacOS/atrium
-  902 /Applications/Atrium Beta.app/Contents/MacOS/atrium
-garbage
-";
-        let macos_dir = Path::new("/Applications/Atrium.app/Contents/MacOS");
-        assert_eq!(pids_running_from(ps_output, macos_dir, 900), vec![815]);
-        let beta = Path::new("/Applications/Atrium Beta.app/Contents/MacOS");
-        assert_eq!(pids_running_from(ps_output, beta, 900), vec![902]);
-    }
-
-    #[test]
-    fn the_own_process_is_not_counted() {
-        let executable = std::env::current_exe().unwrap();
-        let running = processes_running_from(executable.parent().unwrap()).unwrap();
-        assert!(!running.contains(&std::process::id()), "{running:?}");
     }
 
     #[test]

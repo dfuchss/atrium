@@ -1,4 +1,4 @@
-//! Release metadata: the GitHub release JSON, the asset for this Mac and `SHA256SUMS`.
+//! Release metadata: the GitHub release JSON and `SHA256SUMS`.
 
 use std::collections::BTreeMap;
 
@@ -74,16 +74,6 @@ impl Release {
     }
 }
 
-/// The release asset for a Mac of the given architecture (`std::env::consts::ARCH`); the
-/// names are fixed by `.github/workflows/release.yml`.
-pub fn asset_name_for_arch(arch: &str) -> Option<&'static str> {
-    match arch {
-        "aarch64" => Some("atrium-macos-arm64.zip"),
-        "x86_64" => Some("atrium-macos-x86_64.zip"),
-        _ => None,
-    }
-}
-
 /// Parses `sha256sum` output into file name (without directory) to lower case hex digest;
 /// other lines are ignored.
 pub(crate) fn parse_sha256sums(text: &str) -> BTreeMap<String, String> {
@@ -153,19 +143,6 @@ mod tests {
             Release::parse(body).unwrap().unwrap().page_url,
             RELEASES_PAGE
         );
-    }
-
-    #[test]
-    fn picks_the_asset_of_the_architecture() {
-        assert_eq!(
-            asset_name_for_arch("aarch64"),
-            Some("atrium-macos-arm64.zip")
-        );
-        assert_eq!(
-            asset_name_for_arch("x86_64"),
-            Some("atrium-macos-x86_64.zip")
-        );
-        assert_eq!(asset_name_for_arch("riscv64"), None);
     }
 
     #[test]

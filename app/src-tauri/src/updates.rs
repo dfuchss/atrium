@@ -7,9 +7,7 @@ use std::sync::Arc;
 use protocol::{EVENT_UPDATE_STATUS, UI_WEBVIEW, UpdateCommand, UpdateStatus};
 use tauri::{App, AppHandle, Emitter, Manager, State, Wry};
 use tauri_plugin_opener::OpenerExt;
-use updater::{
-    GitHubSource, InstallLocation, LogSink, Updater, UpdaterAction, UpdaterConfig, Version,
-};
+use updater::{GitHubSource, LogSink, Updater, UpdaterAction, UpdaterConfig, Version};
 
 /// The updater as Tauri state.
 pub(crate) struct UpdaterState(Updater);
@@ -42,28 +40,12 @@ pub(crate) fn get_update_status(state: State<'_, UpdaterState>) -> UpdateStatus 
     state.0.status()
 }
 
-/// Where the running executable is installed, and whether it may replace itself.
-fn install_location() -> InstallLocation {
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    match std::env::current_exe() {
-        Ok(executable) => InstallLocation::resolve(
-            &executable,
-            home.as_deref(),
-            cfg!(debug_assertions),
-            &updater::can_replace,
-        ),
-        Err(error) => InstallLocation::ManualOnly {
-            reason: format!("cannot locate Atrium: {error}"),
-        },
-    }
-}
-
 /// Creates the updater (state in `data_dir`), registers it with the app and starts it.
 pub(crate) fn start(app: &App, data_dir: PathBuf, log: LogSink) -> std::io::Result<()> {
     let version = app.package_info().version.to_string();
     let config = UpdaterConfig {
         current_version: Version::parse(&version),
-        location: install_location(),
+        location: updater::install_location(cfg!(debug_assertions)),
         asset_name: updater::asset_name_for_arch(std::env::consts::ARCH),
         data_dir,
     };

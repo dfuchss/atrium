@@ -10,11 +10,9 @@
 //! Releases are unsigned; the checksum file guards against broken or swapped downloads, not
 //! against a compromised release.
 
-mod archive;
-mod bundle;
 pub mod helper;
 mod location;
-mod quarantine;
+mod native;
 mod release;
 mod service;
 mod source;
@@ -24,7 +22,7 @@ mod swap;
 mod version;
 
 pub use location::{InstallLocation, can_replace};
-pub use release::asset_name_for_arch;
+pub use native::{asset_name_for_arch, install_location};
 pub use service::{LogSink, StatusSink, Updater, UpdaterAction, UpdaterConfig};
 pub use source::{Download, GitHubSource, ReleaseSource};
 pub use version::Version;

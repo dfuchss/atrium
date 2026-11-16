@@ -1,19 +1,17 @@
 //! Downloads a release asset into `<app data>/updates/<tag>/`, verifies it against the
-//! release's `SHA256SUMS`, extracts and checks the bundle and moves it next to the install
+//! release's `SHA256SUMS` and has the platform place it next to the install
 //! (`<install>.new-update`). The install itself is never written.
 
 use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use sha2::{Digest as _, Sha256};
 
+use crate::native;
 use crate::release::{Release, SHA256SUMS, parse_sha256sums};
 use crate::source::ReleaseSource;
-use crate::swap::{new_update_path, partial_update_path};
-use crate::{archive, bundle, quarantine};
 
 const MAX_SUMS_BYTES: u64 = 64 * 1024;
 const MAX_ASSET_BYTES: u64 = 512 * 1024 * 1024;
@@ -44,21 +42,15 @@ pub(crate) fn stage(
     let dir = request.updates_dir.join(release.version.tag());
     remove_if_present(&dir)?;
     std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    let zip = dir.join(request.asset_name);
-    let actual = download(source, asset_url, &zip, on_progress)?;
+    let downloaded = dir.join(request.asset_name);
+    let actual = download(source, asset_url, &downloaded, on_progress)?;
     if !actual.eq_ignore_ascii_case(&expected) {
-        let _ = std::fs::remove_file(&zip);
+        let _ = std::fs::remove_file(&downloaded);
         return Err(format!("checksum mismatch for {}", request.asset_name));
     }
 
-    let extracted = dir.join("extracted");
-    archive::extract(&zip, &extracted)?;
-    let bundle = bundle::find_bundle(&extracted)?;
-    bundle::verify(&bundle, release.version)?;
-    quarantine::remove_quarantine(&bundle)?;
-    let staged = place_next_to_install(&bundle, request.install)?;
-    let _ = std::fs::remove_dir_all(&extracted);
-    let _ = std::fs::remove_file(&zip);
+    let staged = native::prepare_update(&downloaded, release.version, request.install)?;
+    let _ = std::fs::remove_file(&downloaded);
     Ok(staged)
 }
 
@@ -132,32 +124,6 @@ pub(crate) fn hex(bytes: &[u8]) -> String {
 fn percent(received: u64, length: Option<u64>) -> Option<u8> {
     let length = length.filter(|&length| length > 0)?;
     u8::try_from((received.min(length) * 100) / length).ok()
-}
-
-/// Moves the checked bundle to `<install>.new-update`, replacing a leftover. Across volumes
-/// it is copied with `ditto` to a `.partial` sibling first, so a broken copy never looks
-/// complete; the copy is cleared of the quarantine `ditto` may have set again.
-fn place_next_to_install(bundle: &Path, install: &Path) -> Result<PathBuf, String> {
-    let target = new_update_path(install);
-    let partial = partial_update_path(install);
-    remove_if_present(&partial)?;
-    remove_if_present(&target)?;
-    if std::fs::rename(bundle, &target).is_ok() {
-        return Ok(target);
-    }
-    let copied = Command::new("/usr/bin/ditto")
-        .arg(bundle)
-        .arg(&partial)
-        .status()
-        .is_ok_and(|status| status.success());
-    if copied
-        && quarantine::remove_quarantine(&partial).is_ok()
-        && std::fs::rename(&partial, &target).is_ok()
-    {
-        return Ok(target);
-    }
-    let _ = remove_if_present(&partial);
-    Err("cannot place the update next to the installation".into())
 }
 
 /// Removes a file or folder tree; a missing path is fine.

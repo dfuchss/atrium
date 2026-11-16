@@ -7,7 +7,7 @@ use protocol::UpdateState;
 
 use super::{
     CheckDecision, HelperPlan, InstallLocation, Release, StageRequest, Updater, UpdaterAction,
-    Version, decide, locked, new_update_path, now_ms, old_update_path, partial_update_path,
+    Version, decide, locked, native, new_update_path, now_ms, old_update_path, partial_update_path,
     ready_or, remove_if_present, stage,
 };
 
@@ -55,7 +55,7 @@ impl Updater {
                 self.set_state(ready_or(self.staged(), UpdateState::UpToDate));
             }
             CheckDecision::ManualOnly { reason } => self.set_status(|status| {
-                status.manual_reason = Some(reason);
+                status.manual_reason = Some(native::manual_only_text(&reason));
                 status.state = UpdateState::Available { version };
             }),
             CheckDecision::AlreadyStaged => self.set_state(UpdateState::Ready { version }),

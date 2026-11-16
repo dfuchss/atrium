@@ -8,8 +8,8 @@ use std::process::Command;
 use sha2::{Digest as _, Sha256};
 
 use super::*;
-use crate::bundle::BUNDLE_IDENTIFIER;
-use crate::bundle::tests::fake_bundle;
+use crate::native::bundle::BUNDLE_IDENTIFIER;
+use crate::native::bundle::tests::fake_bundle;
 use crate::source::Download;
 
 const ASSET: &str = "atrium-macos-arm64.zip";
@@ -143,8 +143,8 @@ fn stages_a_verified_release_next_to_the_install() {
     updater.check();
     assert_eq!(updater.status().state, ready("0.2.0"));
     let staged = new_update_path(&fixture.install());
-    crate::bundle::verify(&staged, Version::parse("0.2.0").unwrap()).unwrap();
-    crate::bundle::verify(&fixture.install(), Version::parse("0.1.0").unwrap()).unwrap();
+    crate::native::bundle::verify(&staged, Version::parse("0.2.0").unwrap()).unwrap();
+    crate::native::bundle::verify(&fixture.install(), Version::parse("0.1.0").unwrap()).unwrap();
     let leftovers = std::fs::read_dir(fixture.data_dir().join("updates/v0.2.0")).unwrap();
     assert_eq!(leftovers.count(), 0);
 
@@ -199,6 +199,7 @@ fn refuses_a_checksum_mismatch() {
 }
 
 #[test]
+#[cfg(target_os = "macos")]
 fn refuses_a_bundle_of_another_app_or_version() {
     for (identifier, version, expected) in [
         ("org.example.other", "0.2.0", "identifier"),
@@ -245,8 +246,8 @@ fn manual_installs_only_announce() {
     );
     assert!(status.has_update());
     assert_eq!(
-        status.manual_reason.as_deref(),
-        Some("this is a development build")
+        status.manual_reason,
+        Some(native::manual_only_text("this is a development build"))
     );
     assert_eq!(
         updater.handle(&UpdateCommand::RestartToUpdate),

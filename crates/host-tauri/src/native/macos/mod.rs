@@ -38,6 +38,8 @@ pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = true;
 pub(crate) const TRAY_MENU_REPLACEABLE: bool = true;
 /// The menu bar carries the app menu with the shortcuts.
 pub(crate) const USES_APP_MENU: bool = true;
+/// A popup runs its own user scripts.
+pub(crate) const POPUPS_RUN_OPENER_SCRIPTS: bool = false;
 
 /// Keeps the view's web data in the `WebKit` data store `store_id`.
 #[expect(

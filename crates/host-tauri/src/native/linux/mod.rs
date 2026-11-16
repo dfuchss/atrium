@@ -62,6 +62,8 @@ pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = false;
 pub(crate) const TRAY_MENU_REPLACEABLE: bool = false;
 /// No app menu: a GTK menu bar would push the views down. Settings and Quit are in the tray.
 pub(crate) const USES_APP_MENU: bool = false;
+/// A popup (a related view of its opener) runs its opener's user scripts, not its own.
+pub(crate) const POPUPS_RUN_OPENER_SCRIPTS: bool = true;
 
 /// Folder of the per-account web data folders, `<app data>/webdata`. A development config
 /// folder (`ATRIUM_CONFIG_DIR`) does not move it, just as the data stores of macOS belong to
@@ -261,6 +263,47 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>) -> PortResult {
     webview
         .with_webview(|platform| platform.inner().reload_bypass_cache())
         .map_err(port_err)
+}
+
+/// Calls `decide` once with the size the page asked for `window` (`window.open` features), or
+/// `None` if it asked for none, as soon as `WebKitGTK` tells it: when the window is ready to
+/// show, before its page loads. wry's new-window request carries no size on Linux. On the main
+/// thread (as inside wry's new-window callback) the handler is in place before this returns.
+///
+/// `WebKitGTK` sets a new window's geometry to the window's own size unless the page asked for
+/// one, so `window` must be sized to something a page is unlikely to ask for: see
+/// [`UNDECIDED_WINDOW_SIZE`].
+pub(crate) fn on_requested_size<R: Runtime>(
+    window: &tauri::WebviewWindow<R>,
+    decide: impl FnOnce(Option<LogicalSize<f64>>) + Send + 'static,
+) -> tauri::Result<()> {
+    window.with_webview(move |platform| {
+        let decide = std::cell::Cell::new(Some(decide));
+        platform.inner().connect_ready_to_show(move |view| {
+            if let Some(decide) = decide.take() {
+                decide(requested_size(view));
+            }
+        });
+    })
+}
+
+/// Size of a window whose requested size is not known yet: `WebKit`'s smallest window, so only
+/// a page asking for at most that size is taken for one that asked for none.
+pub(crate) const UNDECIDED_WINDOW_SIZE: (f64, f64) = (100.0, 100.0);
+
+/// The window size `view`'s page asked for: its geometry, unless that is just the size of the
+/// window it is in.
+fn requested_size(view: &webkit2gtk::WebView) -> Option<LogicalSize<f64>> {
+    use webkit2gtk::WindowPropertiesExt;
+
+    let geometry = view.window_properties()?.geometry();
+    let requested = (geometry.width(), geometry.height());
+    let own = view
+        .toplevel()
+        .and_then(|toplevel| toplevel.downcast::<gtk::Window>().ok())
+        .map(|window| window.size());
+    (own != Some(requested))
+        .then(|| LogicalSize::new(f64::from(requested.0), f64::from(requested.1)))
 }
 
 /// Nothing to prepare: `WebKitGTK`'s `javascript-can-open-windows-automatically` is off by

@@ -15,7 +15,8 @@ use tauri::{AppHandle, Manager, Runtime, Url, Webview, WebviewBuilder, WebviewUr
 use uuid::Uuid;
 
 use crate::dialogs::Dialogs;
-use crate::links::{LinkPolicy, navigation_hook, permission_hook, popup_label_prefix};
+use crate::links::{CLOSE_HOOK, LinkPolicy, navigation_hook, permission_hook, popup_label_prefix};
+use crate::logger::spawn_logged;
 use crate::native;
 use crate::{Feed, Input, Logger, TauriHost, port_err};
 
@@ -38,6 +39,17 @@ const ACCOUNT_CLOSE_POLL: Duration = Duration::from_millis(100);
 /// True if `label` is the service view or an in-app window of `account`.
 fn belongs_to_account(label: &str, account: Uuid) -> bool {
     label == view_label(account) || label.starts_with(&popup_label_prefix(account))
+}
+
+/// A service view's init script: the service's, then the development script, if any, and, if
+/// `popups_run_its_scripts`, the popups' [`CLOSE_HOOK`], which they run only that way.
+fn service_view_script(service: &str, extra: Option<&str>, popups_run_its_scripts: bool) -> String {
+    let close_hook = popups_run_its_scripts.then_some(CLOSE_HOOK);
+    [Some(service), extra, close_hook]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Labels of the in-app (popup and app) windows `account` currently has.
@@ -95,13 +107,6 @@ fn remove_data_store_with_retries<R: Runtime>(
         Err(error) => logger.log(&format!(
             "giving up deleting data store {store}: {error} (removed again at the next start)"
         )),
-    }
-}
-
-/// Runs `job` on a new thread named `name`; logs if the thread cannot start.
-fn spawn_logged(name: &str, logger: &Logger, job: impl FnOnce() + Send + 'static) {
-    if let Err(error) = std::thread::Builder::new().name(name.into()).spawn(job) {
-        logger.log(&format!("cannot start thread {name}: {error}"));
     }
 }
 
@@ -227,12 +232,13 @@ impl<R: Runtime> TauriHost<R> {
             .ok_or_else(|| PortError(format!("no view for account {account}")))
     }
 
-    /// The view's init script plus the development script, if any.
+    /// The view's init script (see [`service_view_script`]).
     fn init_script(&self, spec: &ViewSpec) -> String {
-        match &self.extra_init_script {
-            Some(extra) => format!("{}\n{extra}", spec.init_script),
-            None => spec.init_script.clone(),
-        }
+        service_view_script(
+            &spec.init_script,
+            self.extra_init_script.as_deref(),
+            native::POPUPS_RUN_OPENER_SCRIPTS,
+        )
     }
 
     /// Adds the native hooks of one service view to `builder`.
@@ -499,6 +505,20 @@ impl<R: Runtime> TauriHost<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn service_view_script_carries_the_close_hook_only_for_popups_running_it() {
+        assert_eq!(service_view_script("s", None, false), "s");
+        assert_eq!(service_view_script("s", Some("x"), false), "s\nx");
+        assert_eq!(
+            service_view_script("s", Some("x"), true),
+            format!("s\nx\n{CLOSE_HOOK}")
+        );
+        assert_eq!(
+            service_view_script("s", None, true),
+            format!("s\n{CLOSE_HOOK}")
+        );
+    }
 
     #[test]
     fn stores_of_current_accounts_or_open_views_are_in_use() {

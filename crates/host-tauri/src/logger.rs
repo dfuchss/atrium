@@ -124,6 +124,13 @@ impl Logger {
     }
 }
 
+/// Runs `job` on a new thread named `name`; logs if the thread cannot start.
+pub(crate) fn spawn_logged(name: &str, logger: &Logger, job: impl FnOnce() + Send + 'static) {
+    if let Err(error) = std::thread::Builder::new().name(name.into()).spawn(job) {
+        logger.log(&format!("cannot start thread {name}: {error}"));
+    }
+}
+
 /// Wall clock in ms since the Unix epoch.
 pub(crate) fn now_ms() -> u64 {
     SystemTime::now()

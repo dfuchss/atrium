@@ -94,7 +94,6 @@ Data locations on Linux:
 
 Known limitations on Linux:
 - JavaScript dialogs name the host of the page, not of an embedded frame that asks (WebKitGTK does not tell which frame asked).
-- Sign-in popups open like other links (by default in the system browser): on Linux the new-window request does not carry the size a page asks for.
 - There is no app menu, so no keyboard shortcuts for settings or quit; use the tray menu.
 - The unread count appears as the tray label only where the panel supports it. The launcher badge works only where the desktop supports the Unity launcher API.
 - "Open links in" takes a command name (e.g. `firefox`) instead of an application name.

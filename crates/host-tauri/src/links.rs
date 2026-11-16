@@ -3,6 +3,8 @@
 //! The decision is synchronous inside wry's new-window callback (main thread):
 //! - `window.open` with an explicit size (`NewWindowFeatures::size()`) is a sign-in popup
 //!   (OAuth/SSO): always an in-app window, so `window.opener` and `postMessage` keep working.
+//!   On Linux the request carries no size: a window bound for the system browser opens hidden
+//!   until `WebKitGTK` tells the size it asked for (see `LinkPolicy::system_browser`).
 //! - A URL whose host is in the account's `app_hosts` also opens as in-app window.
 //! - Anything else follows the account's [`LinkTarget`]: the system browser
 //!   (`Deny` + [`Input::ExternalLink`]) or an in-app window of 1100x800.
@@ -33,9 +35,16 @@ use uuid::Uuid;
 
 use crate::dialogs::Dialogs;
 use crate::logger::now_ms;
+#[cfg(target_os = "linux")]
+use crate::logger::spawn_logged;
 use crate::native;
 use crate::webviews::popup_labels;
 use crate::{Feed, Logger};
+
+/// How long a hidden window may wait for its page's requested size before it is closed: a page
+/// whose view never reports ready to show must not leave an invisible window behind.
+#[cfg(target_os = "linux")]
+const UNDECIDED_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Size of windows opened for `LinkTarget::AppWindow`.
 pub(crate) const APP_WINDOW_SIZE: (f64, f64) = (1100.0, 800.0);
@@ -47,6 +56,10 @@ enum Opening {
     Requested,
     /// At [`APP_WINDOW_SIZE`], centred.
     AppWindow,
+    /// Hidden, until it is known whether the page asked for a size (Linux, see
+    /// `LinkPolicy::system_browser`).
+    #[cfg(target_os = "linux")]
+    Undecided,
 }
 
 /// Effective view policy per account, written by the actor (`set_view_policy`), read in the
@@ -67,9 +80,12 @@ pub(crate) fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
         })
 }
 
-/// wry does not implement `WebKit`'s `webViewDidClose`, so a popup's own `window.close()` (end of
-/// an OAuth flow) would do nothing. This wrapper records the call; [`watch_close`] polls it.
-const CLOSE_HOOK: &str = "(()=>{if(window.__msgrCloseHook)return;window.__msgrCloseHook=1;const c=window.close.bind(window);window.close=function(){window.__msgrClosed=true;try{c()}catch(e){}};})();";
+/// wry cannot close a popup on its own `window.close()` (end of an OAuth flow): on macOS it does
+/// not implement `WebKit`'s `webViewDidClose`, on Linux it destroys the webview but leaves its
+/// window (and a service view with a single page in its history may close itself). So this
+/// wrapper only records the call; [`watch_close`] polls it in popups and closes their window.
+/// Nothing polls a service view, where the call does nothing.
+pub(crate) const CLOSE_HOOK: &str = "(()=>{if(window.__msgrCloseHook)return;window.__msgrCloseHook=1;window.close=function(){window.__msgrClosed=true;};})();";
 
 /// Most in-app windows an account may have open at once.
 const MAX_OPEN_WINDOWS: usize = 5;
@@ -251,6 +267,7 @@ impl<R: Runtime> LinkPolicy<R> {
 
     /// A request without a size: a link for the system browser. macOS tells a sign-in popup's
     /// size with the request.
+    #[cfg(target_os = "macos")]
     fn system_browser(
         self: &Arc<Self>,
         url: &Url,
@@ -260,10 +277,104 @@ impl<R: Runtime> LinkPolicy<R> {
         NewWindowResponse::Deny
     }
 
-    /// True if the account may open another window; logs the refusal otherwise.
-    fn admit_window(&self, shown_url: &str) -> bool {
+    /// A request for the system browser, unless it is a sign-in popup: wry's request carries no
+    /// size on Linux, `WebKitGTK` tells it once the new window is ready to show. So the window
+    /// opens hidden (not counted against the quota yet) and [`Self::decide_when_shown`] makes it
+    /// a sign-in popup or closes it and hands its URL to the system browser.
+    #[cfg(target_os = "linux")]
+    fn system_browser(
+        self: &Arc<Self>,
+        url: &Url,
+        features: NewWindowFeatures,
+    ) -> NewWindowResponse<R> {
+        let Some(window) = self.create_window(url, features, Opening::Undecided) else {
+            return NewWindowResponse::Deny;
+        };
+        let (policy, target, page) = (self.clone(), window.clone(), url.clone());
+        let watched = native::on_requested_size(&window, move |size| {
+            policy.decide_when_shown(&target, &page, size);
+        });
+        match watched {
+            Ok(()) => {
+                self.destroy_if_undecided_after_timeout(&window);
+                NewWindowResponse::Create { window }
+            }
+            Err(error) => {
+                self.logger.log(&format!(
+                    "[{}] cannot learn the size of window {}: {error}",
+                    self.spec.account,
+                    window.label()
+                ));
+                self.decide_when_shown(&window, url, None);
+                NewWindowResponse::Deny
+            }
+        }
+    }
+
+    /// Destroys the hidden `window` if it is still hidden after [`UNDECIDED_TIMEOUT`]:
+    /// [`Self::decide_when_shown`] shows a popup or destroys the window, so a hidden one never
+    /// heard that its view is ready to show.
+    #[cfg(target_os = "linux")]
+    fn destroy_if_undecided_after_timeout(&self, window: &WebviewWindow<R>) {
+        let (window, logger) = (window.clone(), self.logger.clone());
         let account = self.spec.account;
-        let open_now = popup_labels(&self.app, account).len();
+        spawn_logged("undecided-window", &self.logger, move || {
+            std::thread::sleep(UNDECIDED_TIMEOUT);
+            if window.is_visible().is_ok_and(|visible| !visible) {
+                logger.log(&format!(
+                    "[{account}] window {} never became ready to show, closed",
+                    window.label()
+                ));
+                let _ = window.destroy();
+            }
+        });
+    }
+
+    /// Shows the hidden `window` for `url` as sign-in popup of `size`, the size its page asked
+    /// for, if the quota admits it; without a size it is a link: the window closes and `url`
+    /// goes to the system browser.
+    #[cfg(target_os = "linux")]
+    fn decide_when_shown(
+        &self,
+        window: &WebviewWindow<R>,
+        url: &Url,
+        size: Option<tauri::LogicalSize<f64>>,
+    ) {
+        let Some(size) = size else {
+            let _ = window.destroy();
+            self.open_in_browser(url);
+            return;
+        };
+        let shown_url = redact_url(url.as_str());
+        // The hidden window itself does not count.
+        let open_besides = self.open_windows().saturating_sub(1);
+        if !self.admit_window(&shown_url, open_besides) {
+            let _ = window.destroy();
+            return;
+        }
+        self.logger.log(&format!(
+            "[{}] window {} for {shown_url} ({}, {}x{}) -> sign-in popup",
+            self.spec.account,
+            window.label(),
+            self.kind_of(url),
+            size.width,
+            size.height
+        ));
+        let _ = window.set_size(size);
+        let _ = window.center();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+
+    /// In-app windows the account has open.
+    fn open_windows(&self) -> usize {
+        popup_labels(&self.app, self.spec.account).len()
+    }
+
+    /// True if the account may open another window besides the `open_now` it has; logs the
+    /// refusal otherwise.
+    fn admit_window(&self, shown_url: &str, open_now: usize) -> bool {
+        let account = self.spec.account;
         let admitted = self
             .popup_quota
             .lock()
@@ -304,6 +415,7 @@ impl<R: Runtime> LinkPolicy<R> {
             .window_features(features);
         let mut builder = native::isolate_window(builder, &self.app, self.spec.store_id)?
             .title(self.window_title_for("", url))
+            // Where popups run their opener's scripts instead, the service view carries it.
             .initialization_script(CLOSE_HOOK)
             .on_new_window(move |url, features| popup_policy.on_new_window(&url, features))
             .on_document_title_changed(move |window, title| {
@@ -321,9 +433,17 @@ impl<R: Runtime> LinkPolicy<R> {
                 self.logger.clone(),
                 "popup",
             ));
-        if let Opening::AppWindow = opening {
-            let (width, height) = APP_WINDOW_SIZE;
-            builder = builder.inner_size(width, height).center();
+        match opening {
+            Opening::Requested => {}
+            Opening::AppWindow => {
+                let (width, height) = APP_WINDOW_SIZE;
+                builder = builder.inner_size(width, height).center();
+            }
+            #[cfg(target_os = "linux")]
+            Opening::Undecided => {
+                let (width, height) = native::UNDECIDED_WINDOW_SIZE;
+                builder = builder.inner_size(width, height).visible(false);
+            }
         }
         if let Some(user_agent) = &self.spec.user_agent {
             builder = builder.user_agent(user_agent);
@@ -331,20 +451,33 @@ impl<R: Runtime> LinkPolicy<R> {
         builder.build()
     }
 
-    /// Creates the in-app window `WebKit` loads the request into, if the quota admits it. Runs
-    /// on the main thread (inside wry's callback), where `build()` creates the window
-    /// synchronously.
+    /// Opens the in-app window `WebKit` loads the request into, if the quota admits it.
     fn open_window(
         self: &Arc<Self>,
         url: &Url,
         features: NewWindowFeatures,
         opening: Opening,
     ) -> NewWindowResponse<R> {
-        let account = self.spec.account;
-        let shown_url = redact_url(url.as_str());
-        if !self.admit_window(&shown_url) {
+        if !self.admit_window(&redact_url(url.as_str()), self.open_windows()) {
             return NewWindowResponse::Deny;
         }
+        match self.create_window(url, features, opening) {
+            Some(window) => NewWindowResponse::Create { window },
+            None => NewWindowResponse::Deny,
+        }
+    }
+
+    /// Creates an in-app window for `url` with the account's dialogs and `window.close()`; logs
+    /// a failure. Runs on the main thread (inside wry's callback), where `build()` creates the
+    /// window synchronously.
+    fn create_window(
+        self: &Arc<Self>,
+        url: &Url,
+        features: NewWindowFeatures,
+        opening: Opening,
+    ) -> Option<WebviewWindow<R>> {
+        let account = self.spec.account;
+        let shown_url = redact_url(url.as_str());
         let label = popup_label(
             account,
             self.popup_counter.fetch_add(1, Ordering::Relaxed) + 1,
@@ -356,13 +489,13 @@ impl<R: Runtime> LinkPolicy<R> {
                 ));
                 Dialogs::attach(window.as_ref(), &self.logger);
                 watch_close(self.app.clone(), label, &self.logger);
-                NewWindowResponse::Create { window }
+                Some(window)
             }
             Err(error) => {
                 self.logger.log(&format!(
                     "[{account}] cannot open window for {shown_url}: {error}"
                 ));
-                NewWindowResponse::Deny
+                None
             }
         }
     }
@@ -433,6 +566,12 @@ fn watch_close<R: Runtime>(app: AppHandle<R>, label: String, logger: &Logger) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn close_hook_only_records_the_call() {
+        assert!(CLOSE_HOOK.contains("window.close=function(){window.__msgrClosed=true;}"));
+        assert!(!CLOSE_HOOK.contains(".close("));
+    }
 
     #[test]
     fn labels_and_permissions() {

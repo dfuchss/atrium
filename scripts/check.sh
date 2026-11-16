@@ -2,7 +2,7 @@
 # Runs every check the code must pass (also in CI): formatting, the UI build, clippy with the
 # workspace lints (native and wasm, warnings are errors) and the tests.
 #
-# Needs Rust with the wasm32-unknown-unknown target and Trunk (see README "Development").
+# Needs Rust with the wasm32-unknown-unknown target and Trunk (see DEVELOPMENT.md).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

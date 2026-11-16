@@ -6,7 +6,7 @@
 # captures only its window. The regular Atrium installation and its accounts are not touched:
 # the demo bundle has its own bundle id (org.fuchss.atrium.demo), so WebKit data, logs, caches
 # and its WebCrypto Keychain item are separate (no Keychain prompt), and it uses the development
-# hooks described in README.md ("Development"). Everything of the demo id is deleted at the end.
+# hooks described in DEVELOPMENT.md ("Debug options"). Everything of the demo id is deleted at the end.
 #
 # Needs macOS, docker, cargo tauri, trunk, python3, magick (ImageMagick) and Screen Recording
 # permission for the terminal. Ports 8008 and 8080 must be free.

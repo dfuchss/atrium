@@ -54,7 +54,8 @@ tempfile = "3"
 # Clean-code rules for every crate (each opts in with `lints.workspace = true`); thresholds
 # live in clippy.toml. Run everything with scripts/check.sh.
 [workspace.lints.rust]
-unsafe_code = "forbid"
+# Denied, not forbidden: host-tauri expects it once, to edit the environment at start-up.
+unsafe_code = "deny"
 unused = { level = "deny", priority = -1 }
 dead_code = "deny"
 unreachable_pub = "warn"

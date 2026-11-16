@@ -475,6 +475,7 @@ fn builder_with_plugins(dev: &DevHooks) -> tauri::Builder<Wry> {
 }
 
 fn main() {
+    host_tauri::clean_launch_environment();
     // Started as the update helper (see `updater::helper`): swap the bundle, never open a window.
     if let Some(exit_code) = updater::helper::run_if_requested() {
         std::process::exit(exit_code);

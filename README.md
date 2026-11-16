@@ -98,6 +98,7 @@ Known limitations on Linux:
 - The unread count appears as the tray label only where the panel supports it. The launcher badge works only where the desktop supports the Unity launcher API.
 - "Open links in" takes a command name (e.g. `firefox`) instead of an application name.
 - No self-update.
+- *Auto* appearance starts light and follows the desktop's light or dark colour scheme only once it changes while Atrium runs ([tao#1378](https://github.com/tauri-apps/tao/issues/1378)); such a change also overrides Light or Dark ([tao#1382](https://github.com/tauri-apps/tao/issues/1382)). A GTK theme named `*-dark` also keeps pages dark when Light is selected.
 - On Wayland, starting Atrium again may only highlight the running Atrium in the task bar instead of bringing its window to the front.
 - Session cookies are stored unencrypted in the per-account web data folder (mode `0700`): exclude `webdata/` from backups and sync.
 

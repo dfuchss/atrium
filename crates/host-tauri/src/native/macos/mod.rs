@@ -187,6 +187,9 @@ impl Shortcuts {
     pub(crate) fn set_accounts(&self, _model: &MenuModel) {}
 }
 
+/// Nothing in the environment of a macOS launch overrides the settings.
+pub(crate) fn clean_launch_environment() {}
+
 /// Leaves `builder` as it is: started again, macOS activates the running app itself (Launch
 /// Services), and a development instance may run beside it.
 pub(crate) fn guard_single_instance<R: Runtime>(

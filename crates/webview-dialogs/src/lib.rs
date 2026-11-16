@@ -4,8 +4,8 @@
 //! On macOS it also holds the other `WebKit` calls Tauri has no API for: the service view
 //! configuration, reloads from origin and display wakes.
 //!
-//! The only crate of the workspace with `unsafe` code (the macOS glue); every block says why it
-//! is sound.
+//! The macOS glue holds the `unsafe` code of this crate; every block says why it is sound. Besides
+//! it, only the Linux theme of `host-tauri` has `unsafe` code.
 
 #[cfg(target_os = "macos")]
 mod macos;

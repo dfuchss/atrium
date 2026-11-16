@@ -194,7 +194,7 @@ pub struct Snapshot {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
-    /// Follow the macOS appearance.
+    /// Follow the system appearance: macOS, or the desktop's colour scheme on Linux.
     #[default]
     Auto,
     Light,

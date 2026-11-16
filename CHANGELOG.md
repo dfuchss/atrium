@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On Linux, `alert`, `confirm` and `prompt` of service pages show Atrium's own dialogs, as on macOS: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
 - On Linux, the keyboard shortcuts of the macOS menu work with Ctrl: settings, reload, back and forward, zoom (also Ctrl++ and Ctrl with the numeric keypad's +, - and 0), open in browser, close, quit and switching accounts with Ctrl+1 to Ctrl+9
 - On Linux, the *Auto* appearance follows changes of the desktop's light or dark colour scheme while Atrium runs
+- On Linux, Settings > Links > Browser lists the installed browsers to open links in; a browser that is no longer installed falls back to the system default, and mail links open in the default mail app
 - On Linux the settings say tray icon, launcher badge and desktop light or dark setting instead of menu bar, dock badge and macOS
 
 ### Changed

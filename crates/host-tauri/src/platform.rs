@@ -36,7 +36,7 @@ impl<R: Runtime> Platform for TauriHost<R> {
     }
 
     fn open_external(&self, url: &str, browser: Option<&str>) -> PortResult {
-        let result = native::open_url_with(&self.app, url, browser);
+        let result = native::open_url_with(&self.app, url, browser, &self.logger);
         self.logger.log(&format!(
             "open external {} (browser {browser:?}) -> {result:?}",
             redact_url(url)

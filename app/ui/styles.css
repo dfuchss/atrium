@@ -163,6 +163,8 @@ input[type=color] { width: 56px; height: 30px; padding: 2px; border: 1px solid v
 .frow.toggle { cursor: pointer; }
 .fctl .radio { min-height: 26px; }
 .fctl .radio input[type=text] { width: 200px; margin-left: 4px; }
+/* A control that belongs to the radio above it, aligned with the radio's text. */
+.fctl select.indented { margin-left: 23px; max-width: 317px; }
 .fctl code { font-size: 12px; }
 .fctl .icon-row { display: flex; align-items: center; gap: 12px; }
 .fctl .actions { display: flex; gap: 8px; }

@@ -4,12 +4,11 @@ use leptos::prelude::*;
 use protocol::{AfterWake, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand};
 
 use super::app_toggle;
+use super::browser_row::BrowserRow;
 use crate::commands::{send_command, update_settings};
 use crate::platform_texts;
 use crate::update::UpdateSection;
-use crate::widgets::{
-    HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, no_autocorrect, number_options,
-};
+use crate::widgets::{HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, number_options};
 
 #[component]
 pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
@@ -102,15 +101,6 @@ pub(super) fn DockTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     }
 }
 
-const BROWSERS: [&str; 6] = [
-    "Safari",
-    "Firefox",
-    "Google Chrome",
-    "Arc",
-    "Microsoft Edge",
-    "Brave Browser",
-];
-
 #[component]
 pub(super) fn LinksTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     let target = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.link_target));
@@ -132,53 +122,6 @@ pub(super) fn LinksTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             </Row>
             <BrowserRow snapshot=snapshot />
         </div>
-    }
-}
-
-/// System default browser, or a named application.
-#[component]
-fn BrowserRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    let browser = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.browser.clone()));
-    // Draft of the text field: committed on change/blur, never overwritten by snapshots.
-    let draft = RwSignal::new(browser.get_untracked().unwrap_or_default());
-    let commit = move || {
-        let name = draft.get_untracked().trim().to_string();
-        update_settings(snapshot, |settings| {
-            settings.browser = (!name.is_empty()).then_some(name);
-        });
-    };
-    view! {
-        <Row label="Browser" hint="Enter the name of an installed application, e.g. Firefox.">
-            <label class="radio">
-                <input type="radio" name="browser" prop:checked=move || browser.get().is_none()
-                    on:change=move |_| update_settings(snapshot, |settings| settings.browser = None) />
-                <span>"System default browser"</span>
-            </label>
-            <label class="radio">
-                <input type="radio" name="browser" prop:checked=move || browser.get().is_some()
-                    on:change=move |_| {
-                        if draft.get_untracked().trim().is_empty() {
-                            draft.set("Safari".into());
-                        }
-                        commit();
-                    } />
-                <span>"Open links in:"</span>
-                <input
-                    type="text"
-                    list="browsers"
-                    placeholder="Application name"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    autocomplete="off"
-                    prop:value=move || draft.get()
-                    on:input=move |event| draft.set(event_target_value(&event))
-                    on:change=move |_| commit()
-                    use:no_autocorrect />
-                <datalist id="browsers">
-                    {BROWSERS.map(|name| view! { <option value=name></option> }).into_iter().collect_view()}
-                </datalist>
-            </label>
-        </Row>
     }
 }
 

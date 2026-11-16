@@ -4,6 +4,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod desktop;
 mod updates;
 
 use std::path::{Path, PathBuf};
@@ -508,6 +509,7 @@ fn main() {
             service_files::save_service_file,
             service_files::delete_service_file,
             service_files::set_service_file_enabled,
+            desktop::list_browsers,
             updates::update_command,
             updates::get_update_status,
         ])

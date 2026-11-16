@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use domain::ports::{PortError, PortResult};
 use domain::{Bounds, DockBadge, MenuModel};
-use protocol::UI_WEBVIEW;
+use protocol::{BrowserChoice, UI_WEBVIEW};
 use tauri::webview::NewWindowFeatures;
 use tauri::{
     AppHandle, Builder, LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder,
@@ -157,8 +157,14 @@ pub(crate) fn open_url_with<R: Runtime>(
     app: &AppHandle<R>,
     url: &str,
     browser: Option<&str>,
+    _logger: &Logger,
 ) -> PortResult {
     app.opener().open_url(url, browser).map_err(port_err)
+}
+
+/// No list: the settings take the browser's app name as text.
+pub(crate) fn installed_browsers() -> Option<Vec<BrowserChoice>> {
+    None
 }
 
 /// The keyboard shortcuts: the app menu carries them (see `menus`), so there is nothing to add.

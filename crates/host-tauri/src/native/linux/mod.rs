@@ -1,7 +1,7 @@
 //! Linux (`WebKitGTK` 4.1, GTK 3): a web data folder per account, child webviews laid out in a
 //! `gtk::Layout`, and Atrium's own JavaScript dialogs (`dialogs`). A second start hands over to
-//! the running Atrium (`single_instance`). Keyboard shortcuts (`shortcuts`) and the appearance
-//! (`theme`) have a module each.
+//! the running Atrium (`single_instance`). Keyboard shortcuts (`shortcuts`), the browser for
+//! links (`browsers`) and the appearance (`theme`) have a module each.
 //!
 //! Layout: Tauri builds every child webview into the window's vertical `gtk::Box`, where wry
 //! packs it to fill (the views would stack) and cannot move or resize it. So each new child
@@ -28,17 +28,18 @@ use tauri::{
     AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder,
     WebviewWindowBuilder, Window,
 };
-use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 use webkit2gtk::WebViewExt;
 
 use crate::port_err;
 
+mod browsers;
 mod dialogs;
 mod shortcuts;
 mod single_instance;
 mod theme;
 
+pub(crate) use browsers::{installed_browsers, open_url_with};
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
 pub(crate) use shortcuts::Shortcuts;
 pub(crate) use single_instance::guard_single_instance;
@@ -317,15 +318,6 @@ pub(crate) fn prepare_popup(_features: &NewWindowFeatures) {}
 
 /// No wake signal yet: nothing is called.
 pub(crate) fn observe_screens_wake(_on_wake: impl Fn() + Send + Sync + 'static) {}
-
-/// Opens `url` in the program `browser`, or in the default browser.
-pub(crate) fn open_url_with<R: Runtime>(
-    app: &AppHandle<R>,
-    url: &str,
-    browser: Option<&str>,
-) -> PortResult {
-    app.opener().open_url(url, browser).map_err(port_err)
-}
 
 /// Shows the unread count on the launcher icon (Unity launcher API), or clears it; a dot
 /// badge shows nothing.

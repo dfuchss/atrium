@@ -16,8 +16,9 @@
 //! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_screens_wake`],
 //!   [`guard_single_instance`], [`NOTIFICATION_SOUND`], the tray icon and whether an app menu
 //!   is shown; [`Shortcuts`] where there is no app menu to carry them.
-//! - Settings: [`open_url_with`] opens links in the chosen browser; [`clean_launch_environment`]
-//!   removes what the launcher set that would override the theme.
+//! - Settings: [`open_url_with`] opens links in the chosen browser, [`installed_browsers`]
+//!   lists the browsers to choose from; [`clean_launch_environment`] removes what the launcher
+//!   set that would override the theme.
 
 #[cfg(target_os = "linux")]
 mod linux;

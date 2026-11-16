@@ -153,6 +153,12 @@ pub fn guard_single_instance<R: Runtime>(
     native::guard_single_instance(builder, window_label)
 }
 
+/// The installed browsers to choose from for links, or `None` where the platform offers no list
+/// (the browser is then typed by name).
+pub fn installed_browsers() -> Option<Vec<protocol::BrowserChoice>> {
+    native::installed_browsers()
+}
+
 /// Implements all webview-engine and OS ports with Tauri.
 pub struct TauriHost<R: Runtime> {
     app: AppHandle<R>,

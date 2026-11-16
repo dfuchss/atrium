@@ -11,7 +11,7 @@
 
 use std::env;
 
-const GTK_THEME: &str = "GTK_THEME";
+pub(super) const GTK_THEME: &str = "GTK_THEME";
 
 /// Removes the `GTK_THEME` that the GTK hook of the `AppImage` set, so the theme setting
 /// applies; the web processes, started later, inherit the environment without it. A `GTK_THEME`

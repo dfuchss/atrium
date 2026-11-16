@@ -6,11 +6,13 @@
 //!   after every state change. The UI renders the snapshot; it keeps no state of its own
 //!   besides form inputs.
 
+mod desktop;
 mod update;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use desktop::*;
 pub use update::*;
 
 pub const CMD_UI_COMMAND: &str = "ui_command";
@@ -217,7 +219,8 @@ pub struct AppSettings {
     /// Closing the window hides it and keeps services running (macOS default); clicking the
     /// dock icon shows it again. Otherwise closing the window quits.
     pub close_to_background: bool,
-    /// Application used for external links, e.g. "Firefox" or "Safari"; None = system default.
+    /// Application used for external links; None = system default. On macOS its name (e.g.
+    /// "Firefox"), on Linux the desktop entry id of an installed browser (e.g. "firefox.desktop").
     pub browser: Option<String>,
     /// Where links that open a new window go (accounts can override it).
     pub link_target: LinkTarget,

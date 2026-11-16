@@ -3,6 +3,7 @@
 mod account_form;
 mod accounts;
 mod app_tabs;
+mod browser_row;
 mod custom_services;
 mod service_editor;
 mod service_files;

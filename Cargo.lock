@@ -226,7 +226,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "atrium"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "domain",
  "host-tauri",
@@ -245,7 +245,7 @@ dependencies = [
 
 [[package]]
 name = "atrium-ui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "js-sys",
  "leptos",
@@ -1102,7 +1102,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "protocol",
  "regex",
@@ -1834,7 +1834,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "host-tauri"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "domain",
@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "macos-dialogs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "block2",
  "objc2",
@@ -3545,7 +3545,7 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "uuid",
@@ -4408,7 +4408,7 @@ checksum = "ff7589a1859b09232522bb9edf076ca7fcf14ded96685d3fa629db73023ffbb7"
 
 [[package]]
 name = "store-fs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "domain",
  "protocol",
@@ -5353,7 +5353,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 
 [[package]]
 name = "updater"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "plist",
  "protocol",

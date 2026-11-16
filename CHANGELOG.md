@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## 0.2.0
+
 ### Added
 
 - Start asleep in an account's settings keeps a service unloaded when Atrium starts; it loads when you select it

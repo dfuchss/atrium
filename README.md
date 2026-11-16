@@ -164,7 +164,7 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 | `crates/host-tauri` | Adapter: implements the ports on Tauri multi-webview (webviews, notifications, dock badge, tray, menus, links). |
 | `crates/store-fs` | Adapter: atomic JSON store (`accounts.json`). |
 | `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting. |
-| `crates/macos-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, added to the system webview's delegate at runtime. The only crate with `unsafe` code. |
+| `crates/webview-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, with platform-neutral dialog types; on macOS added to the system webview's delegate at runtime. The only crate with `unsafe` code. |
 | `app/src-tauri` | Composition root: window, actor thread, Tauri commands. |
 | `app/ui` | Sidebar and settings in [Leptos](https://leptos.dev/) (CSR, built with Trunk). |
 | `services/*.toml` | Built-in service definitions. |

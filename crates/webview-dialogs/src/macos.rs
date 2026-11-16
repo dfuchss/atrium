@@ -1,5 +1,5 @@
-//! Native `alert`, `confirm` and `prompt` for pages in service webviews and the windows they
-//! open.
+//! macOS (`WKWebView`): native `alert`, `confirm` and `prompt` for pages in service webviews
+//! and the windows they open.
 //!
 //! wry's `WKUIDelegate` class implements none of `WebKit`'s three JavaScript panel methods, so
 //! `WebKit` answers them itself with the defaults (`confirm` -> false). [`install`] adds the
@@ -14,7 +14,7 @@
 //! (the sidebar) keeps its defaults.
 //!
 //! What a dialog shows is decided by the [`DialogHandler`] in safe code (text, suppression, rate
-//! limits); this crate only converts between `WebKit` and `NSAlert`, shown as a sheet on the
+//! limits); this module only converts between `WebKit` and `NSAlert`, shown as a sheet on the
 //! webview's window so the main thread never blocks. `WebKit`'s completion handler is called
 //! exactly once: with the default answer when the dialog is suppressed or its sheet never
 //! completes.
@@ -23,7 +23,7 @@
 //! needs the same Objective-C calls, reports display wakes (`wake`) and reloads webviews from
 //! their origin (`reload`).
 //!
-//! The only crate of the workspace with `unsafe` code; every block says why it is sound.
+//! Every `unsafe` block says why it is sound.
 
 mod configuration;
 mod reload;
@@ -48,65 +48,13 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use objc2_web_kit::{WKFrameInfo, WKWebView};
 use tauri::webview::PlatformWebview;
 
+use crate::{
+    DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
+};
+
 pub use configuration::{forbid_automatic_windows, service_configuration};
 pub use reload::reload_from_origin;
 pub use wake::observe_screens_wake;
-
-/// Which panel the page asked for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DialogKind {
-    Alert,
-    Confirm,
-    Prompt { default_text: String },
-}
-
-/// Origin of the frame that asked, as `WebKit` reports it (the page cannot fake it).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PageOrigin {
-    /// Empty for pages without a host (`about:blank`, `data:`).
-    pub host: String,
-    /// 0 = the scheme's default port.
-    pub port: u16,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DialogRequest {
-    pub kind: DialogKind,
-    pub message: String,
-    pub origin: PageOrigin,
-    /// The tag set with [`tag_webview`] on the asking webview, if any.
-    pub webview_tag: Option<String>,
-}
-
-/// What the panel shows.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DialogText {
-    pub title: String,
-    pub message: String,
-    /// Add the "Prevent this page from creating additional dialogs" checkbox.
-    pub offer_suppression: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Presentation {
-    Show(DialogText),
-    /// Answer with the default (OK for `alert`, false for `confirm`, null for `prompt`).
-    Suppress,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum DialogAnswer {
-    Cancelled,
-    Confirmed,
-    /// The text entered into a `prompt`.
-    Text(String),
-}
-
-/// Decides and observes the dialogs; called on the main thread, so it must not block.
-pub trait DialogHandler: Send + Sync {
-    fn present(&self, request: &DialogRequest) -> Presentation;
-    fn answered(&self, request: &DialogRequest, answer: &DialogAnswer, suppress_further: bool);
-}
 
 #[derive(Debug)]
 pub enum InstallError {

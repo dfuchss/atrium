@@ -11,7 +11,7 @@ use tauri_plugin_autostart::AutoLaunchManager;
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
-use crate::{Input, TauriHost, bring_to_front, icons, port_err, services};
+use crate::{Input, TauriHost, bring_to_front, icons, native, port_err, services};
 
 /// Runs `job` on a new named thread.
 fn spawn_named(name: &str, job: impl FnOnce() + Send + 'static) -> PortResult {
@@ -32,18 +32,11 @@ fn describe_simple_icon(result: &SimpleIconResult) -> String {
 
 impl<R: Runtime> Platform for TauriHost<R> {
     fn set_dock_badge(&self, badge: DockBadge) -> PortResult {
-        let window = self.window()?;
-        match badge {
-            DockBadge::Count(count) if count > 0 => window.set_badge_count(Some(i64::from(count))),
-            DockBadge::Dot => window.set_badge_label(Some("•".to_string())),
-            DockBadge::None | DockBadge::Count(_) => window.set_badge_label(None),
-        }
-        .map_err(port_err)
+        native::set_badge(&self.window()?, badge).map_err(port_err)
     }
 
     fn open_external(&self, url: &str, browser: Option<&str>) -> PortResult {
-        // With a browser this runs `/usr/bin/open -a <browser> -- <url>` and waits for it.
-        let result = self.app.opener().open_url(url, browser).map_err(port_err);
+        let result = native::open_url_with(&self.app, url, browser);
         self.logger.log(&format!(
             "open external {} (browser {browser:?}) -> {result:?}",
             redact_url(url)

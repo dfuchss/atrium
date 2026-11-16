@@ -1,6 +1,6 @@
 //! JavaScript dialogs (`alert`, `confirm`, `prompt`) of the service views and the windows they
 //! open: what the native panel says and when a page gets none. The panels are shown by
-//! `macos_dialogs`, which calls [`DialogHandler`] on the main thread.
+//! `webview_dialogs`, which calls [`DialogHandler`] on the main thread.
 //!
 //! - The title names the account (its sidebar label) and the host of the asking frame, taken
 //!   from `WebKit`'s security origin so a page cannot pose as another.
@@ -17,12 +17,11 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use domain::RateLimiter;
-use macos_dialogs::{
+use protocol::Snapshot;
+use uuid::Uuid;
+use webview_dialogs::{
     DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
 };
-use protocol::Snapshot;
-use tauri::{Runtime, Webview};
-use uuid::Uuid;
 
 use crate::logger::{Logger, now_ms};
 
@@ -92,19 +91,6 @@ pub(crate) fn account_names(snapshot: &Snapshot) -> impl Iterator<Item = (Uuid, 
             display_name(&account.settings.label, &account.service_name),
         )
     })
-}
-
-/// Makes the dialogs of `webview` carry its label (see [`account_of_label`]).
-pub(crate) fn tag_for_dialogs<R: Runtime>(webview: &Webview<R>, logger: &Logger) {
-    let label = webview.label().to_string();
-    let tagged =
-        webview.with_webview(move |platform| macos_dialogs::tag_webview(&platform, &label));
-    if let Err(error) = tagged {
-        logger.log(&format!(
-            "[{}] cannot tag webview for dialogs: {error}",
-            webview.label()
-        ));
-    }
 }
 
 /// Why a dialog gets the default answer instead of being shown.
@@ -202,7 +188,7 @@ fn answer_name(answer: &DialogAnswer) -> String {
     }
 }
 
-/// The `macos_dialogs` handler: applies the [`DialogPolicy`] and logs each dialog, never its
+/// The `webview_dialogs` handler: applies the [`DialogPolicy`] and logs each dialog, never its
 /// message.
 pub(crate) struct TauriDialogHandler {
     pub(crate) policy: SharedDialogPolicy,

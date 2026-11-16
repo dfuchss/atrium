@@ -31,13 +31,22 @@ use tauri::webview::{
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
-use crate::dialogs::tag_for_dialogs;
 use crate::logger::now_ms;
+use crate::native;
 use crate::webviews::popup_labels;
 use crate::{Feed, Logger};
 
 /// Size of windows opened for `LinkTarget::AppWindow`.
 pub(crate) const APP_WINDOW_SIZE: (f64, f64) = (1100.0, 800.0);
+
+/// How an in-app window opens.
+#[derive(Clone, Copy)]
+enum Opening {
+    /// At the size and place the page asked for (a sign-in popup).
+    Requested,
+    /// At [`APP_WINDOW_SIZE`], centred.
+    AppWindow,
+}
 
 /// Effective view policy per account, written by the actor (`set_view_policy`), read in the
 /// new-window and permission callbacks. Missing entry = system browser, no media.
@@ -183,6 +192,15 @@ impl<R: Runtime> LinkPolicy<R> {
         window_title(page_title, page, own_host)
     }
 
+    /// How `url` is described in the log: one of the service's own pages or not.
+    fn kind_of(&self, url: &Url) -> &'static str {
+        if self.spec.is_internal(url) {
+            "internal"
+        } else {
+            "external"
+        }
+    }
+
     pub(crate) fn on_new_window(
         self: &Arc<Self>,
         url: &Url,
@@ -190,43 +208,56 @@ impl<R: Runtime> LinkPolicy<R> {
     ) -> NewWindowResponse<R> {
         let account = self.spec.account;
         let shown_url = redact_url(url.as_str());
-        let kind = if self.spec.is_internal(url) {
-            "internal"
-        } else {
-            "external"
-        };
+        let kind = self.kind_of(url);
         if let Some(size) = features.size() {
             self.logger.log(&format!(
                 "[{account}] new window {shown_url} ({kind}, {}x{}) -> sign-in popup",
                 size.width, size.height
             ));
-            return self.open_window(url, features, None);
+            return self.open_window(url, features, Opening::Requested);
         }
         let policy = policy_of(&self.policies, account);
         if url.host_str().is_some_and(|host| policy.is_app_host(host)) {
             self.logger.log(&format!(
                 "[{account}] new window {shown_url} ({kind}) -> app window (app host)"
             ));
-            return self.open_window(url, features, Some(APP_WINDOW_SIZE));
+            return self.open_window(url, features, Opening::AppWindow);
         }
         match policy.link_target {
-            LinkTarget::SystemBrowser => {
-                self.logger.log(&format!(
-                    "[{account}] new window {shown_url} ({kind}) -> system browser"
-                ));
-                (self.feed)(Input::ExternalLink {
-                    account,
-                    url: url.to_string(),
-                });
-                NewWindowResponse::Deny
-            }
+            LinkTarget::SystemBrowser => self.system_browser(url, features),
             LinkTarget::AppWindow => {
                 self.logger.log(&format!(
                     "[{account}] new window {shown_url} ({kind}) -> app window"
                 ));
-                self.open_window(url, features, Some(APP_WINDOW_SIZE))
+                self.open_window(url, features, Opening::AppWindow)
             }
         }
+    }
+
+    /// Hands `url` to the system browser (through the core).
+    fn open_in_browser(&self, url: &Url) {
+        let account = self.spec.account;
+        self.logger.log(&format!(
+            "[{account}] new window {} ({}) -> system browser",
+            redact_url(url.as_str()),
+            self.kind_of(url)
+        ));
+        (self.feed)(Input::ExternalLink {
+            account,
+            url: url.to_string(),
+        });
+    }
+
+    /// A request without a size: a link for the system browser. macOS tells a sign-in popup's
+    /// size with the request.
+    #[cfg(target_os = "macos")]
+    fn system_browser(
+        self: &Arc<Self>,
+        url: &Url,
+        _features: NewWindowFeatures,
+    ) -> NewWindowResponse<R> {
+        self.open_in_browser(url);
+        NewWindowResponse::Deny
     }
 
     /// True if the account may open another window; logs the refusal otherwise.
@@ -257,7 +288,7 @@ impl<R: Runtime> LinkPolicy<R> {
         self: &Arc<Self>,
         url: &Url,
         features: NewWindowFeatures,
-        size: Option<(f64, f64)>,
+        opening: Opening,
     ) -> NewWindowResponse<R> {
         let account = self.spec.account;
         let shown_url = redact_url(url.as_str());
@@ -272,13 +303,13 @@ impl<R: Runtime> LinkPolicy<R> {
         let title_on_change = Arc::new(PopupTitle::new(self.clone()));
         let title_on_load = title_on_change.clone();
         let blank = Url::parse("about:blank").expect("valid URL");
-        // Like the account's view: `window.open` only from a click (see `macos_dialogs`).
-        macos_dialogs::forbid_automatic_windows(&features.opener().target_configuration);
-        let mut builder = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(blank))
+        // Like the account's view: `window.open` only from a click.
+        native::prepare_popup(&features);
+        let builder = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(blank))
             // Requested size/position and, on macOS, the opener's WKWebViewConfiguration, which
             // WebKit requires for the returned view (it also carries the opener's data store).
-            .window_features(features)
-            .data_store_identifier(self.spec.store_id)
+            .window_features(features);
+        let mut builder = native::isolate_window(builder, self.spec.store_id)
             .title(self.window_title_for("", url))
             .initialization_script(CLOSE_HOOK)
             .on_new_window(move |url, features| popup_policy.on_new_window(&url, features))
@@ -297,7 +328,8 @@ impl<R: Runtime> LinkPolicy<R> {
                 self.logger.clone(),
                 "popup",
             ));
-        if let Some((width, height)) = size {
+        if let Opening::AppWindow = opening {
+            let (width, height) = APP_WINDOW_SIZE;
             builder = builder.inner_size(width, height).center();
         }
         if let Some(user_agent) = &self.spec.user_agent {
@@ -308,7 +340,7 @@ impl<R: Runtime> LinkPolicy<R> {
                 self.logger.log(&format!(
                     "[{account}] opened window {label} for {shown_url}"
                 ));
-                tag_for_dialogs(window.as_ref(), &self.logger);
+                native::attach_dialogs(window.as_ref(), &self.logger);
                 watch_close(self.app.clone(), label, &self.logger);
                 NewWindowResponse::Create { window }
             }

@@ -13,7 +13,7 @@ use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
 
-use crate::{Feed, bring_to_front, graceful_quit};
+use crate::{Feed, bring_to_front, graceful_quit, native};
 
 const ID_SHOW: &str = "show";
 const ID_SETTINGS: &str = "settings";
@@ -35,9 +35,7 @@ const TRAY_ID: &str = "atrium-tray";
 /// Accounts 1 to 9 get the shortcuts Cmd+1 to Cmd+9.
 const ACCOUNT_SHORTCUTS: usize = 9;
 
-/// Monochrome template image (black + alpha); macOS tints it for light/dark menu bars.
 const ABOUT_ICON: &[u8] = include_bytes!("../assets/about-icon.png");
-const TRAY_ICON: &[u8] = include_bytes!("../assets/tray-icon.png");
 
 /// What a menu item does: optionally bring the main window to the front, then feed an input.
 #[derive(Debug, Clone, PartialEq)]
@@ -295,8 +293,8 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::
 
 fn build_tray<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<TrayIcon<R>> {
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(Image::from_bytes(TRAY_ICON)?)
-        .icon_as_template(true)
+        .icon(Image::from_bytes(native::TRAY_ICON)?)
+        .icon_as_template(native::TRAY_ICON_IS_TEMPLATE)
         .tooltip("Atrium")
         .menu(&build_tray_menu(app, model)?)
         .show_menu_on_left_click(true)
@@ -452,6 +450,6 @@ mod tests {
 
     #[test]
     fn tray_icon_is_a_png() {
-        assert!(Image::from_bytes(TRAY_ICON).is_ok());
+        assert!(Image::from_bytes(native::TRAY_ICON).is_ok());
     }
 }

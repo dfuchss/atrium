@@ -1,5 +1,5 @@
 [package]
-name = "macos-dialogs"
+name = "webview-dialogs"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ repository.workspace = true
 authors.workspace = true
 description.workspace = true
 
-[dependencies]
+[target.'cfg(target_os = "macos")'.dependencies]
 tauri.workspace = true
 block2 = "0.6"
 objc2 = "0.6"
@@ -49,7 +49,7 @@ objc2-web-kit = { version = "0.3", default-features = false, features = [
     "WKWebsiteDataStore",
 ] }
 
-# The workspace lints, except that `unsafe_code` is allowed: this crate talks to the
+# The workspace lints, except that `unsafe_code` is allowed: on macOS this crate talks to the
 # Objective-C runtime and AppKit, which no safe binding covers. Keep it in sync with the
 # workspace table in the root Cargo.toml.
 [lints.rust]

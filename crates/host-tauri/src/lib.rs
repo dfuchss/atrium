@@ -12,7 +12,7 @@
 //! thread must never wait on the caller.
 //!
 //! New-window policy: see `links`. JavaScript dialogs: see `dialogs`. Native menus and tray:
-//! see `menus`. Quitting: see [`graceful_quit`].
+//! see `menus`. Quitting: see [`graceful_quit`]. What is specific to macOS: see `native`.
 //!
 //! [`WebviewHost`]: domain::ports::WebviewHost
 //! [`Notifier`]: domain::ports::Notifier
@@ -23,6 +23,7 @@ mod icons;
 mod links;
 mod logger;
 mod menus;
+mod native;
 mod notifications;
 mod platform;
 mod quit;
@@ -33,11 +34,11 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use domain::Input;
 use domain::ports::{PortError, PortResult, UiSink};
+use domain::{Bounds, Input};
 use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
 use tauri::window::Color;
-use tauri::{AppHandle, Emitter, Manager, Runtime, Theme, Window};
+use tauri::{AppHandle, Emitter, Manager, Runtime, Theme, WebviewBuilder, WebviewUrl, Window};
 
 use crate::dialogs::{DialogPolicy, SharedDialogPolicy, TauriDialogHandler, account_names};
 use crate::links::{PopupQuota, ViewPolicies, new_popup_quota};
@@ -71,7 +72,6 @@ pub fn native_theme(theme: protocol::Theme) -> Option<Theme> {
 
 pub use crate::menus::handle_menu_event;
 pub use crate::quit::{graceful_quit, is_quitting};
-pub use crate::webviews::web_process_terminated;
 
 /// Sink for inputs produced by the adapter; must not block.
 pub type Feed = Arc<dyn Fn(Input) + Send + Sync>;
@@ -86,6 +86,44 @@ pub fn bring_to_front<R: Runtime>(window: &Window<R>) -> tauri::Result<()> {
     let shown = window.show();
     let focused = window.set_focus();
     unminimized.and(shown).and(focused)
+}
+
+/// Adds the sidebar (`ui`) webview showing `url` at the left edge of `window`.
+pub fn add_sidebar<R: Runtime>(
+    window: &Window<R>,
+    url: WebviewUrl,
+    width: f64,
+    height: f64,
+) -> tauri::Result<()> {
+    let bounds = Bounds {
+        x: 0.0,
+        y: 0.0,
+        width,
+        height,
+    };
+    native::add_child(window, WebviewBuilder::new(UI_WEBVIEW, url), bounds)?;
+    Ok(())
+}
+
+/// Shows a modal warning with an OK button on the main thread (inline when called there),
+/// e.g. before the main window exists.
+pub fn show_warning<R: Runtime>(app: &AppHandle<R>, title: &str, text: &str) -> tauri::Result<()> {
+    native::show_warning(app, title, text)
+}
+
+/// Calls `on_wake` each time the displays wake, until the app exits.
+pub fn observe_screens_wake(on_wake: impl Fn() + Send + Sync + 'static) {
+    native::observe_screens_wake(on_wake);
+}
+
+/// Has the core reload a service view whose web content process ended; other webviews are
+/// reloaded in place.
+#[cfg(target_os = "macos")]
+pub fn register_crash_hook<R: Runtime>(
+    builder: tauri::Builder<R>,
+    feed: &Feed,
+) -> tauri::Builder<R> {
+    native::register_crash_hook(builder, feed)
 }
 
 /// Implements all webview-engine and OS ports with Tauri.
@@ -149,28 +187,13 @@ impl<R: Runtime> TauriHost<R> {
 
     /// Makes `alert`, `confirm` and `prompt` of the service views show native panels. Call it
     /// once the sidebar webview exists and before the first service view is created (see
-    /// `macos_dialogs::install`); without it the pages get the default answers.
+    /// `native::install_dialogs`); without it the pages get the default answers.
     pub fn install_dialogs(&self) {
-        let Some(sidebar) = self.app.get_webview(UI_WEBVIEW) else {
-            self.logger
-                .log("JavaScript dialogs unavailable: no sidebar webview yet");
-            return;
-        };
         let handler = Arc::new(TauriDialogHandler {
             policy: self.dialogs.clone(),
             logger: self.logger.clone(),
         });
-        let logger = self.logger.clone();
-        let scheduled = sidebar.with_webview(move |platform| {
-            match macos_dialogs::install(&platform, handler) {
-                Ok(()) => logger.log("JavaScript dialogs installed"),
-                Err(error) => logger.log(&format!("JavaScript dialogs unavailable: {error}")),
-            }
-        });
-        if let Err(error) = scheduled {
-            self.logger
-                .log(&format!("JavaScript dialogs unavailable: {error}"));
-        }
+        native::install_dialogs(&self.app, handler, &self.logger);
     }
 
     /// File the host logger appends to (`<app_log_dir>/atrium.log`), if available.

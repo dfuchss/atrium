@@ -230,7 +230,6 @@ version = "0.2.0"
 dependencies = [
  "domain",
  "host-tauri",
- "macos-dialogs",
  "protocol",
  "serde_json",
  "store-fs",
@@ -1838,7 +1837,6 @@ version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "domain",
- "macos-dialogs",
  "protocol",
  "tauri",
  "tauri-plugin-autostart",
@@ -1848,6 +1846,7 @@ dependencies = [
  "ureq",
  "url",
  "uuid",
+ "webview-dialogs",
 ]
 
 [[package]]
@@ -2619,18 +2618,6 @@ dependencies = [
  "objc2-foundation",
  "time",
  "uuid",
-]
-
-[[package]]
-name = "macos-dialogs"
-version = "0.2.0"
-dependencies = [
- "block2",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "objc2-web-kit",
- "tauri",
 ]
 
 [[package]]
@@ -5702,6 +5689,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7265c9301c16a8711c992c2d8da90ee77ef54b1ed51482d6dfeb00dc756b1297"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "webview-dialogs"
+version = "0.2.0"
+dependencies = [
+ "block2",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
+ "tauri",
 ]
 
 [[package]]

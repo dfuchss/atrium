@@ -15,13 +15,12 @@ use domain::ports::{Platform, Store};
 use domain::runtime::{Ports, StartupLoad, apply};
 use domain::{Catalog, Core, Effect, Input, Persisted};
 use host_tauri::{Feed, TauriHost};
-use macos_dialogs::MainThreadMarker;
-use protocol::{AppInfo, AppSettings, Snapshot, UI_WEBVIEW, UiCommand};
+use protocol::{AppInfo, AppSettings, Snapshot, UiCommand};
 use store_fs::FsStore;
 use tauri::window::WindowBuilder;
 use tauri::{
-    App, AppHandle, LogicalPosition, LogicalSize, Manager, RunEvent, State, Theme, TitleBarStyle,
-    WebviewBuilder, WebviewUrl, Window, WindowEvent, Wry,
+    App, AppHandle, LogicalSize, Manager, RunEvent, State, Theme, WebviewUrl, Window, WindowEvent,
+    Wry,
 };
 use tauri_plugin_autostart::MacosLauncher;
 
@@ -132,15 +131,11 @@ fn load_persisted(store: &dyn Store, log: &dyn Platform) -> StartupLoad {
 /// inline: its modal loop holds the start until the user confirms, before the (empty) window
 /// exists, which is intended.
 fn show_unreadable_settings_alert(app: &AppHandle) {
-    let shown = app.run_on_main_thread(|| {
-        if let Some(main_thread) = MainThreadMarker::new() {
-            macos_dialogs::show_warning(
-                main_thread,
-                "Atrium cannot read its settings",
-                "Your accounts could not be loaded, so Atrium started empty. Changes made in this session will not be saved, and your saved accounts stay untouched. Quit and check the permissions of accounts.json, then start Atrium again.",
-            );
-        }
-    });
+    let shown = host_tauri::show_warning(
+        app,
+        "Atrium cannot read its settings",
+        "Your accounts could not be loaded, so Atrium started empty. Changes made in this session will not be saved, and your saved accounts stay untouched. Quit and check the permissions of accounts.json, then start Atrium again.",
+    );
     // The alert is a courtesy; the log already holds the reason.
     drop(shown);
 }
@@ -186,6 +181,7 @@ fn run_actor(mut core: Core, inputs: Receiver<Input>, ports: &Ports<'_>, cache: 
 }
 
 /// Shows, unminimizes and focuses the main window (dock icon click while hidden).
+#[cfg(target_os = "macos")]
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_window(MAIN_WINDOW) {
         // Nothing sensible to do if the window cannot come to the front.
@@ -216,14 +212,16 @@ fn config_dir(app: &App, dev: &DevHooks, host: &TauriHost<Wry>) -> tauri::Result
     }
 }
 
-/// Transparent title bar without a title: it shows the window background (the sidebar color)
-/// instead of a lighter strip. Not Overlay: the content view stays below the title bar, so the
-/// services' top-edge controls keep working.
+/// On macOS a transparent title bar without a title: it shows the window background (the
+/// sidebar color) instead of a lighter strip. Not Overlay: the content view stays below the
+/// title bar, so the services' top-edge controls keep working.
 fn build_main_window(app: &App, dev: &DevHooks, start_hidden: bool) -> tauri::Result<Window> {
-    let mut builder = WindowBuilder::new(app, MAIN_WINDOW)
-        .title("Atrium")
-        .title_bar_style(TitleBarStyle::Transparent)
-        .hidden_title(true)
+    let builder = WindowBuilder::new(app, MAIN_WINDOW).title("Atrium");
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Transparent)
+        .hidden_title(true);
+    let mut builder = builder
         .inner_size(1280.0, 800.0)
         .min_inner_size(600.0, 400.0)
         .visible(!start_hidden)
@@ -236,16 +234,6 @@ fn build_main_window(app: &App, dev: &DevHooks, start_hidden: bool) -> tauri::Re
         window.theme().unwrap_or(Theme::Light),
     )))?;
     Ok(window)
-}
-
-/// Adds the sidebar (`ui`) webview at the left edge of `window`.
-fn add_sidebar(window: &Window, dev: &DevHooks, width: f64, height: f64) -> tauri::Result<()> {
-    window.add_child(
-        WebviewBuilder::new(UI_WEBVIEW, dev.ui_url()),
-        LogicalPosition::new(0.0, 0.0),
-        LogicalSize::new(width, height),
-    )?;
-    Ok(())
 }
 
 /// Feeds a tick every second (drives polling, hibernation and sleep detection).
@@ -263,7 +251,7 @@ fn spawn_ticker(feed: Feed) -> std::io::Result<()> {
 
 /// Feeds each display wake; the core handles the views only if the Mac slept before.
 fn observe_screens_wake(feed: Feed) {
-    macos_dialogs::observe_screens_wake(move || feed(Input::ScreensWoke { now_ms: now_ms() }));
+    host_tauri::observe_screens_wake(move || feed(Input::ScreensWoke { now_ms: now_ms() }));
 }
 
 fn feed_resize(feed: &Feed, size: LogicalSize<f64>) {
@@ -355,9 +343,9 @@ fn build_window_with_sidebar(
     let size = window
         .inner_size()?
         .to_logical::<f64>(window.scale_factor()?);
-    add_sidebar(
+    host_tauri::add_sidebar(
         &window,
-        dev,
+        dev.ui_url(),
         app_settings.icon_size.sidebar_width(),
         size.height,
     )?;
@@ -455,9 +443,10 @@ fn main() {
     });
     let snapshot_cache = Arc::new(Mutex::new(Snapshot::default()));
     let (menu_feed, setup_feed, setup_cache) = (feed.clone(), feed.clone(), snapshot_cache.clone());
-    let terminate_feed = feed.clone();
+    #[cfg(target_os = "macos")]
+    let crash_feed = feed.clone();
 
-    let app = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(
@@ -484,16 +473,18 @@ fn main() {
         // App menu and tray menu items (built by the host from the core's menu model).
         .on_menu_event(move |app, event| {
             host_tauri::handle_menu_event(app, MAIN_WINDOW, event.id().as_ref(), &menu_feed);
-        })
-        // A view whose web content process died is reloaded through the core.
-        .on_web_content_process_terminate(move |webview| {
-            host_tauri::web_process_terminated(webview, &terminate_feed);
-        })
+        });
+    // A view whose web content process died is reloaded through the core (Tauri has this hook
+    // on macOS only).
+    #[cfg(target_os = "macos")]
+    let builder = host_tauri::register_crash_hook(builder, &crash_feed);
+    let app = builder
         .setup(move |app| setup(app, &setup_feed, inputs, &setup_cache))
         .build(context)
         .expect("error while building Atrium");
     app.run(|app, event| match event {
         // Dock icon click: bring a hidden (closed to background / started hidden) window back.
+        #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => show_main_window(app),
         // "Restart and update": the helper swaps the bundle once this process is gone.
         RunEvent::Exit => updates::launch_pending_helper(app),
@@ -521,7 +512,7 @@ mod tests {
         assert!(capability.get("windows").is_none());
         assert_eq!(
             capability["webviews"],
-            serde_json::json!([super::UI_WEBVIEW])
+            serde_json::json!([protocol::UI_WEBVIEW])
         );
     }
 }

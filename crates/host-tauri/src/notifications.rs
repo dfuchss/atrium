@@ -9,12 +9,7 @@ use tauri::Runtime;
 use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
-use crate::{Input, TauriHost, port_err};
-
-/// Sound name that makes `NSUserNotification` play the user's default notification sound
-/// (mac-notification-sys maps exactly this string to `NSUserNotificationDefaultSoundName`;
-/// other strings are looked up as named system sounds, unknown names play nothing).
-const DEFAULT_SOUND: &str = "NSUserNotificationDefaultSoundName";
+use crate::{Input, TauriHost, native, port_err};
 
 /// Native notifications remembered for click routing; older ones are forgotten.
 const MAX_TRACKED_NOTIFICATIONS: u16 = 512;
@@ -88,7 +83,7 @@ impl<R: Runtime> Notifier for TauriHost<R> {
             .title(&request.title)
             .body(&request.body);
         if request.sound {
-            builder = builder.sound(DEFAULT_SOUND);
+            builder = builder.sound(native::NOTIFICATION_SOUND);
         }
         builder.show().map_err(port_err)
     }

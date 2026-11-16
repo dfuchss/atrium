@@ -12,7 +12,6 @@ domain.workspace = true
 protocol.workspace = true
 store-fs.workspace = true
 host-tauri.workspace = true
-macos-dialogs.workspace = true
 updater.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }

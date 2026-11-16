@@ -154,8 +154,11 @@ fn AddAccountForm(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                 </Row>
             })}
             <Row label="">
-                <button class="btn primary" type="submit" disabled=move || current().is_none()>"Add"</button>
-                {move || added.get().map(|added_label| view! { <span class="added-note">{format!("Added {added_label}")}</span> })}
+                // Beside the button: below it, the note would grow the row while it shows.
+                <div class="actions">
+                    <button class="btn primary" type="submit" disabled=move || current().is_none()>"Add"</button>
+                    {move || added.get().map(|added_label| view! { <span class="added-note">{format!("Added {added_label}")}</span> })}
+                </div>
             </Row>
         </form>
     }

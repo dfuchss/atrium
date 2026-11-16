@@ -120,7 +120,7 @@ code { font: 12px ui-monospace, "SF Mono", Menlo, monospace; user-select: text; 
 .moon-mark { position: absolute; bottom: -.15em; right: max(0px, calc((var(--sidebar) - var(--icon)) / 2 - 3px)); font-size: max(10px, calc(var(--icon) * .3)); line-height: 1.3; padding: 1px; overflow: hidden; z-index: 1; pointer-events: none; }
 .icon.has-img { background: none; border-radius: 11px; overflow: hidden; padding: 0; }
 .icon.has-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.added-note { margin-left: 10px; color: #16a34a; font-size: 12px; }
+.added-note { align-self: center; margin-left: 2px; color: #16a34a; font-size: 12px; }
 .icon.small.has-img { border-radius: 8px; }
 .sidebar .icon.has-img, .acct:hover .icon.has-img, .acct.active .icon.has-img, .acct.dragged .icon.has-img { border-radius: calc(var(--icon) * .25); }
 .icon.glyph { overflow: hidden; }

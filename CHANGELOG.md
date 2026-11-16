@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - A woken account no longer keeps a small yellow remnant of its sleeping moon on the sidebar icon on macOS
+- The *Added* note after adding an account appears beside the *Add* button instead of below it, so the settings no longer jump
 
 ## 0.2.0
 

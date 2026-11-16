@@ -7,9 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Atrium runs on Linux (WebKitGTK 4.1) when built from source; each account keeps its web data in a folder of its own
+
 ### Changed
 
 - **Breaking:** the `safari` user agent preset is renamed `webkit`: services and accounts that set `user_agent = "safari"` must use `"webkit"`
+- On Linux the WebKit and Chrome presets report a Linux platform
 - New app icon: an atrium courtyard with arched walls around a lit floor
 
 ### Fixed

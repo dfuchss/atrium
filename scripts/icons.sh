@@ -6,7 +6,8 @@
 #
 #   atrium.svg         free-standing hexagon: Linux/general PNGs, About panel source, .ico (64+)
 #   atrium-macos.svg   hexagon on the navy macOS squircle: icon.icns, About panel
-#   atrium-small.svg   simplified hexagon for 16-32 px (also composed onto the squircle for icns)
+#   atrium-small.svg   simplified hexagon for 16-32 px (also composed onto the squircle for icns,
+#                      and the Linux tray icon)
 #   atrium-tray.svg    monochrome menu-bar template icon (black on transparent)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -67,5 +68,7 @@ magick "$TMP"/ico-16.png "$TMP"/ico-24.png "$TMP"/ico-32.png "$TMP"/ico-48.png \
 render "$SRC/atrium-macos.svg" 512 "$ASSETS/about-icon.png"
 render "$SRC/atrium-tray.svg" 44 "$ASSETS/tray-icon.png"
 cp "$SRC/atrium-tray.svg" "$ASSETS/tray-icon.svg"
+# Linux tray icon in colour (panels do not tint it), shown at about 22 px: the small variant.
+render "$SRC/atrium-small.svg" 64 "$ASSETS/tray-icon-linux.png"
 
 echo "icons regenerated"

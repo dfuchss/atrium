@@ -78,7 +78,7 @@ fn App() -> impl IntoView {
     connect(set_snapshot, open_dialog);
     provide_context(Dispatch(set_snapshot));
     provide_context(ui_state);
-    let (update_status, set_update_status) = signal(protocol::UpdateStatus::default());
+    let (update_status, set_update_status) = signal(None::<protocol::UpdateStatus>);
     update::connect_updates(set_update_status);
     provide_context(update::UpdateStatusSignal(update_status));
 

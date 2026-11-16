@@ -17,9 +17,10 @@ impl Core {
         let url = service
             .resolve_url(instance)
             .map_err(|error| format!("account {}: {error}", account.id))?;
+        let platform = &self.user_agent_platform;
         let user_agent = match &account.user_agent {
-            Some(preset) => crate::catalog::resolve_user_agent_preset(Some(preset)),
-            None => service.resolve_user_agent(),
+            Some(preset) => crate::catalog::resolve_user_agent_preset(Some(preset), platform),
+            None => service.resolve_user_agent(platform),
         };
         Ok(ViewSpec {
             account: account.id,

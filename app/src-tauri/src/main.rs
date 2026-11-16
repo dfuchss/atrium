@@ -6,7 +6,7 @@
 
 mod updates;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -352,6 +352,23 @@ fn build_window_with_sidebar(
     Ok((window, size))
 }
 
+/// The facts of the About section.
+fn app_info(
+    host: &TauriHost<Wry>,
+    version: String,
+    config_dir: &Path,
+    services_dir: &Path,
+) -> AppInfo {
+    AppInfo {
+        version,
+        config_dir: config_dir.display().to_string(),
+        services_dir: services_dir.display().to_string(),
+        log_file: host
+            .log_file()
+            .map_or_default(|path| path.display().to_string()),
+    }
+}
+
 /// Builds the window, the host and the core, starts the actor, the ticker and the screen wake
 /// observer, and feeds `Input::Started`. The host only needs the window lazily, so it can log
 /// while loading the settings that decide how the window is created.
@@ -396,17 +413,15 @@ fn setup(
     // Needs the sidebar webview and must precede the service views: see `install_dialogs`.
     host.install_dialogs();
 
-    let mut core = Core::new(Catalog::builtin(), persisted, Box::new(uuid::Uuid::new_v4));
+    let mut core = Core::new(
+        Catalog::builtin(),
+        persisted,
+        Box::new(uuid::Uuid::new_v4),
+        host_tauri::user_agent_platform(),
+    );
     core.set_user_services(user_defs, user_errors);
     core.set_log_page_titles(dev.log_titles);
-    core.set_app_info(AppInfo {
-        version,
-        config_dir: config_dir.display().to_string(),
-        services_dir: services_dir.display().to_string(),
-        log_file: host
-            .log_file()
-            .map_or_default(|path| path.display().to_string()),
-    });
+    core.set_app_info(app_info(&host, version, &config_dir, &services_dir));
     *snapshot_cache
         .lock()
         .unwrap_or_else(PoisonError::into_inner) = core.snapshot();
@@ -436,6 +451,7 @@ fn main() {
         std::process::exit(exit_code);
     }
     let context = tauri::generate_context!();
+    host_tauri::set_app_id(&context.config().identifier);
     let (sender, inputs) = mpsc::channel::<Input>();
     let feed: Feed = Arc::new(move |input| {
         // Fails only after the actor is gone (app shutting down).

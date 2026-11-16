@@ -2,7 +2,8 @@
 //! updater runs beside the core, not inside it.
 //!
 //! - UI -> backend: Tauri command [`CMD_UPDATE_COMMAND`] with argument `{ command: UpdateCommand }`.
-//! - UI initial load: Tauri command [`CMD_GET_UPDATE_STATUS`] returns an [`UpdateStatus`].
+//! - UI initial load: Tauri command [`CMD_GET_UPDATE_STATUS`] returns an `Option<UpdateStatus>`
+//!   (`None`: this build has no updater).
 //! - backend -> UI: event [`EVENT_UPDATE_STATUS`] (payload [`UpdateStatus`]) after every change.
 
 use serde::{Deserialize, Serialize};

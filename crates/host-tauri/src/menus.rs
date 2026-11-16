@@ -291,20 +291,43 @@ fn build_tray_menu<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::
         .build()
 }
 
-fn build_tray<R: Runtime>(app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<TrayIcon<R>> {
+fn build_tray<R: Runtime>(app: &AppHandle<R>, menu: &Menu<R>) -> tauri::Result<TrayIcon<R>> {
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(native::TRAY_ICON)?)
         .icon_as_template(native::TRAY_ICON_IS_TEMPLATE)
         .tooltip("Atrium")
-        .menu(&build_tray_menu(app, model)?)
+        .menu(menu)
         .show_menu_on_left_click(true)
         .build(app)
+}
+
+/// Gives `tray` the items of `fresh`: as its new menu or, where a tray keeps its first menu
+/// (see `native::TRAY_MENU_REPLACEABLE`), as the new items of that menu, `current`.
+fn replace_tray_menu<R: Runtime>(
+    tray: &TrayIcon<R>,
+    current: Option<&Menu<R>>,
+    fresh: Menu<R>,
+) -> tauri::Result<()> {
+    match current {
+        Some(current) if !native::TRAY_MENU_REPLACEABLE => {
+            for item in current.items()? {
+                current.remove(&item)?;
+            }
+            for item in fresh.items()? {
+                current.append(&item)?;
+            }
+            Ok(())
+        }
+        _ => tray.set_menu(Some(fresh)),
+    }
 }
 
 /// Live native menu state kept by the host.
 pub(crate) struct MenuState<R: Runtime> {
     last: Option<MenuModel>,
     tray: Option<TrayIcon<R>>,
+    /// The menu the tray was built with.
+    tray_menu: Option<Menu<R>>,
 }
 
 impl<R: Runtime> Default for MenuState<R> {
@@ -312,6 +335,7 @@ impl<R: Runtime> Default for MenuState<R> {
         MenuState {
             last: None,
             tray: None,
+            tray_menu: None,
         }
     }
 }
@@ -320,9 +344,11 @@ impl<R: Runtime> MenuState<R> {
     /// Applies `model`, rebuilding only what changed.
     pub(crate) fn apply(&mut self, app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<()> {
         let last = self.last.take();
-        if last
-            .as_ref()
-            .is_none_or(|last| app_menu_key(last) != app_menu_key(model))
+        // Without an app menu (Linux), Settings and Quit stay reachable from the tray.
+        if native::USES_APP_MENU
+            && last
+                .as_ref()
+                .is_none_or(|last| app_menu_key(last) != app_menu_key(model))
         {
             app.set_menu(build_app_menu(app, model)?)?;
         }
@@ -340,9 +366,11 @@ impl<R: Runtime> MenuState<R> {
     ) -> tauri::Result<()> {
         match (&self.tray, model.show_tray) {
             (None, true) => {
-                let tray = build_tray(app, model)?;
+                let menu = build_tray_menu(app, model)?;
+                let tray = build_tray(app, &menu)?;
                 tray.set_title(tray_title(model))?;
                 self.tray = Some(tray);
+                self.tray_menu = Some(menu);
             }
             (Some(tray), true) => {
                 let shown_before = last.filter(|last| last.show_tray);
@@ -350,7 +378,8 @@ impl<R: Runtime> MenuState<R> {
                     tray.set_visible(true)?;
                 }
                 if shown_before.is_none_or(|last| tray_menu_key(last) != tray_menu_key(model)) {
-                    tray.set_menu(Some(build_tray_menu(app, model)?))?;
+                    let fresh = build_tray_menu(app, model)?;
+                    replace_tray_menu(tray, self.tray_menu.as_ref(), fresh)?;
                 }
                 if shown_before.is_none_or(|last| last.tray_title != model.tray_title) {
                     tray.set_title(tray_title(model))?;

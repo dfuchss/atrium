@@ -11,8 +11,9 @@
 //! Blocking calls (`add_child`, menu and tray building) wait for the main thread, so the main
 //! thread must never wait on the caller.
 //!
-//! New-window policy: see `links`. JavaScript dialogs: see `dialogs`. Native menus and tray:
-//! see `menus`. Quitting: see [`graceful_quit`]. What is specific to macOS: see `native`.
+//! New-window policy: see `links`. JavaScript dialogs: see `dialogs`. Native menus and
+//! tray: see `menus`. Quitting: see [`graceful_quit`]. What differs between macOS and Linux:
+//! see `native`.
 //!
 //! [`WebviewHost`]: domain::ports::WebviewHost
 //! [`Notifier`]: domain::ports::Notifier
@@ -58,6 +59,17 @@ pub fn window_background(theme: Theme) -> Color {
     } else {
         SIDEBAR_BG_LIGHT
     }
+}
+
+/// Names the app `identifier` for the desktop, so it matches the windows to Atrium's desktop
+/// entry (Linux). Call it before the app is built.
+pub fn set_app_id(identifier: &str) {
+    native::set_app_id(identifier);
+}
+
+/// The host's part of the user agent presets (see `domain::catalog::webkit_user_agent`).
+pub fn user_agent_platform() -> String {
+    native::user_agent_platform()
 }
 
 /// The native appearance for a theme setting; `None` follows the system.
@@ -185,9 +197,10 @@ impl<R: Runtime> TauriHost<R> {
         self
     }
 
-    /// Makes `alert`, `confirm` and `prompt` of the service views show native panels. Call it
-    /// once the sidebar webview exists and before the first service view is created (see
-    /// `native::install_dialogs`); without it the pages get the default answers.
+    /// Makes `alert`, `confirm` and `prompt` of the service views show native panels on macOS
+    /// (`WebKitGTK` shows its own). Call it once the sidebar webview exists and before the first
+    /// service view is created (see `native::install_dialogs`); without it the pages get the
+    /// default answers.
     pub fn install_dialogs(&self) {
         let handler = Arc::new(TauriDialogHandler {
             policy: self.dialogs.clone(),

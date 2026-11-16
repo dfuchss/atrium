@@ -86,7 +86,10 @@ fn custom_service_account_uses_its_definition() {
     let (spec, _) = views(&effects)[0];
     assert_eq!(spec.url.as_str(), "https://chat.example.org/app");
     assert_eq!(spec.internal_hosts, vec!["chat.example.org"]);
-    assert_eq!(spec.user_agent.as_deref(), Some(crate::catalog::UA_WEBKIT));
+    assert_eq!(
+        spec.user_agent,
+        Some(crate::catalog::webkit_user_agent(UA_PLATFORM))
+    );
     // title unread with the default regex
     let effects = core.handle(Input::TitleChanged {
         account: id(101),
@@ -165,7 +168,12 @@ fn custom_services_loaded_from_persisted() {
         custom_services: vec![bad, good],
         ..Default::default()
     };
-    let mut core = Core::new(Catalog::builtin(), persisted, Box::new(|| id(5)));
+    let mut core = Core::new(
+        Catalog::builtin(),
+        persisted,
+        Box::new(|| id(5)),
+        UA_PLATFORM.into(),
+    );
     let effects = core.handle(Input::Started {
         width: 800.0,
         height: 600.0,

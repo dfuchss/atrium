@@ -5,11 +5,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use protocol::{EVENT_UPDATE_STATUS, UI_WEBVIEW, UpdateCommand, UpdateStatus};
-use tauri::{App, AppHandle, Emitter, Manager, State, Wry};
+use tauri::{App, AppHandle, Emitter, Manager, Wry};
 use tauri_plugin_opener::OpenerExt;
 use updater::{GitHubSource, LogSink, Updater, UpdaterAction, UpdaterConfig, Version};
 
-/// The updater as Tauri state.
+/// Whether this build updates itself. Linux self-update comes later.
+pub(crate) const SELF_UPDATE: bool = cfg!(target_os = "macos");
+
+/// The updater as Tauri state; absent when [`SELF_UPDATE`] is off.
 pub(crate) struct UpdaterState(Updater);
 
 #[tauri::command]
@@ -17,11 +20,10 @@ pub(crate) struct UpdaterState(Updater);
     clippy::needless_pass_by_value,
     reason = "Tauri commands receive their arguments by value"
 )]
-pub(crate) fn update_command(
-    app: AppHandle,
-    state: State<'_, UpdaterState>,
-    command: UpdateCommand,
-) {
+pub(crate) fn update_command(app: AppHandle, command: UpdateCommand) {
+    let Some(state) = app.try_state::<UpdaterState>() else {
+        return;
+    };
     match state.0.handle(&command) {
         UpdaterAction::None => {}
         UpdaterAction::Quit => host_tauri::graceful_quit(&app),
@@ -36,12 +38,17 @@ pub(crate) fn update_command(
     clippy::needless_pass_by_value,
     reason = "Tauri commands receive their arguments by value"
 )]
-pub(crate) fn get_update_status(state: State<'_, UpdaterState>) -> UpdateStatus {
-    state.0.status()
+pub(crate) fn get_update_status(app: AppHandle) -> Option<UpdateStatus> {
+    app.try_state::<UpdaterState>()
+        .map(|state| state.0.status())
 }
 
-/// Creates the updater (state in `data_dir`), registers it with the app and starts it.
+/// Creates the updater (state in `data_dir`), registers it with the app and starts it; does
+/// nothing when [`SELF_UPDATE`] is off.
 pub(crate) fn start(app: &App, data_dir: PathBuf, log: LogSink) -> std::io::Result<()> {
+    if !SELF_UPDATE {
+        return Ok(());
+    }
     let version = app.package_info().version.to_string();
     let config = UpdaterConfig {
         current_version: Version::parse(&version),

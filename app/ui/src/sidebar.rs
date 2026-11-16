@@ -401,7 +401,9 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
 fn SidebarTools(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     let dnd = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.dnd));
     let UpdateStatusSignal(update_status) = expect_context::<UpdateStatusSignal>();
-    let has_update = Memo::new(move |_| update_status.with(UpdateStatus::has_update));
+    let has_update = Memo::new(move |_| {
+        update_status.with(|status| status.as_ref().is_some_and(UpdateStatus::has_update))
+    });
     view! {
         <div class="bottom">
             <button class="tool" title="Add account" on:click=move |_| open_dialog(Tab::Accounts, true)><Icon svg=ICON_PLUS /></button>

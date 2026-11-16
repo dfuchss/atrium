@@ -213,8 +213,8 @@ fn user_agent_override() {
         views(&effects)[0].0.user_agent.clone()
     };
     assert_eq!(
-        ua(&mut core, Some("chrome")).as_deref(),
-        Some(crate::catalog::UA_CHROME)
+        ua(&mut core, Some("chrome")),
+        Some(crate::catalog::chrome_user_agent(UA_PLATFORM))
     );
     assert_eq!(ua(&mut core, Some("default")), None);
     assert_eq!(ua(&mut core, Some(" Foo/1 ")).as_deref(), Some("Foo/1"));
@@ -238,8 +238,8 @@ fn update_account_before_start_does_not_recreate() {
         height: 600.0,
     });
     assert_eq!(
-        views(&effects)[0].0.user_agent.as_deref(),
-        Some(crate::catalog::UA_CHROME)
+        views(&effects)[0].0.user_agent,
+        Some(crate::catalog::chrome_user_agent(UA_PLATFORM))
     );
 }
 
@@ -281,8 +281,8 @@ fn settings_of_hibernated_account_apply_on_next_load() {
     assert_eq!(core.account(id(2)).unwrap().hibernate_after_min, Some(0));
     let effects = core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
     assert_eq!(
-        views(&effects)[0].0.user_agent.as_deref(),
-        Some(crate::catalog::UA_CHROME)
+        views(&effects)[0].0.user_agent,
+        Some(crate::catalog::chrome_user_agent(UA_PLATFORM))
     );
     assert!(has(
         &effects,
@@ -314,7 +314,12 @@ fn theme_defaults_to_auto_and_is_applied_at_start() {
 fn persisted_theme_is_applied_at_start() {
     let mut persisted = Persisted::default();
     persisted.settings.app.theme = Theme::Dark;
-    let mut core = Core::new(Catalog::builtin(), persisted, Box::new(Uuid::new_v4));
+    let mut core = Core::new(
+        Catalog::builtin(),
+        persisted,
+        Box::new(Uuid::new_v4),
+        UA_PLATFORM.into(),
+    );
     let effects = core.handle(Input::Started {
         width: 1000.0,
         height: 600.0,

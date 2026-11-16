@@ -6,6 +6,9 @@ use protocol::{
     AccountSettings, AfterWake, CustomService, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme,
 };
 
+/// The host's part of the user agent presets in the tests.
+const UA_PLATFORM: &str = "X11; Linux x86_64";
+
 mod accounts;
 mod hibernation;
 mod icons;
@@ -38,7 +41,7 @@ fn core_with(accounts: Vec<Account>) -> Core {
         accounts,
         ..Default::default()
     };
-    Core::new(Catalog::builtin(), persisted, gen_id)
+    Core::new(Catalog::builtin(), persisted, gen_id, UA_PLATFORM.into())
 }
 
 fn started(accounts: Vec<Account>) -> (Core, Vec<Effect>) {

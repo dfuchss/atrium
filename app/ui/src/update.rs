@@ -6,20 +6,21 @@ use protocol::{UpdateCommand, UpdateState, UpdateStatus};
 use crate::widgets::{Row, Toggle};
 use crate::{query, tauri};
 
-/// The updater's status, provided as context. It stays at its default in the browser demo,
-/// which has no updater.
+/// The updater's status, provided as context. `None` while it is unknown or when this build has
+/// no updater; the browser demo shows the default status.
 #[derive(Clone, Copy)]
-pub(crate) struct UpdateStatusSignal(pub(crate) ReadSignal<UpdateStatus>);
+pub(crate) struct UpdateStatusSignal(pub(crate) ReadSignal<Option<UpdateStatus>>);
 
 /// Loads the status from Rust and keeps it current.
-pub(crate) fn connect_updates(set_status: WriteSignal<UpdateStatus>) {
+pub(crate) fn connect_updates(set_status: WriteSignal<Option<UpdateStatus>>) {
     if !query::use_tauri() {
+        set_status.set(Some(UpdateStatus::default()));
         return;
     }
-    tauri::listen_update_status(move |status| set_status.set(status));
+    tauri::listen_update_status(move |status| set_status.set(Some(status)));
     leptos::task::spawn_local(async move {
         if let Some(status) = tauri::get_update_status().await {
-            set_status.set(status);
+            set_status.set(Some(status));
         }
     });
 }
@@ -46,9 +47,21 @@ fn state_text(state: &UpdateState) -> String {
     }
 }
 
+/// The updates section; nothing at all in a build without an updater.
 #[component]
 pub(crate) fn UpdateSection() -> impl IntoView {
     let UpdateStatusSignal(status) = expect_context::<UpdateStatusSignal>();
+    view! {
+        <Show when=move || status.with(Option::is_some)>
+            <UpdateDetails />
+        </Show>
+    }
+}
+
+#[component]
+fn UpdateDetails() -> impl IntoView {
+    let UpdateStatusSignal(status) = expect_context::<UpdateStatusSignal>();
+    let status = Signal::derive(move || status.get().unwrap_or_default());
     let state = Memo::new(move |_| status.with(|status| status.state.clone()));
     let ready = move || matches!(state.get(), UpdateState::Ready { .. });
     let busy = move || {

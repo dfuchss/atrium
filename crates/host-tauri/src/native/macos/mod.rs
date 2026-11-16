@@ -22,24 +22,47 @@ use crate::{Feed, Input, Logger, port_err};
 /// other strings are looked up as named system sounds, unknown names play nothing).
 pub(crate) const NOTIFICATION_SOUND: &str = "NSUserNotificationDefaultSoundName";
 
+/// Nothing to do: macOS knows the app by its bundle.
+pub(crate) fn set_app_id(_identifier: &str) {}
+
+/// The platform part of the user agent presets, as Safari reports it on every Mac, Apple
+/// silicon included.
+pub(crate) fn user_agent_platform() -> String {
+    "Macintosh; Intel Mac OS X 10_15_7".into()
+}
+
 /// Monochrome template image (black + alpha); macOS tints it for light/dark menu bars.
 pub(crate) const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray-icon.png");
 pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = true;
+/// `NSStatusItem` takes a new menu at any time.
+pub(crate) const TRAY_MENU_REPLACEABLE: bool = true;
+/// The menu bar carries the app menu with the shortcuts.
+pub(crate) const USES_APP_MENU: bool = true;
 
 /// Keeps the view's web data in the `WebKit` data store `store_id`.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as on Linux, where finding the data folder can fail"
+)]
 pub(crate) fn isolate_view<R: Runtime>(
     builder: WebviewBuilder<R>,
+    _app: &AppHandle<R>,
     store_id: [u8; 16],
-) -> WebviewBuilder<R> {
-    builder.data_store_identifier(store_id)
+) -> tauri::Result<WebviewBuilder<R>> {
+    Ok(builder.data_store_identifier(store_id))
 }
 
 /// Keeps the window's web data in the `WebKit` data store `store_id`.
-pub(crate) fn isolate_window<R: Runtime, M: Manager<R>>(
-    builder: WebviewWindowBuilder<'_, R, M>,
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as on Linux, where finding the data folder can fail"
+)]
+pub(crate) fn isolate_window<'a, R: Runtime, M: Manager<R>>(
+    builder: WebviewWindowBuilder<'a, R, M>,
+    _app: &AppHandle<R>,
     store_id: [u8; 16],
-) -> WebviewWindowBuilder<'_, R, M> {
-    builder.data_store_identifier(store_id)
+) -> tauri::Result<WebviewWindowBuilder<'a, R, M>> {
+    Ok(builder.data_store_identifier(store_id))
 }
 
 /// The data stores of this app.

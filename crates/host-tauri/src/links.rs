@@ -250,7 +250,6 @@ impl<R: Runtime> LinkPolicy<R> {
 
     /// A request without a size: a link for the system browser. macOS tells a sign-in popup's
     /// size with the request.
-    #[cfg(target_os = "macos")]
     fn system_browser(
         self: &Arc<Self>,
         url: &Url,
@@ -282,34 +281,27 @@ impl<R: Runtime> LinkPolicy<R> {
         false
     }
 
-    /// Creates the in-app window `WebKit` loads the request into. Runs on the main thread
-    /// (inside wry's callback), where `build()` creates the window synchronously.
-    fn open_window(
+    /// The in-app window `label` for `url`, with the hooks of the account's windows.
+    fn build_window(
         self: &Arc<Self>,
         url: &Url,
+        label: &str,
         features: NewWindowFeatures,
         opening: Opening,
-    ) -> NewWindowResponse<R> {
+    ) -> tauri::Result<WebviewWindow<R>> {
         let account = self.spec.account;
-        let shown_url = redact_url(url.as_str());
-        if !self.admit_window(&shown_url) {
-            return NewWindowResponse::Deny;
-        }
-        let label = popup_label(
-            account,
-            self.popup_counter.fetch_add(1, Ordering::Relaxed) + 1,
-        );
         let popup_policy = self.clone();
         let title_on_change = Arc::new(PopupTitle::new(self.clone()));
         let title_on_load = title_on_change.clone();
         let blank = Url::parse("about:blank").expect("valid URL");
         // Like the account's view: `window.open` only from a click.
         native::prepare_popup(&features);
-        let builder = WebviewWindowBuilder::new(&self.app, &label, WebviewUrl::External(blank))
+        let builder = WebviewWindowBuilder::new(&self.app, label, WebviewUrl::External(blank))
             // Requested size/position and, on macOS, the opener's WKWebViewConfiguration, which
-            // WebKit requires for the returned view (it also carries the opener's data store).
+            // WebKit requires for the returned view (it also carries the opener's data store);
+            // on Linux the opener as related view.
             .window_features(features);
-        let mut builder = native::isolate_window(builder, self.spec.store_id)
+        let mut builder = native::isolate_window(builder, &self.app, self.spec.store_id)?
             .title(self.window_title_for("", url))
             .initialization_script(CLOSE_HOOK)
             .on_new_window(move |url, features| popup_policy.on_new_window(&url, features))
@@ -335,7 +327,28 @@ impl<R: Runtime> LinkPolicy<R> {
         if let Some(user_agent) = &self.spec.user_agent {
             builder = builder.user_agent(user_agent);
         }
-        match builder.build() {
+        builder.build()
+    }
+
+    /// Creates the in-app window `WebKit` loads the request into, if the quota admits it. Runs
+    /// on the main thread (inside wry's callback), where `build()` creates the window
+    /// synchronously.
+    fn open_window(
+        self: &Arc<Self>,
+        url: &Url,
+        features: NewWindowFeatures,
+        opening: Opening,
+    ) -> NewWindowResponse<R> {
+        let account = self.spec.account;
+        let shown_url = redact_url(url.as_str());
+        if !self.admit_window(&shown_url) {
+            return NewWindowResponse::Deny;
+        }
+        let label = popup_label(
+            account,
+            self.popup_counter.fetch_add(1, Ordering::Relaxed) + 1,
+        );
+        match self.build_window(url, &label, features, opening) {
             Ok(window) => {
                 self.logger.log(&format!(
                     "[{account}] opened window {label} for {shown_url}"

@@ -56,6 +56,8 @@ pub struct Core {
     title_rules: HashMap<String, TitleRules>,
     persisted: Persisted,
     new_account_id: Box<dyn FnMut() -> Uuid + Send>,
+    /// The host's part of the user agent presets, e.g. `X11; Linux x86_64`.
+    user_agent_platform: String,
     active: Option<Uuid>,
     dialog_open: bool,
     window: WindowSize,
@@ -91,11 +93,13 @@ const EXTERNAL_LINK_INTERVAL_MS: u64 = 2_000;
 impl Core {
     /// `new_account_id` creates ids for new accounts (`Uuid::new_v4` in the app, deterministic
     /// in tests). `catalog` holds the built-in and user TOML services; the persisted custom
-    /// services are added on top.
+    /// services are added on top. `user_agent_platform` is the host's part of the user agent
+    /// presets (see [`crate::catalog::webkit_user_agent`]).
     pub fn new(
         catalog: Catalog,
         persisted: Persisted,
         new_account_id: Box<dyn FnMut() -> Uuid + Send>,
+        user_agent_platform: String,
     ) -> Core {
         let active = persisted.settings.active;
         let mut core = Core {
@@ -107,6 +111,7 @@ impl Core {
             title_rules: HashMap::new(),
             persisted,
             new_account_id,
+            user_agent_platform,
             active,
             dialog_open: false,
             window: WindowSize::default(),

@@ -304,7 +304,8 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
             )));
         }
         let builder = WebviewBuilder::new(label, WebviewUrl::External(spec.url.clone()));
-        let mut builder = native::isolate_view(builder, spec.store_id)
+        let mut builder = native::isolate_view(builder, &self.app, spec.store_id)
+            .map_err(port_err)?
             .initialization_script(self.init_script(spec))
             // Hidden accounts keep running (calls, sockets, timers).
             .background_throttling(BackgroundThrottlingPolicy::Disabled);

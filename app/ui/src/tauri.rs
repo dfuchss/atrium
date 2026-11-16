@@ -127,9 +127,10 @@ pub(crate) async fn send_update(command: UpdateCommand) {
 
 pub(crate) async fn get_update_status() -> Option<UpdateStatus> {
     match invoke(CMD_GET_UPDATE_STATUS, JsValue::UNDEFINED).await {
-        Ok(payload) => serde_wasm_bindgen::from_value(payload)
+        Ok(payload) => serde_wasm_bindgen::from_value::<Option<UpdateStatus>>(payload)
             .map_err(|error| log_error("bad update status", &error.into()))
-            .ok(),
+            .ok()
+            .flatten(),
         Err(error) => {
             log_error("get_update_status failed", &error);
             None

@@ -99,7 +99,12 @@ fn core_with_polled_service() -> Core {
         accounts: vec![account(1, "p", "P")],
         ..Default::default()
     };
-    let mut core = Core::new(cat, persisted, Box::new(|| Uuid::from_u128(999)));
+    let mut core = Core::new(
+        cat,
+        persisted,
+        Box::new(|| Uuid::from_u128(999)),
+        UA_PLATFORM.into(),
+    );
     core.handle(Input::Started {
         width: 800.0,
         height: 600.0,

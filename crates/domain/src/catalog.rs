@@ -21,11 +21,22 @@
 use protocol::{CustomService, ServiceProblem};
 use serde::Deserialize;
 
-/// Desktop Safari UA. Sites sniff the platform and the "Version/... Safari/..." tokens, which the
-/// engine's bare UA lacks, so some reject it.
-pub const UA_WEBKIT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15";
-/// Desktop Chrome UA for sites that only accept Chromium-based browsers.
-pub const UA_CHROME: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
+/// Safari-style UA for `platform`, the host's part in parentheses (e.g.
+/// `Macintosh; Intel Mac OS X 10_15_7` or `X11; Linux aarch64`). Sites sniff the platform and the
+/// "Version/... Safari/..." tokens, which the engine's bare UA lacks, so some reject it.
+pub fn webkit_user_agent(platform: &str) -> String {
+    format!(
+        "Mozilla/5.0 ({platform}) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15"
+    )
+}
+
+/// Desktop Chrome UA for `platform` (see [`webkit_user_agent`]), for sites that only accept
+/// Chromium-based browsers.
+pub fn chrome_user_agent(platform: &str) -> String {
+    format!(
+        "Mozilla/5.0 ({platform}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+    )
+}
 
 /// Unread rule of custom services without an own `title_regex`: "(3) Title".
 pub const DEFAULT_TITLE_REGEX: &str = r"^\((\d+)\)";
@@ -368,9 +379,10 @@ impl ServiceDef {
             .collect()
     }
 
-    /// Resolves the service's `user_agent` preset (see [`resolve_user_agent_preset`]).
-    pub fn resolve_user_agent(&self) -> Option<String> {
-        resolve_user_agent_preset(self.user_agent.as_deref())
+    /// Resolves the service's `user_agent` preset for `platform` (see
+    /// [`resolve_user_agent_preset`]).
+    pub fn resolve_user_agent(&self, platform: &str) -> Option<String> {
+        resolve_user_agent_preset(self.user_agent.as_deref(), platform)
     }
 }
 
@@ -515,13 +527,13 @@ pub fn custom_service_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
     }
 }
 
-/// Resolves a user agent preset: "webkit"/"chrome" -> constant, "default"/None -> None
-/// (the engine's own UA), anything else -> literal.
-pub fn resolve_user_agent_preset(preset: Option<&str>) -> Option<String> {
+/// Resolves a user agent preset: "webkit"/"chrome" -> that UA for the host's `platform` (see
+/// [`webkit_user_agent`]), "default"/None -> None (the engine's own UA), anything else -> literal.
+pub fn resolve_user_agent_preset(preset: Option<&str>, platform: &str) -> Option<String> {
     match preset {
         None | Some("default") => None,
-        Some("webkit") => Some(UA_WEBKIT.to_string()),
-        Some("chrome") => Some(UA_CHROME.to_string()),
+        Some("webkit") => Some(webkit_user_agent(platform)),
+        Some("chrome") => Some(chrome_user_agent(platform)),
         Some(other) => Some(other.to_string()),
     }
 }
@@ -536,6 +548,8 @@ pub fn host_matches_any(patterns: &[String], host: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const PLATFORM: &str = "X11; Linux aarch64";
 
     fn def(url: &str, default: Option<&str>) -> ServiceDef {
         let mut d = Catalog::parse("t", "id='t'\nname='T'\ncolor='#000'\nurl='x'").unwrap();
@@ -682,11 +696,23 @@ mod tests {
             vec!["h.example.org", "*.a.io"]
         );
         assert_eq!(d.resolve_hosts(None), vec!["*.a.io"]);
-        assert_eq!(d.resolve_user_agent(), None);
+        assert_eq!(d.resolve_user_agent(PLATFORM), None);
         d.user_agent = Some("chrome".into());
-        assert_eq!(d.resolve_user_agent().as_deref(), Some(UA_CHROME));
+        assert_eq!(
+            d.resolve_user_agent(PLATFORM),
+            Some(chrome_user_agent(PLATFORM))
+        );
         d.user_agent = Some("Foo/1".into());
-        assert_eq!(d.resolve_user_agent().as_deref(), Some("Foo/1"));
+        assert_eq!(d.resolve_user_agent(PLATFORM).as_deref(), Some("Foo/1"));
+    }
+
+    #[test]
+    fn user_agents_carry_the_hosts_platform() {
+        assert_eq!(
+            webkit_user_agent(PLATFORM),
+            "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15"
+        );
+        assert!(chrome_user_agent(PLATFORM).starts_with("Mozilla/5.0 (X11; Linux aarch64) "));
     }
 
     fn custom(name: &str, url: &str) -> CustomService {
@@ -715,7 +741,10 @@ mod tests {
         assert_eq!(d.internal_hosts, vec!["{instance}.chat.io"]);
         assert_eq!(d.instance_label.as_deref(), Some("Instance"));
         assert_eq!(d.unread.title_regex.as_deref(), Some(DEFAULT_TITLE_REGEX));
-        assert_eq!(d.resolve_user_agent().as_deref(), Some(UA_WEBKIT));
+        assert_eq!(
+            d.resolve_user_agent(PLATFORM),
+            Some(webkit_user_agent(PLATFORM))
+        );
         assert!(!d.allow_media, "custom services default to no media");
         assert_eq!(d.resolve_hosts(Some("kit")), vec!["kit.chat.io"]);
         assert_eq!(
@@ -732,7 +761,10 @@ mod tests {
             (&None, &vec!["example.org".to_string()])
         );
         assert_eq!(d.unread.title_regex.as_deref(), Some(r"^\[(\d+)\]"));
-        assert_eq!(d.resolve_user_agent().as_deref(), Some(UA_CHROME));
+        assert_eq!(
+            d.resolve_user_agent(PLATFORM),
+            Some(chrome_user_agent(PLATFORM))
+        );
     }
 
     #[test]

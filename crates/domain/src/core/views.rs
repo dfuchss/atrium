@@ -74,6 +74,7 @@ impl Core {
 
     /// `Destroy` if the account has a view.
     pub(super) fn unload_view(&mut self, account_id: Uuid) -> Vec<Effect> {
+        self.stop_wake_check(account_id);
         if self.loaded_views.remove(&account_id) {
             vec![Effect::Destroy(account_id)]
         } else {
@@ -106,7 +107,8 @@ impl Core {
         }
     }
 
-    pub(super) fn reload(&self, account_id: Uuid) -> Vec<Effect> {
+    pub(super) fn reload(&mut self, account_id: Uuid) -> Vec<Effect> {
+        self.stop_wake_check(account_id);
         self.with_view(account_id, "reload", Effect::Reload)
     }
 

@@ -15,6 +15,7 @@ mod snapshot;
 mod tick;
 mod unread;
 mod views;
+mod wake;
 
 #[cfg(test)]
 mod tests;
@@ -69,8 +70,11 @@ pub struct Core {
     last_activity_ms: HashMap<Uuid, u64>,
     /// Latest wall clock reading (ticks and screen wakes).
     last_tick_ms: Option<u64>,
-    /// A sleep was detected and the views were not reloaded since; the next screen wake does it.
+    /// A sleep was detected and not yet handled; the next screen wake does it.
     slept: bool,
+    /// Accounts checked after a wake (`AfterWake::Check`) that have not answered a poll yet,
+    /// with the time of the wake (tick clock).
+    wake_checks: HashMap<Uuid, u64>,
     /// Favicon lookups started this run, per account (retried on later page loads after a failure).
     favicon_attempts: HashMap<Uuid, u8>,
     /// Problems found while loading (logged on start).
@@ -115,6 +119,7 @@ impl Core {
             last_activity_ms: HashMap::new(),
             last_tick_ms: None,
             slept: false,
+            wake_checks: HashMap::new(),
             favicon_attempts: HashMap::new(),
             startup_log: vec![],
             log_page_titles: false,
@@ -146,7 +151,13 @@ impl Core {
             Input::Ui(command) => self.ui(command),
             Input::Menu(action) => self.menu(action),
             Input::TitleChanged { account, title } => self.title_changed(account, &title),
-            Input::PollResult { account, raw } => self.poll_result(account, &raw),
+            Input::PollResult { account, raw } => {
+                let alive = self.wake_check_answered(account, &raw);
+                alive
+                    .into_iter()
+                    .chain(self.poll_result(account, &raw))
+                    .collect()
+            }
             Input::PageLoaded { account, .. } => self.page_loaded(account),
             Input::ExternalLink { account, url } => self.open_external_link(account, url),
             Input::NotificationClicked { account, shim_id } => {
@@ -160,6 +171,7 @@ impl Core {
             }
             Input::Tick { now_ms } => self.tick(now_ms),
             Input::ScreensWoke { now_ms } => self.screens_woke(now_ms),
+            Input::WebProcessTerminated { account } => self.web_process_terminated(account),
             Input::IconFound {
                 account,
                 raw,

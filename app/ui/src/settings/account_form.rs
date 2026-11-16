@@ -1,15 +1,16 @@
 //! Inline edit form of one account.
 
 use leptos::prelude::*;
-use protocol::{AccountSettings, AccountView, LinkTarget, UiCommand};
+use protocol::{AccountSettings, AccountView, AfterWake, LinkTarget, UiCommand};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
 use crate::commands::send_command;
 use crate::widgets::{
-    HIBERNATE_MINUTES, Row, Toggle, hibernate_label, instance_field_label, minutes_label,
-    no_autocorrect, non_empty, number_options,
+    AFTER_WAKE_HINT, HIBERNATE_MINUTES, Row, Toggle, after_wake_label, after_wake_options,
+    hibernate_label, instance_field_label, minutes_label, no_autocorrect, non_empty,
+    number_options,
 };
 
 /// Uploaded icons larger than this are rejected (they are stored in `accounts.json`).
@@ -92,6 +93,8 @@ struct AccountDraft {
     simple_icon: RwSignal<String>,
     zoom_percent: RwSignal<String>,
     hibernate_after: RwSignal<String>,
+    /// "" (global setting) or an `AfterWake` name.
+    after_wake: RwSignal<String>,
     custom_css: RwSignal<String>,
     app_hosts: RwSignal<String>,
     /// "" (service default), "allow" or "block".
@@ -130,6 +133,11 @@ impl AccountDraft {
                 settings
                     .hibernate_after_min
                     .map_or_default(|minutes| minutes.to_string()),
+            ),
+            after_wake: RwSignal::new(
+                settings
+                    .after_wake
+                    .map_or_default(|mode| mode.name().to_string()),
             ),
             custom_css: RwSignal::new(settings.custom_css.clone().unwrap_or_default()),
             app_hosts: RwSignal::new(settings.app_hosts.join("\n")),
@@ -179,6 +187,7 @@ impl AccountDraft {
                 .parse::<f64>()
                 .map_or(1.0, |percent| percent / 100.0),
             hibernate_after_min: self.hibernate_after.get_untracked().parse().ok(),
+            after_wake: AfterWake::from_name(&self.after_wake.get_untracked()),
             custom_css: (!custom_css.trim().is_empty()).then_some(custom_css),
             allow_media: match self.allow_media.get_untracked() {
                 "allow" => Some(true),
@@ -203,6 +212,7 @@ pub(super) fn EditForm(
     editing: RwSignal<Option<Uuid>>,
     media_default: bool,
     global_hibernate: Option<u32>,
+    global_after_wake: AfterWake,
 ) -> impl IntoView {
     let id = account.id;
     let draft = AccountDraft::new(&account.settings);
@@ -244,7 +254,7 @@ pub(super) fn EditForm(
                 </select>
             </Row>
             <IconRows account=account draft=draft />
-            <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate />
+            <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake />
             <Row label="">
                 <div class="actions">
                     <button class="btn primary" type="submit">"Save"</button>
@@ -343,6 +353,7 @@ fn BehaviourRows(
     draft: AccountDraft,
     media_default: bool,
     global_hibernate: Option<u32>,
+    global_after_wake: AfterWake,
 ) -> impl IntoView {
     let zoom_options = number_options(
         &ZOOM_PERCENTS,
@@ -374,6 +385,12 @@ fn BehaviourRows(
                 <option value="">{format!("Use global setting ({})", hibernate_label(global_hibernate))}</option>
                 <option value="0">"Never"</option>
                 {hibernate_options}
+            </select>
+        </Row>
+        <Row label="After waking from sleep" hint=AFTER_WAKE_HINT>
+            <select prop:value=move || draft.after_wake.get() on:change=move |event| draft.after_wake.set(event_target_value(&event))>
+                <option value="">{format!("Use global setting ({})", after_wake_label(global_after_wake))}</option>
+                {after_wake_options()}
             </select>
         </Row>
         <Row label="User agent" hint="Changing the user agent reloads the account.">

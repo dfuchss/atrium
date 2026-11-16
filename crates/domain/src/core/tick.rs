@@ -1,6 +1,5 @@
-//! The one-second tick: sleep detection, hibernation of idle accounts and unread polling.
-//! Views are reloaded after a sleep only once the displays wake, not on a dark wake (Power Nap),
-//! which also leaves a gap between ticks.
+//! The one-second tick: sleep detection, the wake checks, hibernation of idle accounts and
+//! unread polling. What a sleep means for the views is decided once the displays wake (`wake`).
 
 use uuid::Uuid;
 
@@ -17,6 +16,7 @@ impl Core {
             return vec![];
         }
         let mut effects: Vec<Effect> = self.read_clock(now_ms).into_iter().collect();
+        effects.extend(self.reload_silent_after_wake(now_ms));
         if let Some(active) = self.active {
             self.last_activity_ms.insert(active, now_ms);
         }
@@ -30,26 +30,10 @@ impl Core {
         effects
     }
 
-    /// After a sleep, reloads the loaded views (their connections are stale) if the setting
-    /// says so. The clock is read first: the wake can arrive before the first tick after it.
-    pub(super) fn screens_woke(&mut self, now_ms: u64) -> Vec<Effect> {
-        if !self.started {
-            return vec![];
-        }
-        let mut effects: Vec<Effect> = self.read_clock(now_ms).into_iter().collect();
-        if !std::mem::take(&mut self.slept) {
-            return effects;
-        }
-        effects.push(Effect::Log("screens woke after sleep".into()));
-        if self.settings().reload_after_wake {
-            effects.extend(self.loaded_account_ids().into_iter().map(Effect::Reload));
-        }
-        effects
-    }
-
     /// Records `now_ms` as the latest clock reading; a gap longer than [`SLEEP_GAP_MS`] since
-    /// the previous one marks a sleep, logged here.
-    fn read_clock(&mut self, now_ms: u64) -> Option<Effect> {
+    /// the previous one marks a sleep, logged here. A sleep ends the running wake checks: the
+    /// next screen wake starts them again.
+    pub(super) fn read_clock(&mut self, now_ms: u64) -> Option<Effect> {
         let since_last_ms = self
             .last_tick_ms
             .map_or(0, |last| now_ms.saturating_sub(last));
@@ -58,6 +42,7 @@ impl Core {
             return None;
         }
         self.slept = true;
+        self.wake_checks.clear();
         Some(Effect::Log(format!(
             "sleep detected ({} s since the last tick)",
             since_last_ms / 1000

@@ -188,6 +188,11 @@ pub enum Input {
     ScreensWoke {
         now_ms: u64,
     },
+    /// The web content process of the account's view terminated (crash, or killed by macOS
+    /// under memory pressure); the view shows nothing until it is reloaded.
+    WebProcessTerminated {
+        account: Uuid,
+    },
     /// Callback of [`Effect::FindIcon`]: JSON encoding of the icon URL (or null), and the
     /// page shown when it was found (read by the adapter, not reported by the page).
     IconFound {

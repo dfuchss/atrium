@@ -1,12 +1,15 @@
 //! Tabs of the app-wide settings: general, notifications, dock badge, links and about.
 
 use leptos::prelude::*;
-use protocol::{DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand};
+use protocol::{AfterWake, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand};
 
 use super::app_toggle;
 use crate::commands::{send_command, update_settings};
 use crate::update::UpdateSection;
-use crate::widgets::{HIBERNATE_MINUTES, Row, minutes_label, no_autocorrect, number_options};
+use crate::widgets::{
+    AFTER_WAKE_HINT, HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, no_autocorrect,
+    number_options,
+};
 
 #[component]
 pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
@@ -23,6 +26,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
         }
     };
     let hibernate_after = move || snapshot.with(|snapshot| snapshot.settings.hibernate_after_min);
+    let after_wake = move || snapshot.with(|snapshot| snapshot.settings.after_wake);
     view! {
         <h2>"General"</h2>
         <div class="form">
@@ -51,7 +55,12 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {move || number_options(&HIBERNATE_MINUTES, hibernate_after(), minutes_label)}
                 </select>
             </Row>
-            {app_toggle(snapshot, "Reload after wake", "Reload services when you wake your Mac from sleep; fixes stale connections. Background wakes (Power Nap) do not reload.", |settings| settings.reload_after_wake, |settings, enabled| settings.reload_after_wake = enabled)}
+            <Row label="After waking from sleep" hint=AFTER_WAKE_HINT>
+                <select prop:value=move || after_wake().name()
+                    on:change=move |event| if let Some(mode) = AfterWake::from_name(&event_target_value(&event)) { update_settings(snapshot, |settings| settings.after_wake = mode) }>
+                    {after_wake_options()}
+                </select>
+            </Row>
         </div>
     }
 }

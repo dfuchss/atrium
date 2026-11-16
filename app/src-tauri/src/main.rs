@@ -261,7 +261,7 @@ fn spawn_ticker(feed: Feed) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Feeds each display wake; the core reloads the views only if the Mac slept before.
+/// Feeds each display wake; the core handles the views only if the Mac slept before.
 fn observe_screens_wake(feed: Feed) {
     macos_dialogs::observe_screens_wake(move || feed(Input::ScreensWoke { now_ms: now_ms() }));
 }
@@ -455,6 +455,7 @@ fn main() {
     });
     let snapshot_cache = Arc::new(Mutex::new(Snapshot::default()));
     let (menu_feed, setup_feed, setup_cache) = (feed.clone(), feed.clone(), snapshot_cache.clone());
+    let terminate_feed = feed.clone();
 
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
@@ -483,6 +484,10 @@ fn main() {
         // App menu and tray menu items (built by the host from the core's menu model).
         .on_menu_event(move |app, event| {
             host_tauri::handle_menu_event(app, MAIN_WINDOW, event.id().as_ref(), &menu_feed);
+        })
+        // A view whose web content process died is reloaded through the core.
+        .on_web_content_process_terminate(move |webview| {
+            host_tauri::web_process_terminated(webview, &terminate_feed);
         })
         .setup(move |app| setup(app, &setup_feed, inputs, &setup_cache))
         .build(context)

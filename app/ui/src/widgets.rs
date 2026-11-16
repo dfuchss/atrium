@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use leptos::prelude::*;
-use protocol::AccountView;
+use protocol::{AccountView, AfterWake};
 use wasm_bindgen::JsCast;
 
 /// Directive: switch off macOS auto-correction (not a typed attribute in leptos).
@@ -154,6 +154,25 @@ pub(crate) fn hibernate_label(minutes: Option<u32>) -> String {
     minutes
         .filter(|&minutes| minutes > 0)
         .map_or_else(|| "Never".to_string(), minutes_label)
+}
+
+/// Hint of the after-wake selects.
+pub(crate) const AFTER_WAKE_HINT: &str = "Check: reload only services that stop responding after your Mac wakes. Reload: reload every service. Background wakes (Power Nap) change nothing.";
+
+/// Label of an after-wake mode.
+pub(crate) fn after_wake_label(mode: AfterWake) -> &'static str {
+    match mode {
+        AfterWake::Check => "Check, reload if stuck",
+        AfterWake::Reload => "Reload",
+        AfterWake::Never => "Do nothing",
+    }
+}
+
+/// One option per after-wake mode, valued by its stored name.
+pub(crate) fn after_wake_options() -> impl IntoView + use<> {
+    AfterWake::ALL
+        .map(|mode| view! { <option value=mode.name()>{after_wake_label(mode)}</option> })
+        .to_vec()
 }
 
 /// Options of a numeric select; a stored value that is not in the list is kept as an extra option.

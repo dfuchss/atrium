@@ -40,7 +40,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
 - **macOS integration.**
   - App menu with shortcuts.
   - Launch at login, start hidden, keep running in the background.
-  - Reload after you wake your Mac from sleep (not on Power Nap background wakes).
+  - After you wake your Mac from sleep, reload only the services that stopped responding, or all of them, per account (not on Power Nap background wakes).
 
 ## Built-in services
 

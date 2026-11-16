@@ -111,6 +111,7 @@ fn demo_account(
             simple_icon: None,
             zoom: 1.0,
             hibernate_after_min: None,
+            after_wake: None,
             custom_css: None,
             allow_media: None,
             app_hosts: vec![],

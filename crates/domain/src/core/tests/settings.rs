@@ -34,6 +34,7 @@ fn snapshot_carries_settings_app_info_and_account_settings() {
         simple_icon: None,
         zoom: 1.0,
         hibernate_after_min: None,
+        after_wake: None,
         custom_css: None,
         allow_media: None,
         app_hosts: vec![],

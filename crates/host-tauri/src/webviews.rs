@@ -108,9 +108,31 @@ fn spawn_logged(name: &str, logger: &Logger, job: impl FnOnce() + Send + 'static
     }
 }
 
+/// Start of the labels of service webviews.
+const VIEW_LABEL_PREFIX: &str = "svc-";
+
 /// Label of the service webview of `account`.
 pub(crate) fn view_label(account: Uuid) -> String {
-    format!("svc-{}", account.simple())
+    format!("{VIEW_LABEL_PREFIX}{}", account.simple())
+}
+
+/// The account whose service webview has `label`; None for any other webview.
+fn view_account(label: &str) -> Option<Uuid> {
+    let id = label.strip_prefix(VIEW_LABEL_PREFIX)?;
+    Uuid::try_parse(id).ok()
+}
+
+/// Hook for a terminated web content process (macOS). It replaces Tauri's default, which
+/// reloads the webview without telling anyone: a service view is reloaded through the core,
+/// which logs it; other webviews (sidebar, in-app windows) are reloaded in place as before.
+pub fn web_process_terminated<R: Runtime>(webview: &Webview<R>, feed: &Feed) {
+    match view_account(webview.label()) {
+        Some(account) => feed(Input::WebProcessTerminated { account }),
+        None => {
+            // Nobody to tell: the hook has no logger, and the webview may already be closing.
+            let _ = webview.reload();
+        }
+    }
 }
 
 fn place<R: Runtime>(webview: &Webview<R>, bounds: Bounds) -> PortResult {
@@ -558,6 +580,15 @@ mod tests {
             first
         ));
         assert!(!belongs_to_account("ui", first));
+    }
+
+    #[test]
+    fn view_account_reads_service_view_labels_only() {
+        let account = Uuid::from_u128(0x2a);
+        assert_eq!(view_account(&view_label(account)), Some(account));
+        assert_eq!(view_account(UI_WEBVIEW), None);
+        assert_eq!(view_account(&crate::links::popup_label(account, 1)), None);
+        assert_eq!(view_account("svc-nonsense"), None);
     }
 
     #[test]

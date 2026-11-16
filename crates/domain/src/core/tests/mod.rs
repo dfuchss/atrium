@@ -3,7 +3,7 @@
 use super::snapshot::initials;
 use super::*;
 use protocol::{
-    AccountSettings, CustomService, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme,
+    AccountSettings, AfterWake, CustomService, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme,
 };
 
 mod accounts;
@@ -15,6 +15,7 @@ mod services;
 mod settings;
 mod unread;
 mod view_policy;
+mod wake;
 
 /// Sidebar width at the default icon size.
 const SIDEBAR: f64 = 56.0;

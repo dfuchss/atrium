@@ -1,6 +1,6 @@
 //! Persisted data.
 
-use protocol::{AccountSettings, AppSettings, CustomService, LinkTarget};
+use protocol::{AccountSettings, AfterWake, AppSettings, CustomService, LinkTarget};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -43,6 +43,9 @@ pub struct Account {
     /// setting, Some(0) = never.
     #[serde(default)]
     pub hibernate_after_min: Option<u32>,
+    /// Overrides `AppSettings::after_wake`; None = use the global setting.
+    #[serde(default)]
+    pub after_wake: Option<AfterWake>,
     /// CSS injected into every page of this account.
     #[serde(default)]
     pub custom_css: Option<String>,
@@ -93,6 +96,7 @@ impl Account {
             custom_icon: None,
             zoom: 1.0,
             hibernate_after_min: None,
+            after_wake: None,
             custom_css: None,
             favicon: None,
             allow_media: None,
@@ -121,6 +125,7 @@ impl Account {
             custom_icon: self.custom_icon.clone(),
             zoom: self.zoom,
             hibernate_after_min: self.hibernate_after_min,
+            after_wake: self.after_wake,
             custom_css: self.custom_css.clone(),
             allow_media: self.allow_media,
             simple_icon: self.simple_icon.clone(),
@@ -144,6 +149,7 @@ impl Account {
         self.custom_icon = settings.custom_icon;
         self.zoom = settings.zoom;
         self.hibernate_after_min = settings.hibernate_after_min;
+        self.after_wake = settings.after_wake;
         self.custom_css = settings.custom_css;
         self.allow_media = settings.allow_media;
         self.simple_icon = settings.simple_icon;
@@ -152,6 +158,7 @@ impl Account {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(from = "StoredSettings")]
 pub struct Settings {
     /// Global app settings, stored flat next to `active` (older files only have `dnd`).
     #[serde(flatten)]
@@ -159,6 +166,36 @@ pub struct Settings {
     /// Account shown at startup (last selected).
     #[serde(default)]
     pub active: Option<Uuid>,
+}
+
+/// [`Settings`] as read from disk, with the fields of older versions that are migrated on load.
+#[derive(Deserialize)]
+struct StoredSettings {
+    #[serde(flatten)]
+    app: AppSettings,
+    #[serde(default)]
+    active: Option<Uuid>,
+    /// Replaced by `after_wake`: true reloaded every service after a wake, false none.
+    #[serde(default)]
+    reload_after_wake: Option<bool>,
+}
+
+impl From<StoredSettings> for Settings {
+    fn from(stored: StoredSettings) -> Settings {
+        let mut app = stored.app;
+        if let Some(reload) = stored.reload_after_wake {
+            // Services that answer after a wake need no reload, so a reload becomes a check.
+            app.after_wake = if reload {
+                AfterWake::Check
+            } else {
+                AfterWake::Never
+            };
+        }
+        Settings {
+            app,
+            active: stored.active,
+        }
+    }
 }
 
 /// Everything that is saved to disk. Sidebar order = order of `accounts`.

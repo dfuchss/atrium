@@ -219,8 +219,9 @@ pub struct AppSettings {
     pub link_target: LinkTarget,
     /// Menu bar (tray) icon with unread count and account menu.
     pub show_tray: bool,
-    /// Reload all loaded services after the Mac wakes from sleep (stale connections).
-    pub reload_after_wake: bool,
+    /// What happens to the loaded services when the Mac wakes from sleep (accounts can
+    /// override it: `AccountSettings::after_wake`).
+    pub after_wake: AfterWake,
     /// Size of the sidebar icons (and thereby the sidebar width).
     pub icon_size: IconSize,
     /// Put background accounts to sleep (unload their view) after this many minutes without
@@ -244,11 +245,46 @@ impl Default for AppSettings {
             browser: None,
             link_target: LinkTarget::SystemBrowser,
             show_tray: true,
-            reload_after_wake: true,
+            after_wake: AfterWake::Check,
             icon_size: IconSize::Small,
             hibernate_after_min: None,
             theme: Theme::Auto,
         }
+    }
+}
+
+/// What happens to a loaded service when the Mac wakes from sleep (the displays wake; a dark
+/// wake such as Power Nap does nothing).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AfterWake {
+    /// Reload the service only if it does not answer a poll soon after the wake (most services
+    /// reconnect by themselves).
+    #[default]
+    Check,
+    /// Reload the service right away.
+    Reload,
+    /// Leave the service alone.
+    Never,
+}
+
+impl AfterWake {
+    pub const ALL: [AfterWake; 3] = [AfterWake::Check, AfterWake::Reload, AfterWake::Never];
+
+    /// The stored name ("check", "reload", "never"), e.g. as form value.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            AfterWake::Check => "check",
+            AfterWake::Reload => "reload",
+            AfterWake::Never => "never",
+        }
+    }
+
+    /// The mode stored as `name`, if any.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<AfterWake> {
+        AfterWake::ALL.into_iter().find(|mode| mode.name() == name)
     }
 }
 
@@ -309,6 +345,9 @@ pub struct AccountSettings {
     /// None = use `AppSettings::hibernate_after_min`; Some(0) = never for this account.
     #[serde(default)]
     pub hibernate_after_min: Option<u32>,
+    /// Overrides `AppSettings::after_wake`; None = use the global setting.
+    #[serde(default)]
+    pub after_wake: Option<AfterWake>,
     /// CSS injected into every page of this account (e.g. a dark theme or hiding clutter).
     #[serde(default)]
     pub custom_css: Option<String>,

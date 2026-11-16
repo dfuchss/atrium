@@ -27,20 +27,30 @@ impl Core {
             Effect::ApplyTheme(self.settings().theme),
         ];
         effects.extend(log_effects(std::mem::take(&mut self.startup_log)));
-        let enabled: Vec<Uuid> = self
-            .persisted
-            .accounts
-            .iter()
-            .filter(|account| account.enabled)
-            .map(|account| account.id)
-            .collect();
-        for account_id in enabled {
+        let (to_load, asleep) = self.split_startup_accounts();
+        for account_id in asleep {
+            effects.push(Effect::Log(format!("[{account_id}] starts asleep")));
+        }
+        for account_id in to_load {
             effects.extend(self.load_view(account_id, Some(account_id) == self.active));
         }
         effects.extend(self.fetch_missing_simple_icons());
         effects.extend(self.dock_badge());
         effects.push(self.emit());
         effects
+    }
+
+    /// The enabled accounts to load at startup and those that start asleep. The active
+    /// account is always loaded: the user is looking at it.
+    fn split_startup_accounts(&self) -> (Vec<Uuid>, Vec<Uuid>) {
+        let (asleep, to_load): (Vec<&Account>, Vec<&Account>) = self
+            .persisted
+            .accounts
+            .iter()
+            .filter(|account| account.enabled)
+            .partition(|account| account.start_asleep && Some(account.id) != self.active);
+        let ids = |accounts: Vec<&Account>| accounts.iter().map(|account| account.id).collect();
+        (ids(to_load), ids(asleep))
     }
 
     /// Selecting a disabled account is refused (logged): it has no view to show, and the

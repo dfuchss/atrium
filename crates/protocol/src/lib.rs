@@ -349,6 +349,9 @@ pub struct AccountSettings {
     /// None = use `AppSettings::hibernate_after_min`; Some(0) = never for this account.
     #[serde(default)]
     pub hibernate_after_min: Option<u32>,
+    /// Don't load this account at startup; it loads when selected. Read at the next start only.
+    #[serde(default)]
+    pub start_asleep: bool,
     /// Overrides `AppSettings::after_wake`; None = use the global setting.
     #[serde(default)]
     pub after_wake: Option<AfterWake>,

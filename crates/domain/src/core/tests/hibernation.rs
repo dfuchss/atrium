@@ -116,3 +116,91 @@ fn hibernate_command() {
         [Effect::Log(_)]
     ));
 }
+
+fn start_asleep_account(n: u128) -> Account {
+    let mut account = account(n, "slack", "Asleep");
+    account.start_asleep = true;
+    account
+}
+
+fn startup_views(effects: &[Effect]) -> Vec<Uuid> {
+    views(effects)
+        .iter()
+        .map(|(spec, _)| spec.account)
+        .collect()
+}
+
+#[test]
+fn start_asleep_account_gets_no_view_at_startup() {
+    let (mut core, effects) = started(vec![
+        account(1, "slack", "A"),
+        start_asleep_account(2),
+        account(3, "slack", "C"),
+    ]);
+    assert_eq!(startup_views(&effects), vec![id(1), id(3)]);
+    assert!(has(
+        &effects,
+        &Effect::Log(format!("[{}] starts asleep", id(2)))
+    ));
+    assert!(last_snapshot(&effects).accounts[1].hibernated);
+    // like a hibernated account: no polls
+    let effects = tick_range(&mut core, 0, 5_000);
+    assert!(!polls(&effects).contains(&id(2)));
+}
+
+#[test]
+fn selecting_a_start_asleep_account_loads_it() {
+    let (mut core, _) = started(vec![account(1, "slack", "A"), start_asleep_account(2)]);
+    let effects = core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
+    assert_eq!(
+        views(&effects)
+            .iter()
+            .map(|(spec, visible)| (spec.account, *visible))
+            .collect::<Vec<_>>(),
+        vec![(id(2), true)]
+    );
+    assert!(!last_snapshot(&effects).accounts[1].hibernated);
+}
+
+#[test]
+fn active_start_asleep_account_is_loaded_anyway() {
+    let mut core = core_with(vec![start_asleep_account(1), start_asleep_account(2)]);
+    core.active = Some(id(2));
+    let effects = core.handle(Input::Started {
+        width: 1000.0,
+        height: 600.0,
+    });
+    assert_eq!(startup_views(&effects), vec![id(2)]);
+    assert!(!has(
+        &effects,
+        &Effect::Log(format!("[{}] starts asleep", id(2)))
+    ));
+    assert!(has(
+        &effects,
+        &Effect::Log(format!("[{}] starts asleep", id(1)))
+    ));
+}
+
+#[test]
+fn toggling_start_asleep_at_runtime_changes_nothing_now() {
+    let (mut core, _) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
+    let effects = update_account(&mut core, 2, |settings| settings.start_asleep = true);
+    assert!(destroys(&effects).is_empty() && views(&effects).is_empty());
+    assert!(!last_snapshot(&effects).accounts[1].hibernated);
+    let effects = update_account(&mut core, 2, |settings| settings.start_asleep = false);
+    assert!(destroys(&effects).is_empty() && views(&effects).is_empty());
+}
+
+#[test]
+fn start_asleep_does_not_change_the_hibernation_timeout() {
+    let mut b = start_asleep_account(2);
+    b.hibernate_after_min = Some(1);
+    let (mut core, _) = started(vec![account(1, "slack", "A"), b]);
+    core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
+    core.handle(Input::Ui(UiCommand::Select { account: id(1) }));
+    tick_range(&mut core, 0, 50_000);
+    assert_eq!(
+        destroys(&core.handle(Input::Tick { now_ms: 60_000 })),
+        vec![id(2)]
+    );
+}

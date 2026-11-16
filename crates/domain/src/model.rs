@@ -43,6 +43,10 @@ pub struct Account {
     /// setting, Some(0) = never.
     #[serde(default)]
     pub hibernate_after_min: Option<u32>,
+    /// Don't load the view at startup (unless the account is the one shown); it loads when
+    /// selected.
+    #[serde(default)]
+    pub start_asleep: bool,
     /// Overrides `AppSettings::after_wake`; None = use the global setting.
     #[serde(default)]
     pub after_wake: Option<AfterWake>,
@@ -96,6 +100,7 @@ impl Account {
             custom_icon: None,
             zoom: 1.0,
             hibernate_after_min: None,
+            start_asleep: false,
             after_wake: None,
             custom_css: None,
             favicon: None,
@@ -125,6 +130,7 @@ impl Account {
             custom_icon: self.custom_icon.clone(),
             zoom: self.zoom,
             hibernate_after_min: self.hibernate_after_min,
+            start_asleep: self.start_asleep,
             after_wake: self.after_wake,
             custom_css: self.custom_css.clone(),
             allow_media: self.allow_media,
@@ -149,6 +155,7 @@ impl Account {
         self.custom_icon = settings.custom_icon;
         self.zoom = settings.zoom;
         self.hibernate_after_min = settings.hibernate_after_min;
+        self.start_asleep = settings.start_asleep;
         self.after_wake = settings.after_wake;
         self.custom_css = settings.custom_css;
         self.allow_media = settings.allow_media;
@@ -268,7 +275,7 @@ mod tests {
         );
         assert!(p.custom_services.is_empty());
         assert_eq!(a.allow_media, None);
-        assert!(a.app_hosts.is_empty());
+        assert!(a.app_hosts.is_empty() && !a.start_asleep);
         assert_eq!(
             (a.simple_icon.as_deref(), a.simple_icon_data.as_deref()),
             (None, None)
@@ -300,6 +307,7 @@ mod tests {
         a.link_target = Some(LinkTarget::SystemBrowser);
         a.zoom = 1.25;
         a.hibernate_after_min = Some(10);
+        a.start_asleep = true;
         a.custom_css = Some("body{color:red}".into());
         a.favicon = Some("data:image/png;base64,AA==".into());
         a.app_hosts = vec!["*.example.org".into()];

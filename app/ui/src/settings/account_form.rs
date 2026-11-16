@@ -85,6 +85,7 @@ struct AccountDraft {
     show_badge: RwSignal<bool>,
     in_dock_badge: RwSignal<bool>,
     enabled: RwSignal<bool>,
+    start_asleep: RwSignal<bool>,
     /// "" (global setting), "system" or "app".
     link_target: RwSignal<&'static str>,
     custom_icon: RwSignal<Option<String>>,
@@ -113,6 +114,7 @@ impl AccountDraft {
             show_badge: RwSignal::new(settings.show_badge),
             in_dock_badge: RwSignal::new(settings.in_dock_badge),
             enabled: RwSignal::new(settings.enabled),
+            start_asleep: RwSignal::new(settings.start_asleep),
             link_target: RwSignal::new(match settings.link_target {
                 None => "",
                 Some(LinkTarget::SystemBrowser) => "system",
@@ -187,6 +189,7 @@ impl AccountDraft {
                 .parse::<f64>()
                 .map_or(1.0, |percent| percent / 100.0),
             hibernate_after_min: self.hibernate_after.get_untracked().parse().ok(),
+            start_asleep: self.start_asleep.get_untracked(),
             after_wake: AfterWake::from_name(&self.after_wake.get_untracked()),
             custom_css: (!custom_css.trim().is_empty()).then_some(custom_css),
             allow_media: match self.allow_media.get_untracked() {
@@ -391,6 +394,7 @@ fn BehaviourRows(
                 {hibernate_options}
             </select>
         </Row>
+        <Toggle label="Start asleep" hint="Don't load this service when Atrium starts; it wakes when you select it. Takes effect at the next start." checked=draft.start_asleep on_change=move |enabled| draft.start_asleep.set(enabled) />
         <Row label="After waking from sleep" hint=AFTER_WAKE_HINT>
             <select prop:value=move || draft.after_wake.get() on:change=move |event| draft.after_wake.set(event_target_value(&event))>
                 <option value="">{format!("Use global setting ({})", after_wake_label(global_after_wake))}</option>

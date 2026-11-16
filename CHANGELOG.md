@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Start asleep in an account's settings keeps a service unloaded when Atrium starts; it loads when you select it
 - Force reload in an account's settings reloads the service without its cache, for a page that stays broken after a normal reload
 
 ### Changed

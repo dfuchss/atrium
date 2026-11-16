@@ -178,6 +178,7 @@ mod tests {
             (a.zoom, a.hibernate_after_min, a.custom_css.as_deref()),
             (1.0, None, None)
         );
+        assert!(!a.start_asleep);
         let app = &p.settings.app;
         assert!(
             !app.notification_preview

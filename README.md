@@ -28,6 +28,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
 - **Sleep.**
   - Inactive services can be put to sleep automatically, globally or per account, to free memory.
   - Sleeping accounts are shown greyed out with a moon.
+  - An account can start asleep, so it only loads when you select it.
 - **Links.**
   - Links open in your browser of choice, or in an app window that shares the account's login.
   - Sign-in popups (SSO/OAuth) always stay in the app.

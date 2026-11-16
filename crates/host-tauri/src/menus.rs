@@ -21,9 +21,9 @@ const ID_DND: &str = "dnd";
 const ID_RELOAD: &str = "reload";
 const ID_BACK: &str = "back";
 const ID_FORWARD: &str = "forward";
-const ID_ZOOM_IN: &str = "zoom-in";
-const ID_ZOOM_OUT: &str = "zoom-out";
-const ID_ZOOM_RESET: &str = "zoom-reset";
+pub(crate) const ID_ZOOM_IN: &str = "zoom-in";
+pub(crate) const ID_ZOOM_OUT: &str = "zoom-out";
+pub(crate) const ID_ZOOM_RESET: &str = "zoom-reset";
 const ID_OPEN_BROWSER: &str = "open-in-browser";
 /// Custom Quit items (app menu, tray): the predefined Quit sends `terminate:`, which ends the
 /// process without a `RunEvent::ExitRequested`, so pages would not be unloaded first.
@@ -32,8 +32,56 @@ const ID_QUIT: &str = "quit";
 /// Prefix of the account items (app menu "Accounts" and tray), followed by the account id.
 const ID_ACCOUNT: &str = "account:";
 const TRAY_ID: &str = "atrium-tray";
-/// Accounts 1 to 9 get the shortcuts Cmd+1 to Cmd+9.
-const ACCOUNT_SHORTCUTS: usize = 9;
+/// Accounts 1 to 9 get the shortcuts Cmd+1 to Cmd+9 (Ctrl on Linux).
+pub(crate) const ACCOUNT_SHORTCUTS: usize = 9;
+
+/// A keyboard shortcut: `key` held with Cmd on macOS and Ctrl on Linux, and with Shift if
+/// `shift`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Shortcut {
+    /// The character of the key; letters in lower case.
+    pub(crate) key: char,
+    pub(crate) shift: bool,
+}
+
+impl Shortcut {
+    pub(crate) const fn key(key: char) -> Shortcut {
+        Shortcut { key, shift: false }
+    }
+
+    const fn shift_key(key: char) -> Shortcut {
+        Shortcut { key, shift: true }
+    }
+
+    /// The accelerator of a menu item, e.g. `CmdOrCtrl+Shift+O`.
+    fn accelerator(self) -> String {
+        let shift = if self.shift { "Shift+" } else { "" };
+        format!("CmdOrCtrl+{shift}{}", self.key.to_ascii_uppercase())
+    }
+}
+
+/// The menu items with a shortcut, by id: the macOS menu and the Linux window both take their
+/// shortcuts from here.
+pub(crate) const ITEM_SHORTCUTS: [(&str, Shortcut); 9] = [
+    (ID_SETTINGS, Shortcut::key(',')),
+    (ID_QUIT, Shortcut::key('q')),
+    (ID_RELOAD, Shortcut::key('r')),
+    (ID_BACK, Shortcut::key('[')),
+    (ID_FORWARD, Shortcut::key(']')),
+    (ID_ZOOM_IN, Shortcut::key('=')),
+    (ID_ZOOM_OUT, Shortcut::key('-')),
+    (ID_ZOOM_RESET, Shortcut::key('0')),
+    (ID_OPEN_BROWSER, Shortcut::shift_key('o')),
+];
+
+/// The shortcut of the account at `index` (from 0) in the menu, for the first
+/// [`ACCOUNT_SHORTCUTS`] accounts: Cmd+1 to Cmd+9 (Ctrl on Linux).
+pub(crate) fn account_shortcut(index: usize) -> Option<Shortcut> {
+    if index >= ACCOUNT_SHORTCUTS {
+        return None;
+    }
+    char::from_digit(u32::try_from(index + 1).ok()?, 10).map(Shortcut::key)
+}
 
 const ABOUT_ICON: &[u8] = include_bytes!("../assets/about-icon.png");
 
@@ -104,7 +152,8 @@ pub fn handle_menu_event<R: Runtime>(
     }
 }
 
-fn account_item_id(account: &MenuAccount) -> String {
+/// Id of the item (and shortcut) that selects `account`.
+pub(crate) fn account_item_id(account: &MenuAccount) -> String {
     format!("{ID_ACCOUNT}{}", account.id)
 }
 
@@ -143,15 +192,24 @@ fn tray_title(model: &MenuModel) -> Option<String> {
     Some(model.tray_title.clone()).filter(|title| !title.is_empty())
 }
 
+/// The menu item `id` with its shortcut from [`ITEM_SHORTCUTS`], if it has one.
 fn shortcut_item<R: Runtime>(
     app: &AppHandle<R>,
     id: &str,
     text: &str,
-    shortcut: &str,
 ) -> tauri::Result<MenuItem<R>> {
-    MenuItemBuilder::with_id(id, text)
-        .accelerator(shortcut)
-        .build(app)
+    let mut item = MenuItemBuilder::with_id(id, text);
+    if let Some(shortcut) = item_shortcut(id) {
+        item = item.accelerator(shortcut.accelerator());
+    }
+    item.build(app)
+}
+
+fn item_shortcut(id: &str) -> Option<Shortcut> {
+    ITEM_SHORTCUTS
+        .iter()
+        .find(|(item, _)| *item == id)
+        .map(|&(_, shortcut)| shortcut)
 }
 
 fn about_metadata<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<AboutMetadata<'static>> {
@@ -174,18 +232,13 @@ fn atrium_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     SubmenuBuilder::new(app, "Atrium")
         .about(Some(about_metadata(app)?))
         .separator()
-        .item(&shortcut_item(
-            app,
-            ID_SETTINGS,
-            "Settings…",
-            "CmdOrCtrl+,",
-        )?)
+        .item(&shortcut_item(app, ID_SETTINGS, "Settings…")?)
         .separator()
         .hide()
         .hide_others()
         .show_all()
         .separator()
-        .item(&shortcut_item(app, ID_QUIT, "Quit Atrium", "CmdOrCtrl+Q")?)
+        .item(&shortcut_item(app, ID_QUIT, "Quit Atrium")?)
         .build()
 }
 
@@ -204,24 +257,18 @@ fn edit_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
 
 fn view_submenu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Submenu<R>> {
     SubmenuBuilder::new(app, "View")
-        .item(&shortcut_item(app, ID_RELOAD, "Reload", "CmdOrCtrl+R")?)
-        .item(&shortcut_item(app, ID_BACK, "Back", "CmdOrCtrl+[")?)
-        .item(&shortcut_item(app, ID_FORWARD, "Forward", "CmdOrCtrl+]")?)
+        .item(&shortcut_item(app, ID_RELOAD, "Reload")?)
+        .item(&shortcut_item(app, ID_BACK, "Back")?)
+        .item(&shortcut_item(app, ID_FORWARD, "Forward")?)
         .separator()
-        .item(&shortcut_item(app, ID_ZOOM_IN, "Zoom In", "CmdOrCtrl+=")?)
-        .item(&shortcut_item(app, ID_ZOOM_OUT, "Zoom Out", "CmdOrCtrl+-")?)
-        .item(&shortcut_item(
-            app,
-            ID_ZOOM_RESET,
-            "Actual Size",
-            "CmdOrCtrl+0",
-        )?)
+        .item(&shortcut_item(app, ID_ZOOM_IN, "Zoom In")?)
+        .item(&shortcut_item(app, ID_ZOOM_OUT, "Zoom Out")?)
+        .item(&shortcut_item(app, ID_ZOOM_RESET, "Actual Size")?)
         .separator()
         .item(&shortcut_item(
             app,
             ID_OPEN_BROWSER,
             "Open Page in Browser",
-            "CmdOrCtrl+Shift+O",
         )?)
         .separator()
         .fullscreen()
@@ -235,8 +282,8 @@ fn accounts_submenu<R: Runtime>(
     let mut submenu = SubmenuBuilder::new(app, "Accounts");
     for (index, account) in model.accounts.iter().enumerate() {
         let mut item = MenuItemBuilder::with_id(account_item_id(account), &account.label);
-        if index < ACCOUNT_SHORTCUTS {
-            item = item.accelerator(format!("CmdOrCtrl+{}", index + 1));
+        if let Some(shortcut) = account_shortcut(index) {
+            item = item.accelerator(shortcut.accelerator());
         }
         submenu = submenu.item(&item.build(app)?);
     }
@@ -328,6 +375,7 @@ pub(crate) struct MenuState<R: Runtime> {
     tray: Option<TrayIcon<R>>,
     /// The menu the tray was built with.
     tray_menu: Option<Menu<R>>,
+    shortcuts: native::Shortcuts,
 }
 
 impl<R: Runtime> Default for MenuState<R> {
@@ -336,14 +384,26 @@ impl<R: Runtime> Default for MenuState<R> {
             last: None,
             tray: None,
             tray_menu: None,
+            shortcuts: native::Shortcuts::new(),
         }
     }
 }
 
 impl<R: Runtime> MenuState<R> {
-    /// Applies `model`, rebuilding only what changed.
-    pub(crate) fn apply(&mut self, app: &AppHandle<R>, model: &MenuModel) -> tauri::Result<()> {
+    /// Applies `model`, rebuilding only what changed. The native shortcuts are added to the
+    /// window `window_label` on the first call and feed their inputs to `feed`.
+    pub(crate) fn apply(
+        &mut self,
+        app: &AppHandle<R>,
+        window_label: &str,
+        feed: &Feed,
+        model: &MenuModel,
+    ) -> tauri::Result<()> {
         let last = self.last.take();
+        if last.is_none() {
+            self.shortcuts.install(app, window_label, feed)?;
+        }
+        self.shortcuts.set_accounts(model);
         // Without an app menu (Linux), Settings and Quit stay reachable from the tray.
         if native::USES_APP_MENU
             && last
@@ -411,6 +471,36 @@ mod tests {
                 String::new()
             },
         }
+    }
+
+    #[test]
+    fn shortcuts_render_as_menu_accelerators() {
+        let accelerators: Vec<String> = ITEM_SHORTCUTS
+            .iter()
+            .map(|(_, shortcut)| shortcut.accelerator())
+            .collect();
+        assert_eq!(
+            accelerators,
+            [
+                "CmdOrCtrl+,",
+                "CmdOrCtrl+Q",
+                "CmdOrCtrl+R",
+                "CmdOrCtrl+[",
+                "CmdOrCtrl+]",
+                "CmdOrCtrl+=",
+                "CmdOrCtrl+-",
+                "CmdOrCtrl+0",
+                "CmdOrCtrl+Shift+O",
+            ]
+        );
+        assert_eq!(item_shortcut(ID_DND), None);
+    }
+
+    #[test]
+    fn the_first_nine_accounts_get_a_digit() {
+        assert_eq!(account_shortcut(0), Some(Shortcut::key('1')));
+        assert_eq!(account_shortcut(8), Some(Shortcut::key('9')));
+        assert_eq!(account_shortcut(ACCOUNT_SHORTCUTS), None);
     }
 
     #[test]

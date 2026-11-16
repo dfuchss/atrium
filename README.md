@@ -39,7 +39,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
   - Custom services can be created in the settings, optionally starting from a built-in one.
   - **Expert mode:** edit service definitions as TOML files in the services folder and reload them without restarting.
 - **Desktop integration.**
-  - App menu with shortcuts (macOS).
+  - Keyboard shortcuts: an app menu on macOS, window shortcuts on Linux.
   - Launch at login, start hidden, keep running in the background.
   - After you wake your Mac from sleep, reload only the services that stopped responding, or all of them, per account (not on Power Nap background wakes).
 
@@ -94,7 +94,7 @@ Data locations on Linux:
 
 Known limitations on Linux:
 - JavaScript dialogs name the host of the page, not of an embedded frame that asks (WebKitGTK does not tell which frame asked).
-- There is no app menu, so no keyboard shortcuts for settings or quit; use the tray menu.
+- There is no app menu; the keyboard shortcuts work with <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>. They take precedence over a page's own shortcuts with the same keys (for example <kbd>Ctrl</kbd><kbd>R</kbd> or <kbd>Ctrl</kbd><kbd>1</kbd> in a web app).
 - The unread count appears as the tray label only where the panel supports it. The launcher badge works only where the desktop supports the Unity launcher API.
 - "Open links in" takes a command name (e.g. `firefox`) instead of an application name.
 - No self-update.
@@ -115,6 +115,7 @@ Known limitations on Linux:
 
 | Shortcut | Action |
 |---|---|
+| <kbd>⌘</kbd><kbd>,</kbd> | Open the settings |
 | <kbd>⌘</kbd><kbd>1</kbd> … <kbd>⌘</kbd><kbd>9</kbd> | Switch to account 1–9 |
 | <kbd>⌘</kbd><kbd>R</kbd> | Reload the current account |
 | <kbd>⌘</kbd><kbd>[</kbd> / <kbd>⌘</kbd><kbd>]</kbd> | Back / forward |
@@ -122,6 +123,8 @@ Known limitations on Linux:
 | <kbd>⌘</kbd><kbd>⇧</kbd><kbd>O</kbd> | Open the current page in the browser |
 | <kbd>⌘</kbd><kbd>W</kbd> | Close the window (Atrium keeps running in the background) |
 | <kbd>⌘</kbd><kbd>Q</kbd> | Quit |
+
+On Linux, use <kbd>Ctrl</kbd> where the table says <kbd>⌘</kbd> (and <kbd>Shift</kbd> for <kbd>⇧</kbd>); they work while a service has the focus. <kbd>Ctrl</kbd><kbd>+</kbd> zooms in as well.
 
 ### Service definitions (expert mode)
 

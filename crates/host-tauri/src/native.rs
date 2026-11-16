@@ -15,7 +15,7 @@
 //!   view whose web process died.
 //! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_screens_wake`],
 //!   [`guard_single_instance`], [`NOTIFICATION_SOUND`], the tray icon and whether an app menu
-//!   is shown.
+//!   is shown; [`Shortcuts`] where there is no app menu to carry them.
 //! - Settings: [`open_url_with`] opens links in the chosen browser.
 
 #[cfg(target_os = "linux")]

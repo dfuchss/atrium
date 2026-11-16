@@ -1,6 +1,7 @@
 //! Linux (`WebKitGTK` 4.1, GTK 3): a web data folder per account, child webviews laid out in a
 //! `gtk::Layout`, and Atrium's own JavaScript dialogs (`dialogs`). A second start hands over to
-//! the running Atrium (`single_instance`).
+//! the running Atrium (`single_instance`). Keyboard shortcuts have a module of their own
+//! (`shortcuts`).
 //!
 //! Layout: Tauri builds every child webview into the window's vertical `gtk::Box`, where wry
 //! packs it to fill (the views would stack) and cannot move or resize it. So each new child
@@ -34,9 +35,11 @@ use webkit2gtk::WebViewExt;
 use crate::port_err;
 
 mod dialogs;
+mod shortcuts;
 mod single_instance;
 
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
+pub(crate) use shortcuts::Shortcuts;
 pub(crate) use single_instance::guard_single_instance;
 
 /// Freedesktop sound theme name of an instant message.

@@ -148,7 +148,7 @@ impl<R: Runtime> Platform for TauriHost<R> {
         self.menus
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .apply(&self.app, model)
+            .apply(&self.app, &self.window_label, &self.feed, model)
             .map_err(port_err)
     }
 

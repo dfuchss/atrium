@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use domain::ports::{PortError, PortResult};
-use domain::{Bounds, DockBadge};
+use domain::{Bounds, DockBadge, MenuModel};
 use protocol::UI_WEBVIEW;
 use tauri::webview::NewWindowFeatures;
 use tauri::{
@@ -159,6 +159,32 @@ pub(crate) fn open_url_with<R: Runtime>(
     browser: Option<&str>,
 ) -> PortResult {
     app.opener().open_url(url, browser).map_err(port_err)
+}
+
+/// The keyboard shortcuts: the app menu carries them (see `menus`), so there is nothing to add.
+pub(crate) struct Shortcuts;
+
+impl Shortcuts {
+    pub(crate) fn new() -> Shortcuts {
+        Shortcuts
+    }
+
+    #[expect(clippy::unused_self, reason = "same methods as on Linux")]
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "same signature as on Linux, where adding the shortcuts can fail"
+    )]
+    pub(crate) fn install<R: Runtime>(
+        &mut self,
+        _app: &AppHandle<R>,
+        _window_label: &str,
+        _feed: &Feed,
+    ) -> tauri::Result<()> {
+        Ok(())
+    }
+
+    #[expect(clippy::unused_self, reason = "same methods as on Linux")]
+    pub(crate) fn set_accounts(&self, _model: &MenuModel) {}
 }
 
 /// Leaves `builder` as it is: started again, macOS activates the running app itself (Launch

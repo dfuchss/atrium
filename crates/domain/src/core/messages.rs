@@ -183,9 +183,10 @@ pub enum Input {
     Tick {
         now_ms: u64,
     },
-    /// The displays woke, so the user is back; a dark wake (Power Nap) never wakes them.
-    /// `now_ms` as for [`Input::Tick`].
-    ScreensWoke {
+    /// The user is back at the computer: on macOS the displays woke (a dark wake such as Power
+    /// Nap never wakes them), on Linux the system resumed from suspend. Handled only after a
+    /// sleep (see [`Input::Tick`]). `now_ms` as for [`Input::Tick`].
+    Resumed {
         now_ms: u64,
     },
     /// The web content process of the account's view terminated (crash, or killed by macOS

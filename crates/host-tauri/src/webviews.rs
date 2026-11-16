@@ -119,7 +119,6 @@ pub(crate) fn view_label(account: Uuid) -> String {
 }
 
 /// The account whose service webview has `label`; None for any other webview.
-#[cfg(target_os = "macos")]
 pub(crate) fn view_account(label: &str) -> Option<Uuid> {
     let id = label.strip_prefix(VIEW_LABEL_PREFIX)?;
     Uuid::try_parse(id).ok()
@@ -319,6 +318,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         let builder = self.hook(spec, builder);
         let webview = add_service_view(&self.window()?, builder, spec.store_id, bounds)?;
         Dialogs::attach(&webview, &self.logger);
+        native::observe_web_process_termination(&webview, &self.feed, &self.logger);
         if !visible {
             native::set_visible(&webview, false)?;
         }
@@ -567,7 +567,6 @@ mod tests {
         assert!(!belongs_to_account("ui", first));
     }
 
-    #[cfg(target_os = "macos")]
     #[test]
     fn view_account_reads_service_view_labels_only() {
         let account = Uuid::from_u128(0x2a);

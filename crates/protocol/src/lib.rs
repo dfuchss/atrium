@@ -226,7 +226,7 @@ pub struct AppSettings {
     pub link_target: LinkTarget,
     /// Menu bar (tray) icon with unread count and account menu.
     pub show_tray: bool,
-    /// What happens to the loaded services when the Mac wakes from sleep (accounts can
+    /// What happens to the loaded services when the computer wakes from sleep (accounts can
     /// override it: `AccountSettings::after_wake`).
     pub after_wake: AfterWake,
     /// Size of the sidebar icons (and thereby the sidebar width).
@@ -260,8 +260,8 @@ impl Default for AppSettings {
     }
 }
 
-/// What happens to a loaded service when the Mac wakes from sleep (the displays wake; a dark
-/// wake such as Power Nap does nothing).
+/// What happens to a loaded service when the computer wakes from sleep (on macOS once the
+/// displays wake; a dark wake such as Power Nap does nothing).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AfterWake {

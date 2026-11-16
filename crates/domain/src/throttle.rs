@@ -35,6 +35,11 @@ impl<K: Hash + Eq> RateLimiter<K> {
         stamps.push_back(now_ms);
         true
     }
+
+    /// Forgets the events of `key`: its next events count from zero.
+    pub fn reset(&mut self, key: &K) {
+        self.recent.remove(key);
+    }
 }
 
 /// Why a new in-app window was refused.
@@ -96,6 +101,16 @@ mod tests {
         assert!(limiter.allow(1, 0));
         assert!(!limiter.allow(1, 1_500));
         assert!(limiter.allow(1, 2_000));
+    }
+
+    #[test]
+    fn reset_forgets_the_events_of_one_key() {
+        let mut limiter = RateLimiter::new(1, 1_000);
+        assert!(limiter.allow('a', 0));
+        assert!(limiter.allow('b', 0));
+        limiter.reset(&'a');
+        assert!(limiter.allow('a', 10));
+        assert!(!limiter.allow('b', 10));
     }
 
     #[test]

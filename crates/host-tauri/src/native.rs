@@ -11,9 +11,10 @@
 //! - JavaScript dialogs: [`install_dialogs`] and [`attach_dialogs`] show the dialogs of the
 //!   service views and popups as decided by the `dialogs` policy; [`prepare_popup`]: what a
 //!   popup's page may do before it is created.
-//! - Crashed web processes: `register_crash_hook` (macOS) has the core reload a service
+//! - Crashed web processes: [`register_crash_hook`] (macOS, for every webview) or
+//!   [`observe_web_process_termination`] (Linux, per service view) has the core reload a service
 //!   view whose web process died.
-//! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_screens_wake`],
+//! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_resume`],
 //!   [`guard_single_instance`], [`NOTIFICATION_SOUND`], the tray icon and whether an app menu
 //!   is shown; [`Shortcuts`] where there is no app menu to carry them.
 //! - Settings: [`open_url_with`] opens links in the chosen browser, [`installed_browsers`]

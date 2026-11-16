@@ -1,11 +1,11 @@
 //! The one-second tick: sleep detection, the wake checks, hibernation of idle accounts and
-//! unread polling. What a sleep means for the views is decided once the displays wake (`wake`).
+//! unread polling. What a sleep means for the views is decided once the user is back (`wake`).
 
 use uuid::Uuid;
 
 use super::{Core, Effect, scripts};
 
-/// A gap between two clock readings longer than this means the Mac was asleep.
+/// A gap between two clock readings longer than this means the computer was asleep.
 pub const SLEEP_GAP_MS: u64 = 30_000;
 
 const MS_PER_MINUTE: u64 = 60_000;
@@ -32,7 +32,7 @@ impl Core {
 
     /// Records `now_ms` as the latest clock reading; a gap longer than [`SLEEP_GAP_MS`] since
     /// the previous one marks a sleep, logged here. A sleep ends the running wake checks: the
-    /// next screen wake starts them again.
+    /// next resume starts them again.
     pub(super) fn read_clock(&mut self, now_ms: u64) -> Option<Effect> {
         let since_last_ms = self
             .last_tick_ms

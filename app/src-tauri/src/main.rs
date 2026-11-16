@@ -159,7 +159,7 @@ fn remove_unused_data_stores(
     }
 }
 
-/// Wall clock in ms since the Unix epoch (ticks and screen wakes; a jump > 30 s means the Mac
+/// Wall clock in ms since the Unix epoch (ticks and resumes; a jump > 30 s means the computer
 /// slept).
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -259,9 +259,10 @@ fn host_os() -> OperatingSystem {
     }
 }
 
-/// Feeds each display wake; the core handles the views only if the Mac slept before.
-fn observe_screens_wake(feed: Feed) {
-    host_tauri::observe_screens_wake(move || feed(Input::ScreensWoke { now_ms: now_ms() }));
+/// Feeds each return of the user (see [`TauriHost::observe_resume`]); the core handles the
+/// views only if the computer slept before.
+fn observe_resume(host: &TauriHost<Wry>, feed: Feed) {
+    host.observe_resume(move || feed(Input::Resumed { now_ms: now_ms() }));
 }
 
 fn feed_resize(feed: &Feed, size: LogicalSize<f64>) {
@@ -380,8 +381,8 @@ fn app_info(
     }
 }
 
-/// Builds the window, the host and the core, starts the actor, the ticker and the screen wake
-/// observer, and feeds `Input::Started`. The host only needs the window lazily, so it can log
+/// Builds the window, the host and the core, starts the resume observer, the actor and the
+/// ticker, and feeds `Input::Started`. The host only needs the window lazily, so it can log
 /// while loading the settings that decide how the window is created.
 fn setup(
     app: &App,
@@ -439,6 +440,7 @@ fn setup(
 
     // The actor may block in `add_child` until the main thread runs the build, so the main
     // thread (this function, window events, commands) only ever sends to it.
+    observe_resume(&host, feed.clone());
     let env = ActorEnv {
         host,
         store,
@@ -447,7 +449,6 @@ fn setup(
     };
     spawn_actor(core, inputs, env)?;
     spawn_ticker(feed.clone())?;
-    observe_screens_wake(feed.clone());
     watch_main_window(&window, feed.clone(), snapshot_cache.clone());
     feed(Input::Started {
         width: size.width,
@@ -491,7 +492,6 @@ fn main() {
     });
     let snapshot_cache = Arc::new(Mutex::new(Snapshot::default()));
     let (menu_feed, setup_feed, setup_cache) = (feed.clone(), feed.clone(), snapshot_cache.clone());
-    #[cfg(target_os = "macos")]
     let crash_feed = feed.clone();
 
     let builder = builder_with_plugins(&dev)
@@ -517,9 +517,7 @@ fn main() {
         .on_menu_event(move |app, event| {
             host_tauri::handle_menu_event(app, MAIN_WINDOW, event.id().as_ref(), &menu_feed);
         });
-    // A view whose web content process died is reloaded through the core (Tauri has this hook
-    // on macOS only).
-    #[cfg(target_os = "macos")]
+    // A view whose web content process died is reloaded through the core.
     let builder = host_tauri::register_crash_hook(builder, &crash_feed);
     let app = builder
         .setup(move |app| setup(app, &dev, &setup_feed, inputs, &setup_cache))

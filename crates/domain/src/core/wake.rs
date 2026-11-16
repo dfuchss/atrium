@@ -1,7 +1,7 @@
 //! What a sleep means for the loaded views, and views whose web content process died.
 //!
 //! The tick detects a sleep (a gap between clock readings); the views are handled only once the
-//! displays wake, not on a dark wake (Power Nap), which also leaves a gap. Each account follows
+//! user is back ([`Input::Resumed`]), not on a dark wake (Power Nap), which also leaves a gap. Each account follows
 //! its own [`AfterWake`] mode, or the global one:
 //! - `Check` watches the view: it is alive once it answers a poll after the wake, and reloaded
 //!   if it stays silent for [`WAKE_GRACE_MS`]. Most services reconnect by themselves, and a
@@ -18,13 +18,18 @@ use uuid::Uuid;
 
 use super::{Core, Effect};
 
+/// Reloads of a view after its web process crashed, within [`CRASH_RELOAD_WINDOW_MS`].
+pub(super) const MAX_CRASH_RELOADS: usize = 3;
+/// The window, in ms of the tick clock, in which [`MAX_CRASH_RELOADS`] are allowed.
+pub(super) const CRASH_RELOAD_WINDOW_MS: u64 = 60_000;
+
 /// Time a checked view has after a wake to answer a poll before it is reloaded.
 pub(super) const WAKE_GRACE_MS: u64 = 15_000;
 
 impl Core {
     /// After a sleep, reloads or watches the loaded views as their mode says. The clock is read
     /// first: the wake can arrive before the first tick after it.
-    pub(super) fn screens_woke(&mut self, now_ms: u64) -> Vec<Effect> {
+    pub(super) fn resumed(&mut self, now_ms: u64) -> Vec<Effect> {
         if !self.started {
             return vec![];
         }
@@ -32,7 +37,7 @@ impl Core {
         if !std::mem::take(&mut self.slept) {
             return effects;
         }
-        effects.push(Effect::Log("screens woke after sleep".into()));
+        effects.push(Effect::Log("resumed after sleep".into()));
         for account_id in self.loaded_account_ids() {
             match self.after_wake(account_id) {
                 AfterWake::Check => {
@@ -89,17 +94,37 @@ impl Core {
     }
 
     /// Stops watching the account (its view is gone or reloads anyway).
-    pub(super) fn stop_wake_check(&mut self, account_id: Uuid) {
+    fn stop_wake_check(&mut self, account_id: Uuid) {
         self.wake_checks.remove(&account_id);
     }
 
-    /// A view whose web content process died shows a blank page until it is reloaded.
+    /// A view whose web content process died shows a blank page until it is reloaded. A page
+    /// that crashes it again and again is reloaded at most [`MAX_CRASH_RELOADS`] times within
+    /// [`CRASH_RELOAD_WINDOW_MS`] (tick clock), then left alone until the user reloads it.
     pub(super) fn web_process_terminated(&mut self, account_id: Uuid) -> Vec<Effect> {
         if !self.is_loaded(account_id) {
             return vec![];
         }
         self.stop_wake_check(account_id);
-        logged_reload(account_id, "web process terminated").into()
+        let now_ms = self.last_tick_ms.unwrap_or(0);
+        if self.crash_reload_limit.allow(account_id, now_ms) {
+            self.crash_reloads_stopped.remove(&account_id);
+            logged_reload(account_id, "web process terminated").into()
+        } else if self.crash_reloads_stopped.insert(account_id) {
+            vec![Effect::Log(format!(
+                "[{account_id}] web process keeps crashing -> not reloading"
+            ))]
+        } else {
+            vec![]
+        }
+    }
+
+    /// A reload by the user or a new view starts the account afresh: its wake check ends and
+    /// its crashes are reloaded again from zero.
+    pub(super) fn start_afresh(&mut self, account_id: Uuid) {
+        self.stop_wake_check(account_id);
+        self.crash_reload_limit.reset(&account_id);
+        self.crash_reloads_stopped.remove(&account_id);
     }
 }
 

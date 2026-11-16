@@ -146,9 +146,19 @@ pub(crate) fn prepare_popup(features: &NewWindowFeatures) {
     webview_dialogs::forbid_automatic_windows(&features.opener().target_configuration);
 }
 
-/// Calls `on_wake` each time the displays wake (not on a Power Nap dark wake).
-pub(crate) fn observe_screens_wake(on_wake: impl Fn() + Send + Sync + 'static) {
-    webview_dialogs::observe_screens_wake(on_wake);
+/// Calls `on_resume` each time the displays wake, the sign that the user is back: a dark wake
+/// (Power Nap) leaves them off. Nothing to log: the observer cannot fail.
+pub(crate) fn observe_resume(_logger: &Logger, on_resume: impl Fn() + Send + Sync + 'static) {
+    webview_dialogs::observe_screens_wake(on_resume);
+}
+
+/// Leaves `builder` as it is: started again, macOS activates the running app itself (Launch
+/// Services), and a development instance may run beside it.
+pub(crate) fn guard_single_instance<R: Runtime>(
+    builder: Builder<R>,
+    _window_label: &'static str,
+) -> Builder<R> {
+    builder
 }
 
 /// Opens `url` in the app named `browser`, or in the default browser. With a browser this runs
@@ -195,15 +205,6 @@ impl Shortcuts {
 
 /// Nothing in the environment of a macOS launch overrides the settings.
 pub(crate) fn clean_launch_environment() {}
-
-/// Leaves `builder` as it is: started again, macOS activates the running app itself (Launch
-/// Services), and a development instance may run beside it.
-pub(crate) fn guard_single_instance<R: Runtime>(
-    builder: Builder<R>,
-    _window_label: &'static str,
-) -> Builder<R> {
-    builder
-}
 
 /// Shows the unread count or a dot on the Dock icon, or clears it.
 pub(crate) fn set_badge<R: Runtime>(window: &Window<R>, badge: DockBadge) -> tauri::Result<()> {
@@ -273,6 +274,14 @@ pub(crate) fn register_crash_hook<R: Runtime>(
             }
         }
     })
+}
+
+/// Nothing to observe per view: [`register_crash_hook`] covers every webview.
+pub(crate) fn observe_web_process_termination<R: Runtime>(
+    _webview: &Webview<R>,
+    _feed: &Feed,
+    _logger: &Logger,
+) {
 }
 
 /// Makes the dialogs of `webview` carry its label (see `dialogs::account_of_label`).

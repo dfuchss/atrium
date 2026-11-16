@@ -1,7 +1,8 @@
 //! Linux (`WebKitGTK` 4.1, GTK 3): a web data folder per account, child webviews laid out in a
-//! `gtk::Layout`, and Atrium's own JavaScript dialogs (`dialogs`). A second start hands over to
-//! the running Atrium (`single_instance`). Keyboard shortcuts (`shortcuts`), the browser for
-//! links (`browsers`) and the appearance (`theme`) have a module each.
+//! `gtk::Layout`, and Atrium's own JavaScript dialogs (`dialogs`). Resumes from suspend
+//! come from logind (`resume`); a second start hands over to the running Atrium
+//! (`single_instance`). Keyboard shortcuts (`shortcuts`), the browser for links (`browsers`)
+//! and the appearance (`theme`) have a module each.
 //!
 //! Layout: Tauri builds every child webview into the window's vertical `gtk::Box`, where wry
 //! packs it to fill (the views would stack) and cannot move or resize it. So each new child
@@ -29,18 +30,21 @@ use tauri::{
     WebviewWindowBuilder, Window,
 };
 use uuid::Uuid;
-use webkit2gtk::WebViewExt;
+use webkit2gtk::{WebProcessTerminationReason, WebViewExt};
 
-use crate::port_err;
+use crate::webviews::view_account;
+use crate::{Feed, Input, Logger, port_err};
 
 mod browsers;
 mod dialogs;
+mod resume;
 mod shortcuts;
 mod single_instance;
 mod theme;
 
 pub(crate) use browsers::{installed_browsers, open_url_with};
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
+pub(crate) use resume::observe_resume;
 pub(crate) use shortcuts::Shortcuts;
 pub(crate) use single_instance::guard_single_instance;
 pub(crate) use theme::clean_launch_environment;
@@ -231,6 +235,49 @@ pub(crate) fn add_child<R: Runtime>(
     Ok(webview)
 }
 
+/// Whether a terminated web process is worth a reload: not when Atrium ended it itself.
+fn reload_after(reason: WebProcessTerminationReason) -> bool {
+    !matches!(reason, WebProcessTerminationReason::TerminatedByApi)
+}
+
+/// Nothing to register for the whole app: [`observe_web_process_termination`] watches each
+/// service view.
+pub(crate) fn register_crash_hook<R: Runtime>(
+    builder: tauri::Builder<R>,
+    _feed: &Feed,
+) -> tauri::Builder<R> {
+    builder
+}
+
+/// Has the core reload the service view `webview` when its web process crashes or is killed
+/// for its memory (`WebKitGTK` leaves the view blank otherwise). A process Atrium ended itself
+/// is left alone.
+pub(crate) fn observe_web_process_termination<R: Runtime>(
+    webview: &Webview<R>,
+    feed: &Feed,
+    logger: &Logger,
+) {
+    let label = webview.label().to_string();
+    let (feed, signal_logger) = (feed.clone(), logger.clone());
+    let connected = webview.with_webview(move |platform| {
+        platform
+            .inner()
+            .connect_web_process_terminated(move |_, reason| {
+                let Some(account) = view_account(&label).filter(|_| reload_after(reason)) else {
+                    return;
+                };
+                signal_logger.log(&format!("[{account}] web process ended: {reason:?}"));
+                feed(Input::WebProcessTerminated { account });
+            });
+    });
+    if let Err(error) = connected {
+        logger.log(&format!(
+            "[{}] cannot watch the web process: {error}",
+            webview.label()
+        ));
+    }
+}
+
 /// Adds a service view to `window` (called on the main thread).
 pub(crate) fn build_service_view<R: Runtime>(
     window: &Window<R>,
@@ -316,9 +363,6 @@ fn requested_size(view: &webkit2gtk::WebView) -> Option<LogicalSize<f64>> {
 /// default and wry leaves it, so pages open windows only from a user gesture.
 pub(crate) fn prepare_popup(_features: &NewWindowFeatures) {}
 
-/// No wake signal yet: nothing is called.
-pub(crate) fn observe_screens_wake(_on_wake: impl Fn() + Send + Sync + 'static) {}
-
 /// Shows the unread count on the launcher icon (Unity launcher API), or clears it; a dot
 /// badge shows nothing.
 pub(crate) fn set_badge<R: Runtime>(window: &Window<R>, badge: DockBadge) -> tauri::Result<()> {
@@ -353,6 +397,15 @@ pub(crate) fn show_warning<R: Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_process_atrium_did_not_end_is_reloaded() {
+        assert!(reload_after(WebProcessTerminationReason::Crashed));
+        assert!(reload_after(
+            WebProcessTerminationReason::ExceededMemoryLimit
+        ));
+        assert!(!reload_after(WebProcessTerminationReason::TerminatedByApi));
+    }
 
     #[test]
     fn stores_are_the_uuid_folders() {

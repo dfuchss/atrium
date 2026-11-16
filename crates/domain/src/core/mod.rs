@@ -41,6 +41,7 @@ pub use unread::HIDDEN_PREVIEW_BODY;
 
 use layout::WindowSize;
 use unread::{TitleRules, UnreadTracker};
+use wake::{CRASH_RELOAD_WINDOW_MS, MAX_CRASH_RELOADS};
 
 pub struct Core {
     /// Built-in + user TOML services; `catalog` = this + custom services.
@@ -70,9 +71,9 @@ pub struct Core {
     loaded_views: HashSet<Uuid>,
     /// Last time (tick clock) each account was active (shown) or left.
     last_activity_ms: HashMap<Uuid, u64>,
-    /// Latest wall clock reading (ticks and screen wakes).
+    /// Latest wall clock reading (ticks and resumes).
     last_tick_ms: Option<u64>,
-    /// A sleep was detected and not yet handled; the next screen wake does it.
+    /// A sleep was detected and not yet handled; the next resume does it.
     slept: bool,
     /// Accounts checked after a wake (`AfterWake::Check`) that have not answered a poll yet,
     /// with the time of the wake (tick clock).
@@ -85,6 +86,11 @@ pub struct Core {
     log_page_titles: bool,
     /// External opens (browser, mail app) per account, so a page cannot flood the desktop.
     external_link_limit: RateLimiter<Uuid>,
+    /// Reloads after a crashed web process per account, so a crashing page is not reloaded
+    /// forever.
+    crash_reload_limit: RateLimiter<Uuid>,
+    /// Accounts whose crashes are no longer reloaded (logged once).
+    crash_reloads_stopped: HashSet<Uuid>,
 }
 
 /// One external open per account within this time (tick clock).
@@ -129,6 +135,8 @@ impl Core {
             startup_log: vec![],
             log_page_titles: false,
             external_link_limit: RateLimiter::new(1, EXTERNAL_LINK_INTERVAL_MS),
+            crash_reload_limit: RateLimiter::new(MAX_CRASH_RELOADS, CRASH_RELOAD_WINDOW_MS),
+            crash_reloads_stopped: HashSet::new(),
         };
         core.startup_log = core.rebuild_catalog();
         core
@@ -175,7 +183,7 @@ impl Core {
                 self.window_resized(WindowSize { width, height })
             }
             Input::Tick { now_ms } => self.tick(now_ms),
-            Input::ScreensWoke { now_ms } => self.screens_woke(now_ms),
+            Input::Resumed { now_ms } => self.resumed(now_ms),
             Input::WebProcessTerminated { account } => self.web_process_terminated(account),
             Input::IconFound {
                 account,

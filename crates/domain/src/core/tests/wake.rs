@@ -1,4 +1,4 @@
-use super::super::wake::WAKE_GRACE_MS;
+use super::super::wake::{CRASH_RELOAD_WINDOW_MS, MAX_CRASH_RELOADS, WAKE_GRACE_MS};
 use super::*;
 use crate::model::Settings;
 
@@ -38,9 +38,9 @@ fn reloads(effects: &[Effect]) -> Vec<Uuid> {
 
 const AFTER_SLEEP_MS: u64 = 31_000 + SLEEP_GAP_MS + 1;
 
-/// Sleeps, wakes the screens at [`AFTER_SLEEP_MS`] and returns the effects of the wake.
+/// Sleeps, resumes at [`AFTER_SLEEP_MS`] and returns the effects of the wake.
 fn wake(core: &mut Core) -> Vec<Effect> {
-    core.handle(Input::ScreensWoke {
+    core.handle(Input::Resumed {
         now_ms: AFTER_SLEEP_MS,
     })
 }
@@ -89,7 +89,7 @@ fn check_is_the_default() {
 fn check_reloads_only_the_silent_account_once() {
     let mut core = three_accounts_one_hibernated();
     let effects = wake(&mut core);
-    assert!(logs(&effects).contains(&"screens woke after sleep"));
+    assert!(logs(&effects).contains(&"resumed after sleep"));
     assert!(reloads(&effects).is_empty(), "a check does not reload");
     let mut effects = core.handle(Input::Tick {
         now_ms: AFTER_SLEEP_MS + 1_000,
@@ -177,34 +177,34 @@ fn reload_mode_reloads_loaded_views_once() {
     core.handle(Input::Tick {
         now_ms: 2 * AFTER_SLEEP_MS,
     });
-    let effects = core.handle(Input::ScreensWoke {
+    let effects = core.handle(Input::Resumed {
         now_ms: 2 * AFTER_SLEEP_MS + 500,
     });
     assert_eq!(reloads(&effects), vec![id(1), id(2)]);
-    let effects = core.handle(Input::ScreensWoke {
+    let effects = core.handle(Input::Resumed {
         now_ms: 2 * AFTER_SLEEP_MS + 1_000,
     });
     assert!(reloads(&effects).is_empty());
 }
 
 #[test]
-fn reload_mode_reloads_when_the_screens_wake_before_the_first_tick() {
+fn reload_mode_reloads_when_resumed_before_the_first_tick() {
     let mut core = with_global_after_wake(three_accounts_one_hibernated(), AfterWake::Reload);
     assert_eq!(reloads(&wake(&mut core)).len(), 2);
     // the gap was counted once, and nothing is watched
     let effects = tick_through_grace(&mut core);
     assert!(logs(&effects).is_empty());
     assert!(reloads(&effects).is_empty());
-    let effects = core.handle(Input::ScreensWoke {
+    let effects = core.handle(Input::Resumed {
         now_ms: AFTER_SLEEP_MS + 16_000,
     });
     assert!(reloads(&effects).is_empty());
 }
 
 #[test]
-fn screens_waking_without_sleep_does_nothing() {
+fn resuming_without_sleep_does_nothing() {
     let mut core = three_accounts_one_hibernated();
-    let effects = core.handle(Input::ScreensWoke { now_ms: 32_000 });
+    let effects = core.handle(Input::Resumed { now_ms: 32_000 });
     assert!(effects.is_empty());
     assert!(reloads(&tick_through_grace(&mut core)).is_empty());
 }
@@ -213,7 +213,7 @@ fn screens_waking_without_sleep_does_nothing() {
 fn never_mode_does_nothing() {
     let mut core = with_global_after_wake(three_accounts_one_hibernated(), AfterWake::Never);
     let effects = wake(&mut core);
-    assert!(logs(&effects).contains(&"screens woke after sleep"));
+    assert!(logs(&effects).contains(&"resumed after sleep"));
     assert!(reloads(&effects).is_empty());
     assert!(reloads(&tick_through_grace(&mut core)).is_empty());
 }
@@ -250,6 +250,69 @@ fn a_terminated_web_process_reloads_its_view() {
     // a view that is gone is not reloaded
     let effects = core.handle(Input::WebProcessTerminated { account: id(3) });
     assert!(effects.is_empty());
+}
+
+/// Terminates the web process of account `n` once and returns the accounts reloaded for it.
+fn crash(core: &mut Core, n: u128) -> Vec<Uuid> {
+    reloads(&core.handle(Input::WebProcessTerminated { account: id(n) }))
+}
+
+/// Crashes account `n` until its crash reloads are used up.
+fn crash_until_stopped(core: &mut Core, n: u128) {
+    for _ in 0..MAX_CRASH_RELOADS {
+        assert_eq!(crash(core, n), vec![id(n)]);
+    }
+}
+
+fn keeps_crashing(n: u128) -> String {
+    format!("[{}] web process keeps crashing -> not reloading", id(n))
+}
+
+#[test]
+fn a_web_process_that_keeps_crashing_is_reloaded_a_limited_number_of_times() {
+    let mut core = three_accounts_one_hibernated();
+    crash_until_stopped(&mut core, 2);
+    let effects = core.handle(Input::WebProcessTerminated { account: id(2) });
+    assert!(reloads(&effects).is_empty());
+    assert_eq!(logs(&effects), vec![keeps_crashing(2)]);
+    // logged once
+    assert!(
+        core.handle(Input::WebProcessTerminated { account: id(2) })
+            .is_empty()
+    );
+    // accounts are independent
+    assert_eq!(crash(&mut core, 1), vec![id(1)]);
+}
+
+#[test]
+fn crash_reloads_older_than_the_window_do_not_count() {
+    let mut core = three_accounts_one_hibernated();
+    assert_eq!(crash(&mut core, 2), vec![id(2)]);
+    tick_range(&mut core, 32_000, 40_000);
+    assert_eq!(crash(&mut core, 2), vec![id(2)]);
+    assert_eq!(crash(&mut core, 2), vec![id(2)]);
+    assert!(crash(&mut core, 2).is_empty());
+    // the first crash (at 31 s) leaves the window
+    tick_range(&mut core, 41_000, 31_000 + CRASH_RELOAD_WINDOW_MS);
+    assert_eq!(crash(&mut core, 2), vec![id(2)]);
+    assert!(crash(&mut core, 2).is_empty());
+}
+
+#[test]
+fn a_reload_by_the_user_or_a_new_view_resets_the_crash_reloads() {
+    let commands = [
+        UiCommand::Reload { account: id(2) },
+        UiCommand::ForceReload { account: id(2) },
+        UiCommand::Hibernate { account: id(2) },
+    ];
+    for command in commands {
+        let mut core = three_accounts_one_hibernated();
+        crash_until_stopped(&mut core, 2);
+        assert!(crash(&mut core, 2).is_empty());
+        core.handle(Input::Ui(command));
+        core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
+        assert_eq!(crash(&mut core, 2), vec![id(2)]);
+    }
 }
 
 #[test]

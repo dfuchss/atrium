@@ -41,7 +41,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
 - **Desktop integration.**
   - Keyboard shortcuts: an app menu on macOS, window shortcuts on Linux.
   - Launch at login, start hidden, keep running in the background.
-  - After you wake your Mac from sleep, reload only the services that stopped responding, or all of them, per account (not on Power Nap background wakes).
+  - After you wake your computer from sleep, reload only the services that stopped responding, or all of them, per account (on macOS not on Power Nap background wakes; on Linux after a resume from suspend).
 
 ## Built-in services
 

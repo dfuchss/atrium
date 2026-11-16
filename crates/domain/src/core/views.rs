@@ -75,7 +75,7 @@ impl Core {
 
     /// `Destroy` if the account has a view.
     pub(super) fn unload_view(&mut self, account_id: Uuid) -> Vec<Effect> {
-        self.stop_wake_check(account_id);
+        self.start_afresh(account_id);
         if self.loaded_views.remove(&account_id) {
             vec![Effect::Destroy(account_id)]
         } else {
@@ -109,12 +109,12 @@ impl Core {
     }
 
     pub(super) fn reload(&mut self, account_id: Uuid) -> Vec<Effect> {
-        self.stop_wake_check(account_id);
+        self.start_afresh(account_id);
         self.with_view(account_id, "reload", Effect::Reload)
     }
 
     pub(super) fn force_reload(&mut self, account_id: Uuid) -> Vec<Effect> {
-        self.stop_wake_check(account_id);
+        self.start_afresh(account_id);
         let mut effects = self.with_view(account_id, "force reload", Effect::ForceReload);
         if self.is_loaded(account_id) {
             effects.insert(0, Effect::Log(format!("[{account_id}] force reload")));

@@ -19,8 +19,9 @@ pub enum UpdateCommand {
     CheckNow,
     /// Turn the automatic check on startup and every few hours on or off.
     SetAutoCheck { enabled: bool },
-    /// Quit, swap in the staged update and start it (only while [`UpdateState::Ready`]).
-    RestartToUpdate,
+    /// Quit and swap in the staged update (only while [`UpdateState::Ready`]); macOS starts
+    /// Atrium again, Linux leaves that to the user ([`UpdateStatus::relaunches`]).
+    ApplyUpdate,
     /// Open the release page of the offered update (or the latest release) in the browser.
     OpenReleasePage,
 }
@@ -43,7 +44,8 @@ pub enum UpdateState {
         version: String,
         percent: Option<u8>,
     },
-    /// Verified and staged next to the installation; a restart installs it.
+    /// Verified and staged next to the installation; quitting with
+    /// [`UpdateCommand::ApplyUpdate`] installs it.
     Ready {
         version: String,
     },
@@ -60,7 +62,9 @@ pub struct UpdateStatus {
     /// Why updates have to be installed by hand (development build, not in Applications...),
     /// as a whole sentence; `None` when Atrium can update itself.
     pub manual_reason: Option<String>,
-    /// The previous "Restart and update" did not install the update, with the reason.
+    /// Atrium starts again by itself after [`UpdateCommand::ApplyUpdate`] swapped the update in.
+    pub relaunches: bool,
+    /// The previous [`UpdateCommand::ApplyUpdate`] did not install the update, with the reason.
     pub last_failure: Option<String>,
 }
 

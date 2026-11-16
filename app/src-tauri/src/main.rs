@@ -47,6 +47,9 @@ struct DevHooks {
     ui_query: Option<String>,
     /// `ATRIUM_LOG_TITLES=1`: log page titles (diagnosing unread title patterns).
     log_titles: bool,
+    /// `ATRIUM_DEV_RELEASE_DIR`: folder with `release.json`, `SHA256SUMS` and the asset that
+    /// stands in for the latest GitHub release; the debug build then updates itself.
+    release_dir: Option<PathBuf>,
 }
 
 impl DevHooks {
@@ -66,6 +69,7 @@ impl DevHooks {
             }),
             ui_query: var("ATRIUM_DEV_UI_QUERY"),
             log_titles: var("ATRIUM_LOG_TITLES").is_some_and(|value| value == "1"),
+            release_dir: var("ATRIUM_DEV_RELEASE_DIR").map(Into::into),
         }
     }
 
@@ -396,7 +400,7 @@ fn setup(
     host.log(&format!("---- Atrium {version} starting ----"));
     let config_dir = config_dir(app, dev, &host)?;
     let store = FsStore::new(config_dir.clone());
-    updates::start(app, config_dir.clone(), host.log_sink())?;
+    updates::start(app, &config_dir, host.log_sink(), dev.release_dir.clone())?;
     let load = load_persisted(&store, &host);
     let read_only = load.is_read_only();
     if read_only {
@@ -527,7 +531,7 @@ fn main() {
         // Dock icon click: bring a hidden (closed to background / started hidden) window back.
         #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => show_main_window(app),
-        // "Restart and update": the helper swaps the bundle once this process is gone.
+        // "Restart/Quit and update": the helper swaps the bundle once this process is gone.
         RunEvent::Exit => updates::launch_pending_helper(app),
         // Any other exit request (e.g. the last window went away) unloads the pages first; the
         // request `graceful_quit` ends with passes. The predefined Quit (`terminate:`, still used

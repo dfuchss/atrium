@@ -79,7 +79,7 @@ The builds are not signed, so macOS blocks the first start: open Atrium once, th
 
 Atrium checks for a new release on startup and every six hours (Settings → About; the check can be switched off there). An update is downloaded, verified against the release's `SHA256SUMS` and placed next to the app; *Restart and update* quits Atrium, swaps in the new version and starts it again. This works only for an Atrium in `/Applications` or `~/Applications`; development builds and other locations just point to the release page.
 
-Linux has no release builds and no self-update yet; see [Linux](#linux).
+On Linux, an Atrium started as an AppImage updates itself the same way, except that *Quit and update* only quits Atrium and swaps in the new AppImage under the same file name; open Atrium again afterwards. The AppImage must lie in a folder you can write to (e.g. `~/Applications`); builds from source just point to the release page.
 
 To build Atrium yourself, see [Building from source](DEVELOPMENT.md#building-from-source) in [DEVELOPMENT.md](DEVELOPMENT.md).
 
@@ -97,7 +97,6 @@ Known limitations on Linux:
 - There is no app menu; the keyboard shortcuts work with <kbd>Ctrl</kbd> instead of <kbd>⌘</kbd>. They take precedence over a page's own shortcuts with the same keys (for example <kbd>Ctrl</kbd><kbd>R</kbd> or <kbd>Ctrl</kbd><kbd>1</kbd> in a web app).
 - The unread count appears as the tray label only where the panel supports it. The launcher badge works only where the desktop supports the Unity launcher API.
 - Settings > Links > Browser lists the installed browsers; a command name saved by an earlier build is not recognised and links open in the system default browser.
-- No self-update.
 - *Auto* appearance starts light and follows the desktop's light or dark colour scheme only once it changes while Atrium runs ([tao#1378](https://github.com/tauri-apps/tao/issues/1378)); such a change also overrides Light or Dark ([tao#1382](https://github.com/tauri-apps/tao/issues/1382)). A GTK theme named `*-dark` also keeps pages dark when Light is selected.
 - On Wayland, starting Atrium again may only highlight the running Atrium in the task bar instead of bringing its window to the front.
 - Session cookies are stored unencrypted in the per-account web data folder (mode `0700`): exclude `webdata/` from backups and sync.

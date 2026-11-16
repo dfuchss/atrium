@@ -1,4 +1,4 @@
-//! The updater's long-running steps: checking and staging, preparing the restart and the
+//! The updater's long-running steps: checking and staging, preparing the swap and the
 //! clean-up after the previous run.
 
 use std::path::Path;
@@ -100,14 +100,14 @@ impl Updater {
     }
 
     /// Prepares the helper while the app still runs, so a problem keeps the app open.
-    pub(crate) fn prepare_restart(&self) -> UpdaterAction {
+    pub(crate) fn prepare_apply_update(&self) -> UpdaterAction {
         let Some(version) = self.staged() else {
             return UpdaterAction::None;
         };
         let InstallLocation::SelfUpdatable { bundle } = &self.shared.config.location else {
             return UpdaterAction::None;
         };
-        if !new_update_path(bundle).is_dir() {
+        if !new_update_path(bundle).exists() {
             self.set_staged(None);
             self.set_state(UpdateState::Failed {
                 message: "the downloaded update is gone; check again".into(),
@@ -120,7 +120,7 @@ impl Updater {
             updates_dir: self.shared.files.updates_dir(),
             version: version.to_string(),
         });
-        self.log(&format!("restart to update to {version} requested"));
+        self.log(&format!("update to {version} requested"));
         UpdaterAction::Quit
     }
 
@@ -150,7 +150,7 @@ impl Updater {
                 .config
                 .current_version
                 .is_some_and(|current| *staged > current)
-                && new_update_path(bundle).is_dir()
+                && new_update_path(bundle).exists()
         });
         self.set_staged(usable);
         for leftover in [old_update_path(bundle), partial_update_path(bundle)] {

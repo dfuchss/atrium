@@ -3,16 +3,13 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::path::Path;
-use std::process::Command;
 
 use sha2::{Digest as _, Sha256};
 
 use super::*;
-use crate::native::bundle::BUNDLE_IDENTIFIER;
-use crate::native::bundle::tests::fake_bundle;
+use crate::native::tests::{ASSET, fake_asset, fake_install, verify_staged};
 use crate::source::Download;
 
-const ASSET: &str = "atrium-macos-arm64.zip";
 const DOWNLOADS: &str = "https://github.com/dfuchss/atrium/releases/download/v0.2.0/";
 
 struct FakeSource {
@@ -34,40 +31,30 @@ impl ReleaseSource for FakeSource {
     }
 }
 
-/// A fake installation in `<dir>/Applications`, a release zip and the data folder.
+/// A fake installation in `<dir>/Applications`, the release asset and the data folder.
 struct Fixture {
     dir: tempfile::TempDir,
+    install: PathBuf,
 }
 
 impl Fixture {
     fn new() -> Fixture {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(dir.path().join("Applications")).unwrap();
-        fake_bundle(&dir.path().join("Applications"), BUNDLE_IDENTIFIER, "0.1.0");
-        Fixture { dir }
+        let install = fake_install(dir.path());
+        Fixture { dir, install }
     }
 
     fn install(&self) -> PathBuf {
-        self.dir.path().join("Applications/Atrium.app")
+        self.install.clone()
     }
 
     fn data_dir(&self) -> PathBuf {
         self.dir.path().join("data")
     }
 
-    /// The zip of an `Atrium.app` with the given identifier and version.
-    fn release_zip(&self, identifier: &str, version: &str) -> Vec<u8> {
-        let build = self.dir.path().join(format!("build-{version}"));
-        let bundle = fake_bundle(&build, identifier, version);
-        let zip = build.join(ASSET);
-        let status = Command::new("/usr/bin/ditto")
-            .args(["-c", "-k", "--keepParent"])
-            .arg(&bundle)
-            .arg(&zip)
-            .status()
-            .unwrap();
-        assert!(status.success());
-        std::fs::read(zip).unwrap()
+    /// The release asset of Atrium in `version`.
+    fn release_asset(&self, version: &str) -> Vec<u8> {
+        fake_asset(self.dir.path(), version)
     }
 
     fn updater(&self, source: FakeSource, location: InstallLocation, current: &str) -> Updater {
@@ -102,9 +89,9 @@ fn sha256_hex(bytes: &[u8]) -> String {
     crate::staging::hex(&Sha256::digest(bytes))
 }
 
-/// A v0.2.0 release serving `zip` and (optionally) `sums`.
-fn source(zip: Vec<u8>, sums: Option<String>) -> FakeSource {
-    let mut files = BTreeMap::from([(format!("{DOWNLOADS}{ASSET}"), zip)]);
+/// A v0.2.0 release serving `asset` and (optionally) `sums`.
+fn source(asset: Vec<u8>, sums: Option<String>) -> FakeSource {
+    let mut files = BTreeMap::from([(format!("{DOWNLOADS}{ASSET}"), asset)]);
     let mut assets = vec![ASSET];
     if let Some(sums) = sums {
         files.insert(format!("{DOWNLOADS}SHA256SUMS"), sums.into_bytes());
@@ -117,10 +104,10 @@ fn source(zip: Vec<u8>, sums: Option<String>) -> FakeSource {
 }
 
 fn valid_source(fixture: &Fixture) -> FakeSource {
-    let zip = fixture.release_zip(BUNDLE_IDENTIFIER, "0.2.0");
+    let asset = fixture.release_asset("0.2.0");
     // Upper case digits: the comparison ignores case.
-    let sums = format!("{}  {ASSET}\n", sha256_hex(&zip).to_ascii_uppercase());
-    source(zip, Some(sums))
+    let sums = format!("{}  {ASSET}\n", sha256_hex(&asset).to_ascii_uppercase());
+    source(asset, Some(sums))
 }
 
 fn ready(version: &str) -> UpdateState {
@@ -143,13 +130,13 @@ fn stages_a_verified_release_next_to_the_install() {
     updater.check();
     assert_eq!(updater.status().state, ready("0.2.0"));
     let staged = new_update_path(&fixture.install());
-    crate::native::bundle::verify(&staged, Version::parse("0.2.0").unwrap()).unwrap();
-    crate::native::bundle::verify(&fixture.install(), Version::parse("0.1.0").unwrap()).unwrap();
+    verify_staged(&staged, "0.2.0");
+    verify_staged(&fixture.install(), "0.1.0");
     let leftovers = std::fs::read_dir(fixture.data_dir().join("updates/v0.2.0")).unwrap();
     assert_eq!(leftovers.count(), 0);
 
     assert_eq!(
-        updater.handle(&UpdateCommand::RestartToUpdate),
+        updater.handle(&UpdateCommand::ApplyUpdate),
         UpdaterAction::Quit
     );
     let plan = locked(&updater.shared.pending).clone().unwrap();
@@ -165,13 +152,17 @@ fn stages_a_verified_release_next_to_the_install() {
 #[test]
 fn refuses_a_release_without_checksums() {
     let fixture = Fixture::new();
-    let zip = fixture.release_zip(BUNDLE_IDENTIFIER, "0.2.0");
-    let updater = fixture.updater(source(zip.clone(), None), fixture.self_updatable(), "0.1.0");
+    let asset = fixture.release_asset("0.2.0");
+    let updater = fixture.updater(
+        source(asset.clone(), None),
+        fixture.self_updatable(),
+        "0.1.0",
+    );
     updater.check();
     assert!(failure(&updater).contains("SHA256SUMS"));
-    let other_entry = format!("{}  atrium-macos-x86_64.zip\n", sha256_hex(&zip));
+    let other_entry = format!("{}  atrium-other-machine.zip\n", sha256_hex(&asset));
     let updater = fixture.updater(
-        source(zip, Some(other_entry)),
+        source(asset, Some(other_entry)),
         fixture.self_updatable(),
         "0.1.0",
     );
@@ -183,9 +174,9 @@ fn refuses_a_release_without_checksums() {
 #[test]
 fn refuses_a_checksum_mismatch() {
     let fixture = Fixture::new();
-    let zip = fixture.release_zip(BUNDLE_IDENTIFIER, "0.2.0");
+    let asset = fixture.release_asset("0.2.0");
     let sums = format!("{}  {ASSET}\n", sha256_hex(b"something else"));
-    let updater = fixture.updater(source(zip, Some(sums)), fixture.self_updatable(), "0.1.0");
+    let updater = fixture.updater(source(asset, Some(sums)), fixture.self_updatable(), "0.1.0");
     updater.check();
     assert!(failure(&updater).contains("checksum mismatch"));
     assert!(!new_update_path(&fixture.install()).exists());
@@ -201,14 +192,16 @@ fn refuses_a_checksum_mismatch() {
 #[test]
 #[cfg(target_os = "macos")]
 fn refuses_a_bundle_of_another_app_or_version() {
+    use crate::native::tests::{BUNDLE_IDENTIFIER, fake_zip};
+
     for (identifier, version, expected) in [
         ("org.example.other", "0.2.0", "identifier"),
         (BUNDLE_IDENTIFIER, "0.3.0", "version"),
     ] {
         let fixture = Fixture::new();
-        let zip = fixture.release_zip(identifier, version);
-        let sums = format!("{}  {ASSET}\n", sha256_hex(&zip));
-        let updater = fixture.updater(source(zip, Some(sums)), fixture.self_updatable(), "0.1.0");
+        let asset = fake_zip(fixture.dir.path(), identifier, version);
+        let sums = format!("{}  {ASSET}\n", sha256_hex(&asset));
+        let updater = fixture.updater(source(asset, Some(sums)), fixture.self_updatable(), "0.1.0");
         updater.check();
         assert!(
             failure(&updater).contains(expected),
@@ -250,19 +243,19 @@ fn manual_installs_only_announce() {
         Some(native::manual_only_text("this is a development build"))
     );
     assert_eq!(
-        updater.handle(&UpdateCommand::RestartToUpdate),
+        updater.handle(&UpdateCommand::ApplyUpdate),
         UpdaterAction::None
     );
     assert!(!new_update_path(&fixture.install()).exists());
 }
 
 #[test]
-fn a_release_without_this_macs_asset_is_manual() {
+fn a_release_without_this_machines_asset_is_manual() {
     let fixture = Fixture::new();
     let config = UpdaterConfig {
         current_version: Version::parse("0.1.0"),
         location: fixture.self_updatable(),
-        asset_name: Some("atrium-macos-x86_64.zip"),
+        asset_name: Some("atrium-other-machine.zip"),
         data_dir: fixture.data_dir(),
     };
     let release = Release::parse(&release_json("v0.2.0", &[ASSET])).unwrap();
@@ -312,7 +305,7 @@ fn a_failed_swap_is_reported_and_the_update_offered_again() {
     let status = restarted.status();
     assert_eq!(status.state, ready("0.2.0"));
     assert!(status.last_failure.unwrap().contains("cannot move"));
-    assert!(new_update_path(&fixture.install()).is_dir());
+    assert!(new_update_path(&fixture.install()).exists());
     assert!(!old_update_path(&fixture.install()).exists());
     assert!(!fixture.data_dir().join("updates/v0.2.0").exists());
 }

@@ -47,6 +47,24 @@ fn state_text(state: &UpdateState) -> String {
     }
 }
 
+/// The button that quits Atrium and swaps in the staged update.
+fn apply_label(relaunches: bool) -> &'static str {
+    if relaunches {
+        "Restart and update"
+    } else {
+        "Quit and update"
+    }
+}
+
+/// What the apply button does.
+fn apply_note(relaunches: bool) -> &'static str {
+    if relaunches {
+        "Atrium quits, replaces itself with the new version and starts again."
+    } else {
+        "Atrium quits and replaces itself with the new version; open it again afterwards."
+    }
+}
+
 /// The updates section; nothing at all in a build without an updater.
 #[component]
 pub(crate) fn UpdateSection() -> impl IntoView {
@@ -73,6 +91,7 @@ fn UpdateDetails() -> impl IntoView {
     let has_update = move || status.with(UpdateStatus::has_update);
     let auto_check = Signal::derive(move || status.with(|status| status.auto_check));
     let manual_reason = move || status.with(|status| status.manual_reason.clone());
+    let relaunches = move || status.with(|status| status.relaunches);
     let last_failure = move || status.with(|status| status.last_failure.clone());
     view! {
         <h2 class="updates-title">"Updates"</h2>
@@ -83,7 +102,7 @@ fn UpdateDetails() -> impl IntoView {
             <Row label="">
                 <div class="update-actions">
                     <Show when=ready>
-                        <button class="btn primary" on:click=move |_| send_update_command(UpdateCommand::RestartToUpdate)>"Restart and update"</button>
+                        <button class="btn primary" on:click=move |_| send_update_command(UpdateCommand::ApplyUpdate)>{move || apply_label(relaunches())}</button>
                     </Show>
                     <button class="btn" disabled=busy on:click=move |_| send_update_command(UpdateCommand::CheckNow)>"Check now"</button>
                     <Show when=has_update>
@@ -95,7 +114,7 @@ fn UpdateDetails() -> impl IntoView {
                 on_change=move |enabled| send_update_command(UpdateCommand::SetAutoCheck { enabled }) />
         </div>
         <Show when=ready>
-            <p class="note">"Atrium quits, replaces itself with the new version and starts again."</p>
+            <p class="note">{move || apply_note(relaunches())}</p>
         </Show>
         {move || manual_reason().map(|reason| view! {
             <p class="note">{format!("{reason} Download new versions from the release page.")}</p>

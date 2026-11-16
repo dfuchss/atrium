@@ -52,7 +52,7 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 | `crates/host-tauri` | Adapter: implements the ports on Tauri multi-webview (webviews, notifications, dock badge, tray, menus, links); platform-specific code in `native/`. |
 | `crates/store-fs` | Adapter: atomic JSON store (`accounts.json`). |
 | `crates/fs-util` | File operations shared by the crates: atomic writes with a fixed mode. |
-| `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting. |
+| `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting; the macOS app bundle or the Linux AppImage, platform-specific code in `native/`. |
 | `crates/webview-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, with platform-neutral dialog types; on macOS added to the system webview's delegate at runtime, on Linux shown from WebKitGTK's `script-dialog` signal. The only crate built on `unsafe` code; elsewhere it is denied, except for one environment change at start-up on Linux in `host-tauri`. |
 | `app/src-tauri` | Composition root: window, actor thread, Tauri commands. |
 | `app/ui` | Sidebar and settings in [Leptos](https://leptos.dev/) (CSR, built with Trunk). |
@@ -93,6 +93,7 @@ Debug builds (`cargo tauri dev`, `cargo tauri build --debug`) read these environ
 | `ATRIUM_WINDOW_POSITION=<x>,<y>` | Position of the main window in logical pixels (the main display starts at `0,0`), e.g. to open it on a Retina display. |
 | `ATRIUM_DEV_INIT_SCRIPT=<file>` | JavaScript appended to the init script of every service view (the screenshot script seeds a demo Element session with it). |
 | `ATRIUM_LOG_TITLES=1` | Logs page titles with each unread change, to check a service's `title_regex` against what it really shows. Titles name chats and senders, so this is off otherwise. |
+| `ATRIUM_DEV_RELEASE_DIR=<dir>` | Folder that stands in for the latest GitHub release, to try an update by hand: `release.json` (the GitHub latest-release JSON; asset URLs must start with `https://github.com/dfuchss/atrium/releases/download/`, only their file name is used), `SHA256SUMS` and the asset. The debug build then counts as installed, so it updates itself when it runs from an installable location. |
 | `ATRIUM_DEV_UI_QUERY=<query>` | Query string for the sidebar UI. `dialog=<tab>` opens the settings dialog on a tab (`accounts`, `general`, `notifications`, `dock`, `links`, `custom`, `about`), `edit=<index>` opens the edit form of an account, `addcustom=1` the custom service form, `editservice=<file>` the definition editor (demo files `wiki.toml`, `broken.toml`). |
 
 ## Screenshots

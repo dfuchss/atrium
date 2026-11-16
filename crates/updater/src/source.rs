@@ -1,6 +1,8 @@
 //! Where releases and their files come from.
 
+use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::release::LATEST_RELEASE_API;
@@ -72,5 +74,66 @@ impl ReleaseSource for GitHubSource {
             reader: Box::new(body.into_with_config().limit(max_bytes).reader()),
             length,
         })
+    }
+}
+
+/// A local folder standing in for the latest release, for testing updates by hand
+/// (`ATRIUM_DEV_RELEASE_DIR` in debug builds): `release.json` is the latest-release response,
+/// and every download URL is served from the file named like its last path segment
+/// (`SHA256SUMS`, the asset).
+pub struct DirectorySource {
+    dir: PathBuf,
+}
+
+impl DirectorySource {
+    pub fn new(dir: PathBuf) -> DirectorySource {
+        DirectorySource { dir }
+    }
+}
+
+impl ReleaseSource for DirectorySource {
+    fn latest_release(&self) -> Result<String, String> {
+        let path = self.dir.join("release.json");
+        std::fs::read_to_string(&path).map_err(|error| format!("{}: {error}", path.display()))
+    }
+
+    fn open(&self, url: &str, max_bytes: u64) -> Result<Download, String> {
+        let name = url.rsplit('/').next().unwrap_or_default();
+        if matches!(name, "" | "." | "..") {
+            return Err(format!("no file name in {url}"));
+        }
+        let path = self.dir.join(name);
+        let failed = |error: std::io::Error| format!("{}: {error}", path.display());
+        let file = File::open(&path).map_err(failed)?;
+        let length = file.metadata().map_err(failed)?.len();
+        Ok(Download {
+            reader: Box::new(file.take(max_bytes)),
+            length: Some(length),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_serves_the_release_and_its_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("release.json"), r#"{"tag_name":"v9.9.9"}"#).unwrap();
+        std::fs::write(dir.path().join("SHA256SUMS"), "0123456789").unwrap();
+        let source = DirectorySource::new(dir.path().to_path_buf());
+        assert!(source.latest_release().unwrap().contains("v9.9.9"));
+
+        let url = "https://github.com/dfuchss/atrium/releases/download/v9.9.9/SHA256SUMS";
+        let mut download = source.open(url, 4).unwrap();
+        assert_eq!(download.length, Some(10));
+        let mut text = String::new();
+        download.reader.read_to_string(&mut text).unwrap();
+        assert_eq!(text, "0123");
+
+        assert!(source.open("https://example.com/missing", 4).is_err());
+        assert!(source.open("https://example.com/download/..", 4).is_err());
+        assert!(source.open("https://example.com/download/", 4).is_err());
     }
 }

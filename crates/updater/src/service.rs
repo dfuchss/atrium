@@ -1,5 +1,5 @@
 //! The updater's state machine: checks on startup and periodically, stages a newer release
-//! and hands over to the swap helper when the user restarts.
+//! and hands over to the swap helper when the user applies it.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -32,7 +32,7 @@ pub struct UpdaterConfig {
     /// `None` turns the updater off (a version that is no plain release version).
     pub current_version: Option<Version>,
     pub location: InstallLocation,
-    /// The release asset for this Mac's architecture.
+    /// The release asset for this machine's architecture.
     pub asset_name: Option<&'static str>,
     /// `<app data>`: `updater.json` and `updates/` live there.
     pub data_dir: PathBuf,
@@ -156,6 +156,7 @@ impl Updater {
                 .location
                 .manual_reason()
                 .map(native::manual_only_text),
+            relaunches: native::RELAUNCHES_AFTER_SWAP,
             last_failure: None,
         };
         let shared = Shared {
@@ -219,7 +220,7 @@ impl Updater {
                 self.set_status(|status| status.auto_check = enabled);
                 UpdaterAction::None
             }
-            UpdateCommand::RestartToUpdate => self.prepare_restart(),
+            UpdateCommand::ApplyUpdate => self.prepare_apply_update(),
             UpdateCommand::OpenReleasePage => {
                 UpdaterAction::OpenUrl(locked(&self.shared.page_url).clone())
             }
@@ -232,7 +233,9 @@ impl Updater {
         let Some(plan) = locked(&self.shared.pending).take() else {
             return false;
         };
-        match std::env::current_exe().and_then(|executable| plan.spawn(&executable)) {
+        match native::helper_executable(&plan.install)
+            .and_then(|executable| plan.spawn(&executable))
+        {
             Ok(()) => {
                 self.log(&format!("update helper started for {}", plan.version));
                 true
@@ -298,5 +301,4 @@ impl Updater {
 mod checking;
 
 #[cfg(test)]
-#[cfg(target_os = "macos")]
 mod tests;

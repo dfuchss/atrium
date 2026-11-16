@@ -10,7 +10,7 @@ const SETTINGS_FILE: &str = "updater.json";
 const UPDATES_DIR: &str = "updates";
 const RESULT_FILE: &str = "update-result.json";
 const HELPER_LOG_FILE: &str = "helper.log";
-/// The updater's files name versions and paths of this Mac: readable by the user only.
+/// The updater's files name versions and paths of this computer: readable by the user only.
 pub(crate) const PRIVATE_FILE_MODE: u32 = 0o600;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

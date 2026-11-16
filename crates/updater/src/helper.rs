@@ -1,7 +1,8 @@
-//! The swap helper. Atrium starts its own (installed, already trusted) executable again with
-//! [`APPLY_UPDATE_ARGUMENT`] right before it exits; that process waits until Atrium is gone,
-//! swaps the bundle unless another process still runs from it, records the result and opens
-//! Atrium again. It never initialises Tauri.
+//! The swap helper. Atrium starts its own installed (already trusted) app again with
+//! [`APPLY_UPDATE_ARGUMENT`] right before it exits (the bundle's executable on macOS, the
+//! `AppImage` on Linux); that process waits until Atrium is gone, swaps the installation unless
+//! another process still runs from it, records the result and, where the platform does that,
+//! opens Atrium again. It never initialises Tauri.
 
 use std::ffi::OsString;
 use std::io::Write as _;
@@ -10,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use crate::native::{process_alive, processes_running_from, relaunch};
+use crate::native::{SWAPS_IN_ONE_RENAME, process_alive, processes_running_from, relaunch};
 use crate::store::{SwapResult, UpdaterFiles, open_private, write_private};
 use crate::swap::{BundleFs, RealFs, SwapOutcome, swap};
 
@@ -139,8 +140,8 @@ pub(crate) fn run(plan: &HelperPlan, io: &HelperIo<'_>) -> SwapResult {
     if let Err(error) = write_private(&UpdaterFiles::result_file(&plan.updates_dir), &json) {
         log(&format!("cannot write the result: {error}"));
     }
-    // Even without a swap: the user asked for a restart and should not be left without Atrium
-    // (`open` only activates an instance that still runs).
+    // Even without a swap: a user who asked for a restart should not be left without Atrium
+    // (on macOS `open` only activates an instance that still runs; Linux does nothing here).
     (io.relaunch)(&plan.install);
     result
 }
@@ -157,10 +158,10 @@ fn wait_for_exit(pid: u32, io: &HelperIo<'_>) -> bool {
 }
 
 /// Swaps only when no other process (a second instance started from the same bundle) runs
-/// from `install`; the helper itself does, and is not counted.
+/// from the installation; the helper itself does, and is not counted.
 fn swap_unless_in_use(install: &Path, io: &HelperIo<'_>) -> SwapOutcome {
     match (io.running_from)(install) {
-        Ok(pids) if pids.is_empty() => swap(install, io.fs),
+        Ok(pids) if pids.is_empty() => swap(install, io.fs, SWAPS_IN_ONE_RENAME),
         Ok(pids) => SwapOutcome::NotStarted(format!(
             "Atrium still runs from the installation (pid {pids:?}); the update stays staged"
         )),
@@ -185,6 +186,7 @@ mod tests {
     use std::cell::RefCell;
 
     use super::*;
+    use crate::native::tests::{fake_install, fake_staged, verify_staged};
     use crate::swap::new_update_path;
 
     fn plan(dir: &Path) -> HelperPlan {
@@ -224,32 +226,46 @@ mod tests {
         }
     }
 
-    fn staged_install(dir: &Path) {
-        std::fs::create_dir_all(dir.join("Atrium.app")).unwrap();
-        std::fs::create_dir_all(new_update_path(&dir.join("Atrium.app"))).unwrap();
-        std::fs::write(new_update_path(&dir.join("Atrium.app")).join("new"), "").unwrap();
+    /// The plan for an installation of 0.1.0 in `dir` with 0.2.0 staged next to it.
+    fn staged_plan(dir: &Path) -> HelperPlan {
+        let install = fake_install(dir);
+        fake_staged(dir, &install, "0.2.0");
+        HelperPlan {
+            install,
+            ..plan(dir)
+        }
+    }
+
+    /// The real file system, an app that has exited, no other process and nothing relaunched.
+    fn exited_app_io() -> HelperIo<'static> {
+        HelperIo {
+            fs: &RealFs,
+            app_alive: &|_| false,
+            running_from: &|_| Ok(Vec::new()),
+            relaunch: &|_| {},
+            exit_timeout: Duration::from_millis(300),
+        }
     }
 
     #[test]
     fn swaps_after_exit_and_relaunches() {
         let dir = tempfile::tempdir().unwrap();
-        staged_install(dir.path());
-        let plan = plan(dir.path());
+        let plan = staged_plan(dir.path());
         let relaunched = RefCell::new(Vec::new());
         let alive_checks = RefCell::new(0);
         let io = HelperIo {
-            fs: &RealFs,
             app_alive: &|_| {
                 *alive_checks.borrow_mut() += 1;
                 *alive_checks.borrow() < 3
             },
-            running_from: &|_| Ok(Vec::new()),
             relaunch: &|path| relaunched.borrow_mut().push(path.to_path_buf()),
             exit_timeout: Duration::from_secs(5),
+            ..exited_app_io()
         };
         let result = run(&plan, &io);
         assert!(result.success, "{result:?}");
-        assert!(plan.install.join("new").exists());
+        verify_staged(&plan.install, "0.2.0");
+        assert!(!new_update_path(&plan.install).exists());
         assert_eq!(*relaunched.borrow(), std::slice::from_ref(&plan.install));
         let written =
             std::fs::read_to_string(UpdaterFiles::result_file(&plan.updates_dir)).unwrap();
@@ -263,53 +279,47 @@ mod tests {
     #[test]
     fn running_app_is_never_touched_but_opened_again() {
         let dir = tempfile::tempdir().unwrap();
-        staged_install(dir.path());
-        let plan = plan(dir.path());
+        let plan = staged_plan(dir.path());
         let relaunched = RefCell::new(false);
         let io = HelperIo {
-            fs: &RealFs,
             app_alive: &|_| true,
-            running_from: &|_| Ok(Vec::new()),
             relaunch: &|_| *relaunched.borrow_mut() = true,
-            exit_timeout: Duration::from_millis(300),
+            ..exited_app_io()
         };
         let result = run(&plan, &io);
         assert!(!result.success);
         assert!(result.message.contains("did not exit"));
-        assert!(!plan.install.join("new").exists());
+        verify_staged(&plan.install, "0.1.0");
         assert!(*relaunched.borrow());
     }
 
     #[test]
     fn another_running_copy_keeps_the_update_staged() {
         let dir = tempfile::tempdir().unwrap();
-        staged_install(dir.path());
-        let plan = plan(dir.path());
+        let plan = staged_plan(dir.path());
         let asked = RefCell::new(Vec::new());
         let relaunched = RefCell::new(false);
         let io = HelperIo {
-            fs: &RealFs,
-            app_alive: &|_| false,
             running_from: &|dir| {
                 asked.borrow_mut().push(dir.to_path_buf());
                 Ok(vec![815])
             },
             relaunch: &|_| *relaunched.borrow_mut() = true,
-            exit_timeout: Duration::from_millis(300),
+            ..exited_app_io()
         };
         let result = run(&plan, &io);
         assert!(!result.success);
         assert!(result.message.contains("815"), "{}", result.message);
         assert_eq!(*asked.borrow(), vec![plan.install.clone()]);
-        assert!(!plan.install.join("new").exists());
-        assert!(new_update_path(&plan.install).join("new").exists());
+        verify_staged(&plan.install, "0.1.0");
+        verify_staged(&new_update_path(&plan.install), "0.2.0");
         assert!(*relaunched.borrow());
         let failing = HelperIo {
             running_from: &|_| Err("no ps".into()),
             ..io
         };
         assert!(!run(&plan, &failing).success);
-        assert!(new_update_path(&plan.install).join("new").exists());
+        verify_staged(&new_update_path(&plan.install), "0.2.0");
     }
 
     #[test]

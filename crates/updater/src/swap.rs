@@ -1,5 +1,6 @@
-//! Replacing the installed bundle with the staged one: two renames on one volume, with a
-//! rollback when the second fails. Runs only after Atrium exited (see `helper`).
+//! Replacing the installation with the staged update on one volume: a file in one atomic
+//! rename, a folder in two renames with a rollback when the second fails. Runs only after
+//! Atrium exited (see `helper`).
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -79,14 +80,27 @@ impl SwapOutcome {
     }
 }
 
-/// Moves `install` aside, the staged update in its place, then removes the old version
-/// (a leftover is removed on the next start).
-pub(crate) fn swap(install: &Path, fs: &dyn BundleFs) -> SwapOutcome {
+/// Puts the staged update in place of `install`: `in_one_rename` (a file) renames it over the
+/// install, so either version is always there and running copies keep the old file; otherwise
+/// (a folder, which a rename cannot replace) see [`move_aside_and_swap`].
+pub(crate) fn swap(install: &Path, fs: &dyn BundleFs, in_one_rename: bool) -> SwapOutcome {
     let staged = new_update_path(install);
-    let backup = old_update_path(install);
     if !fs.exists(&staged) {
         return SwapOutcome::NotStarted("the staged update is missing".into());
     }
+    if !in_one_rename {
+        return move_aside_and_swap(install, &staged, fs);
+    }
+    match fs.rename(&staged, install) {
+        Ok(()) => SwapOutcome::Installed,
+        Err(error) => SwapOutcome::NotStarted(format!("cannot move the update in place: {error}")),
+    }
+}
+
+/// Moves `install` aside, the staged update in its place, then removes the old version
+/// (a leftover is removed on the next start).
+fn move_aside_and_swap(install: &Path, staged: &Path, fs: &dyn BundleFs) -> SwapOutcome {
+    let backup = old_update_path(install);
     if fs.exists(&backup)
         && let Err(error) = fs.remove_all(&backup)
     {
@@ -95,7 +109,7 @@ pub(crate) fn swap(install: &Path, fs: &dyn BundleFs) -> SwapOutcome {
     if let Err(error) = fs.rename(install, &backup) {
         return SwapOutcome::NotStarted(format!("cannot move the current version aside: {error}"));
     }
-    match fs.rename(&staged, install) {
+    match fs.rename(staged, install) {
         Ok(()) => {
             let _ = fs.remove_all(&backup);
             SwapOutcome::Installed
@@ -158,6 +172,10 @@ mod tests {
         }
     }
 
+    /// The `in_one_rename` of a file (Linux) and of a folder (macOS).
+    const ONE_RENAME: bool = true;
+    const TWO_RENAMES: bool = false;
+
     /// `Atrium.app` with version file "old" and a staged update with "new".
     fn install(dir: &Path) -> PathBuf {
         let install = dir.join("Atrium.app");
@@ -191,7 +209,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let install = install(dir.path());
         std::fs::create_dir(old_update_path(&install)).unwrap();
-        assert_eq!(swap(&install, &RealFs), SwapOutcome::Installed);
+        assert_eq!(swap(&install, &RealFs, TWO_RENAMES), SwapOutcome::Installed);
         assert_eq!(installed_version(&install), "new");
         assert!(!new_update_path(&install).exists());
         assert!(!old_update_path(&install).exists());
@@ -203,7 +221,7 @@ mod tests {
         let install = install(dir.path());
         std::fs::remove_dir_all(new_update_path(&install)).unwrap();
         assert!(matches!(
-            swap(&install, &RealFs),
+            swap(&install, &RealFs, TWO_RENAMES),
             SwapOutcome::NotStarted(_)
         ));
         assert_eq!(installed_version(&install), "old");
@@ -214,7 +232,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let install = install(dir.path());
         assert!(matches!(
-            swap(&install, &FailingRename::new(&[1])),
+            swap(&install, &FailingRename::new(&[1]), TWO_RENAMES),
             SwapOutcome::NotStarted(_)
         ));
         assert_eq!(installed_version(&install), "old");
@@ -225,7 +243,7 @@ mod tests {
     fn failing_second_rename_rolls_back() {
         let dir = tempfile::tempdir().unwrap();
         let install = install(dir.path());
-        let outcome = swap(&install, &FailingRename::new(&[2]));
+        let outcome = swap(&install, &FailingRename::new(&[2]), TWO_RENAMES);
         assert!(matches!(outcome, SwapOutcome::RolledBack(_)), "{outcome:?}");
         assert!(outcome.message().contains("restored"));
         assert_eq!(installed_version(&install), "old");
@@ -236,11 +254,46 @@ mod tests {
     fn failing_rollback_is_reported() {
         let dir = tempfile::tempdir().unwrap();
         let install = install(dir.path());
-        let outcome = swap(&install, &FailingRename::new(&[2, 3]));
+        let outcome = swap(&install, &FailingRename::new(&[2, 3]), TWO_RENAMES);
         assert!(
             matches!(outcome, SwapOutcome::RollbackFailed(_)),
             "{outcome:?}"
         );
         assert!(old_update_path(&install).exists());
+    }
+
+    /// `Atrium.AppImage` with "old" and a staged update with "new".
+    fn file_install(dir: &Path) -> PathBuf {
+        let install = dir.join("Atrium.AppImage");
+        std::fs::write(&install, "old").unwrap();
+        std::fs::write(new_update_path(&install), "new").unwrap();
+        install
+    }
+
+    #[test]
+    fn replaces_a_file_in_one_rename_and_keeps_open_copies() {
+        let dir = tempfile::tempdir().unwrap();
+        let install = file_install(dir.path());
+        let running = std::fs::File::open(&install).unwrap();
+        assert_eq!(swap(&install, &RealFs, ONE_RENAME), SwapOutcome::Installed);
+        assert_eq!(std::fs::read_to_string(&install).unwrap(), "new");
+        assert!(!new_update_path(&install).exists());
+        assert!(!old_update_path(&install).exists());
+        assert_eq!(std::io::read_to_string(running).unwrap(), "old");
+    }
+
+    #[test]
+    fn a_failing_rename_leaves_the_file_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let install = file_install(dir.path());
+        let outcome = swap(&install, &FailingRename::new(&[1]), ONE_RENAME);
+        assert!(matches!(outcome, SwapOutcome::NotStarted(_)), "{outcome:?}");
+        assert_eq!(std::fs::read_to_string(&install).unwrap(), "old");
+        assert!(new_update_path(&install).exists());
+        std::fs::remove_file(new_update_path(&install)).unwrap();
+        assert!(matches!(
+            swap(&install, &RealFs, ONE_RENAME),
+            SwapOutcome::NotStarted(_)
+        ));
     }
 }

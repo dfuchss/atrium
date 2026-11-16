@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallLocation {
-    /// `bundle` is the `Atrium.app` that gets swapped after Atrium quit.
+    /// `bundle` is the installation (`Atrium.app`, or the `AppImage` on Linux) that gets swapped
+    /// after Atrium quit.
     SelfUpdatable { bundle: PathBuf },
     /// Updates are only announced; the user installs them from the release page.
     ManualOnly { reason: String },
@@ -14,7 +15,7 @@ pub enum InstallLocation {
 
 /// Whether the user can create files next to `bundle` (needed for the renames) and owns it
 /// (needed to remove the old version). The probe file never goes inside the bundle.
-pub fn can_replace(bundle: &Path) -> bool {
+pub(crate) fn can_replace(bundle: &Path) -> bool {
     let Some(parent) = bundle.parent() else {
         return false;
     };

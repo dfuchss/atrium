@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- Reload after wake waits until you wake your Mac, instead of reloading every service during Power Nap while the Mac sleeps
 - Downloads never replace an existing file: a taken name gets a number, like `report (1).pdf`
 
 ### Security

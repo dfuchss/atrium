@@ -163,7 +163,8 @@ fn remove_unused_data_stores(
     }
 }
 
-/// Wall clock in ms since the Unix epoch (ticks; a jump > 30 s means the Mac slept).
+/// Wall clock in ms since the Unix epoch (ticks and screen wakes; a jump > 30 s means the Mac
+/// slept).
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -247,7 +248,7 @@ fn add_sidebar(window: &Window, dev: &DevHooks, width: f64, height: f64) -> taur
     Ok(())
 }
 
-/// Feeds a tick every second (drives polling, hibernation and wake detection).
+/// Feeds a tick every second (drives polling, hibernation and sleep detection).
 fn spawn_ticker(feed: Feed) -> std::io::Result<()> {
     std::thread::Builder::new()
         .name("ticker".into())
@@ -258,6 +259,11 @@ fn spawn_ticker(feed: Feed) -> std::io::Result<()> {
             }
         })?;
     Ok(())
+}
+
+/// Feeds each display wake; the core reloads the views only if the Mac slept before.
+fn observe_screens_wake(feed: Feed) {
+    macos_dialogs::observe_screens_wake(move || feed(Input::ScreensWoke { now_ms: now_ms() }));
 }
 
 fn feed_resize(feed: &Feed, size: LogicalSize<f64>) {
@@ -358,9 +364,9 @@ fn build_window_with_sidebar(
     Ok((window, size))
 }
 
-/// Builds the window, the host and the core, starts the actor and the ticker, and feeds
-/// `Input::Started`. The host only needs the window lazily, so it can log while loading the
-/// settings that decide how the window is created.
+/// Builds the window, the host and the core, starts the actor, the ticker and the screen wake
+/// observer, and feeds `Input::Started`. The host only needs the window lazily, so it can log
+/// while loading the settings that decide how the window is created.
 fn setup(
     app: &App,
     feed: &Feed,
@@ -427,6 +433,7 @@ fn setup(
     };
     spawn_actor(core, inputs, env)?;
     spawn_ticker(feed.clone())?;
+    observe_screens_wake(feed.clone());
     watch_main_window(&window, feed.clone(), snapshot_cache.clone());
     feed(Input::Started {
         width: size.width,

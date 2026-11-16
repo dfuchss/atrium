@@ -35,7 +35,7 @@ pub use messages::{
 };
 pub use scripts::ICON_SCRIPT;
 pub use settings::ZOOM_STEPS;
-pub use tick::WAKE_GAP_MS;
+pub use tick::SLEEP_GAP_MS;
 pub use unread::HIDDEN_PREVIEW_BODY;
 
 use layout::WindowSize;
@@ -67,7 +67,10 @@ pub struct Core {
     loaded_views: HashSet<Uuid>,
     /// Last time (tick clock) each account was active (shown) or left.
     last_activity_ms: HashMap<Uuid, u64>,
+    /// Latest wall clock reading (ticks and screen wakes).
     last_tick_ms: Option<u64>,
+    /// A sleep was detected and the views were not reloaded since; the next screen wake does it.
+    slept: bool,
     /// Favicon lookups started this run, per account (retried on later page loads after a failure).
     favicon_attempts: HashMap<Uuid, u8>,
     /// Problems found while loading (logged on start).
@@ -111,6 +114,7 @@ impl Core {
             loaded_views: HashSet::new(),
             last_activity_ms: HashMap::new(),
             last_tick_ms: None,
+            slept: false,
             favicon_attempts: HashMap::new(),
             startup_log: vec![],
             log_page_titles: false,
@@ -155,6 +159,7 @@ impl Core {
                 self.window_resized(WindowSize { width, height })
             }
             Input::Tick { now_ms } => self.tick(now_ms),
+            Input::ScreensWoke { now_ms } => self.screens_woke(now_ms),
             Input::IconFound {
                 account,
                 raw,

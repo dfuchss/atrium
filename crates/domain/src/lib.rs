@@ -16,7 +16,7 @@ pub use crate::catalog::{Catalog, CatalogError, ServiceDef, UnreadRules};
 pub use crate::catalog::{host_matches_any, normalize_app_hosts};
 pub use crate::core::{
     Bounds, Core, DockBadge, Effect, ICON_SCRIPT, Input, MenuAccount, MenuAction, MenuModel,
-    NotificationReq, ViewPolicy, ViewSpec, WAKE_GAP_MS, ZOOM_STEPS,
+    NotificationReq, SLEEP_GAP_MS, ViewPolicy, ViewSpec, ZOOM_STEPS,
 };
 pub use crate::model::{Account, Persisted, Settings, unused_store_ids};
 pub use crate::security::{nav_allowed, opener_url_allowed, redact_url, window_title};

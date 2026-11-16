@@ -178,9 +178,14 @@ pub enum Input {
         width: f64,
         height: f64,
     },
-    /// Every second: drives polling, hibernation and wake detection. `now_ms` = wall clock
+    /// Every second: drives polling, hibernation and sleep detection. `now_ms` = wall clock
     /// (ms since the Unix epoch).
     Tick {
+        now_ms: u64,
+    },
+    /// The displays woke, so the user is back; a dark wake (Power Nap) never wakes them.
+    /// `now_ms` as for [`Input::Tick`].
+    ScreensWoke {
         now_ms: u64,
     },
     /// Callback of [`Effect::FindIcon`]: JSON encoding of the icon URL (or null), and the

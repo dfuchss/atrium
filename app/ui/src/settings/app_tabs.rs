@@ -51,7 +51,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {move || number_options(&HIBERNATE_MINUTES, hibernate_after(), minutes_label)}
                 </select>
             </Row>
-            {app_toggle(snapshot, "Reload after wake", "Reload services after waking from sleep; fixes stale connections.", |settings| settings.reload_after_wake, |settings, enabled| settings.reload_after_wake = enabled)}
+            {app_toggle(snapshot, "Reload after wake", "Reload services when you wake your Mac from sleep; fixes stale connections. Background wakes (Power Nap) do not reload.", |settings| settings.reload_after_wake, |settings, enabled| settings.reload_after_wake = enabled)}
         </div>
     }
 }

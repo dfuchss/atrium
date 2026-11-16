@@ -15,7 +15,7 @@ use domain::ports::{Platform, Store};
 use domain::runtime::{Ports, StartupLoad, apply};
 use domain::{Catalog, Core, Effect, Input, Persisted};
 use host_tauri::{Feed, TauriHost};
-use protocol::{AppInfo, AppSettings, Snapshot, UiCommand};
+use protocol::{AppInfo, AppSettings, OperatingSystem, Snapshot, UiCommand};
 use store_fs::FsStore;
 use tauri::window::WindowBuilder;
 use tauri::{
@@ -249,6 +249,15 @@ fn spawn_ticker(feed: Feed) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The operating system this build runs on.
+fn host_os() -> OperatingSystem {
+    if cfg!(target_os = "linux") {
+        OperatingSystem::Linux
+    } else {
+        OperatingSystem::MacOs
+    }
+}
+
 /// Feeds each display wake; the core handles the views only if the Mac slept before.
 fn observe_screens_wake(feed: Feed) {
     host_tauri::observe_screens_wake(move || feed(Input::ScreensWoke { now_ms: now_ms() }));
@@ -360,6 +369,7 @@ fn app_info(
     services_dir: &Path,
 ) -> AppInfo {
     AppInfo {
+        os: host_os(),
         version,
         config_dir: config_dir.display().to_string(),
         services_dir: services_dir.display().to_string(),

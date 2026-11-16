@@ -1,8 +1,8 @@
 //! Browser demo (`?demo`): sample data, and commands applied to it locally instead of in Rust.
 
 use protocol::{
-    AccountSettings, AccountView, AppInfo, AppSettings, CustomService, ServiceInfo, Snapshot,
-    UiCommand,
+    AccountSettings, AccountView, AppInfo, AppSettings, CustomService, OperatingSystem,
+    ServiceInfo, Snapshot, UiCommand,
 };
 use uuid::Uuid;
 
@@ -29,6 +29,7 @@ pub(crate) fn demo_snapshot() -> Snapshot {
         settings: AppSettings::default(),
         service_errors: vec![],
         app: AppInfo {
+            os: OperatingSystem::MacOs,
             version: "0.1.0-demo".into(),
             services_dir: "~/Library/Application Support/org.fuchss.atrium/services".into(),
             config_dir: "~/Library/Application Support/org.fuchss.atrium".into(),

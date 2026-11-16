@@ -7,6 +7,7 @@ fn snapshot_carries_settings_app_info_and_account_settings() {
     a.show_badge = false;
     let mut core = core_with(vec![a, account(2, "slack", "Slack")]);
     let info = AppInfo {
+        os: OperatingSystem::Linux,
         version: "1.2.3".into(),
         config_dir: "/cfg".into(),
         services_dir: "/cfg/services".into(),

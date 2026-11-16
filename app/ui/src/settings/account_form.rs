@@ -7,10 +7,10 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
 use crate::commands::send_command;
+use crate::platform_texts;
 use crate::widgets::{
-    AFTER_WAKE_HINT, HIBERNATE_MINUTES, Row, Toggle, after_wake_label, after_wake_options,
-    hibernate_label, instance_field_label, minutes_label, no_autocorrect, non_empty,
-    number_options,
+    HIBERNATE_MINUTES, Row, Toggle, after_wake_label, after_wake_options, hibernate_label,
+    instance_field_label, minutes_label, no_autocorrect, non_empty, number_options,
 };
 
 /// Uploaded icons larger than this are rejected (they are stored in `accounts.json`).
@@ -245,7 +245,7 @@ pub(super) fn EditForm(
             <Toggle label="Enabled" hint="Disabled accounts keep their login but are not loaded." checked=draft.enabled on_change=move |enabled| draft.enabled.set(enabled) />
             <Toggle label="Notifications" checked=draft.notifications on_change=move |enabled| draft.notifications.set(enabled) />
             <Toggle label="Unread badge" checked=draft.show_badge on_change=move |enabled| draft.show_badge.set(enabled) />
-            <Toggle label="Count in dock badge" checked=draft.in_dock_badge on_change=move |enabled| draft.in_dock_badge.set(enabled) />
+            <Toggle label=platform_texts::texts().account_badge_toggle checked=draft.in_dock_badge on_change=move |enabled| draft.in_dock_badge.set(enabled) />
             <Row label="Open links in">
                 <select prop:value=move || draft.link_target.get() on:change=move |event| draft.link_target.set(match event_target_value(&event).as_str() {
                     "system" => "system",
@@ -395,7 +395,7 @@ fn BehaviourRows(
             </select>
         </Row>
         <Toggle label="Start asleep" hint="Don't load this service when Atrium starts; it wakes when you select it. Takes effect at the next start." checked=draft.start_asleep on_change=move |enabled| draft.start_asleep.set(enabled) />
-        <Row label="After waking from sleep" hint=AFTER_WAKE_HINT>
+        <Row label="After waking from sleep" hint=platform_texts::texts().after_wake_hint>
             <select prop:value=move || draft.after_wake.get() on:change=move |event| draft.after_wake.set(event_target_value(&event))>
                 <option value="">{format!("Use global setting ({})", after_wake_label(global_after_wake))}</option>
                 {after_wake_options()}

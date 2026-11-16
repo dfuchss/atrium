@@ -156,9 +156,6 @@ pub(crate) fn hibernate_label(minutes: Option<u32>) -> String {
         .map_or_else(|| "Never".to_string(), minutes_label)
 }
 
-/// Hint of the after-wake selects.
-pub(crate) const AFTER_WAKE_HINT: &str = "Check: reload only services that stop responding after your Mac wakes. Reload: reload every service. Background wakes (Power Nap) change nothing.";
-
 /// Label of an after-wake mode.
 pub(crate) fn after_wake_label(mode: AfterWake) -> &'static str {
     match mode {

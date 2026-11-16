@@ -11,6 +11,7 @@ use leptos::prelude::*;
 use protocol::{AppSettings, Snapshot, UiCommand};
 
 use crate::commands::{send_command, update_settings};
+use crate::platform_texts::{self, Texts};
 use crate::widgets::Toggle;
 use accounts::AccountsTab;
 use app_tabs::{AboutTab, DockTab, GeneralTab, LinksTab, NotificationsTab};
@@ -51,13 +52,13 @@ impl Tab {
         })
     }
 
-    fn title(self) -> &'static str {
+    fn title(self, texts: &Texts) -> &'static str {
         match self {
             Tab::Accounts => "Accounts",
             Tab::Custom => "Custom services",
             Tab::General => "General",
             Tab::Notifications => "Notifications",
-            Tab::Dock => "Dock badge",
+            Tab::Dock => texts.badge_tab,
             Tab::Links => "Links",
             Tab::About => "About",
         }
@@ -89,12 +90,13 @@ pub(crate) fn open_dialog(tab: Tab, focus_add: bool) {
 #[component]
 pub(crate) fn SettingsDialog(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     let ui = expect_context::<UiState>();
+    let texts = platform_texts::texts();
     view! {
         <div class="dialog">
             <aside class="tabs">
                 <h1>"Settings"</h1>
                 {Tab::ALL.map(|tab| view! {
-                    <button class="tab" class:active=move || ui.tab.get() == tab on:click=move |_| ui.tab.set(tab)>{tab.title()}</button>
+                    <button class="tab" class:active=move || ui.tab.get() == tab on:click=move |_| ui.tab.set(tab)>{tab.title(texts)}</button>
                 }).into_iter().collect_view()}
                 <span class="spacer"></span>
                 <button class="btn" on:click=move |_| send_command(UiCommand::SetDialog { open: false })>"Close"</button>

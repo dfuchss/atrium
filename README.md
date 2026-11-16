@@ -22,7 +22,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
 - **Isolated sessions.** Each account has its own persistent WebKit data store (cookies, storage, caches), e.g. two Slack workspaces or a work and a private Element account.
 - **Notifications.**
   - Native notifications; clicking one jumps to the right account.
-  - Dock badge and menu bar icon with the total unread count.
+  - Dock badge and menu bar icon with the total unread count (launcher badge and tray icon on Linux).
   - Do Not Disturb, and per-account mute.
   - Optional hiding of message text.
 - **Sleep.**
@@ -110,7 +110,7 @@ Known limitations on Linux:
   - Custom services
   - General
   - Notifications
-  - Dock badge
+  - Dock badge (Launcher badge on Linux)
   - Links
   - About
 

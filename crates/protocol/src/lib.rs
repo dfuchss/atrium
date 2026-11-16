@@ -394,9 +394,19 @@ pub struct CustomService {
     pub user_agent: Option<String>,
 }
 
+/// Operating system the host runs on; the UI words the settings after it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OperatingSystem {
+    #[default]
+    MacOs,
+    Linux,
+}
+
 /// Read-only information for the "About" section.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct AppInfo {
+    pub os: OperatingSystem,
     pub version: String,
     pub config_dir: String,
     /// Folder of the user's service definition files (`<config_dir>/services`).

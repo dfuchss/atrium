@@ -1,14 +1,14 @@
-//! Tabs of the app-wide settings: general, notifications, dock badge, links and about.
+//! Tabs of the app-wide settings: general, notifications, badge, links and about.
 
 use leptos::prelude::*;
 use protocol::{AfterWake, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand};
 
 use super::app_toggle;
 use crate::commands::{send_command, update_settings};
+use crate::platform_texts;
 use crate::update::UpdateSection;
 use crate::widgets::{
-    AFTER_WAKE_HINT, HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, no_autocorrect,
-    number_options,
+    HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, no_autocorrect, number_options,
 };
 
 #[component]
@@ -25,6 +25,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             <button class="btn" class:on=move || theme.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.theme = value)>{label}</button>
         }
     };
+    let texts = platform_texts::texts();
     let hibernate_after = move || snapshot.with(|snapshot| snapshot.settings.hibernate_after_min);
     let after_wake = move || snapshot.with(|snapshot| snapshot.settings.after_wake);
     view! {
@@ -37,7 +38,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {size_button(IconSize::Large, "Large")}
                 </div>
             </Row>
-            <Row label="Appearance" hint="Auto follows macOS. Service pages follow if they support it.">
+            <Row label="Appearance" hint=texts.theme_hint>
                 <div class="btn-group seg">
                     {theme_button(Theme::Auto, "Auto")}
                     {theme_button(Theme::Light, "Light")}
@@ -47,7 +48,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             {app_toggle(snapshot, "Launch at login", "", |settings| settings.launch_at_login, |settings, enabled| settings.launch_at_login = enabled)}
             {app_toggle(snapshot, "Start hidden", "Start without showing the window.", |settings| settings.start_hidden, |settings, enabled| settings.start_hidden = enabled)}
             {app_toggle(snapshot, "Keep running in background", "Otherwise closing the window quits the app.", |settings| settings.close_to_background, |settings, enabled| settings.close_to_background = enabled)}
-            {app_toggle(snapshot, "Menu bar icon", "Unread count and account menu in the menu bar.", |settings| settings.show_tray, |settings, enabled| settings.show_tray = enabled)}
+            {app_toggle(snapshot, texts.tray_label, texts.tray_hint, |settings| settings.show_tray, |settings, enabled| settings.show_tray = enabled)}
             <Row label="Put inactive services to sleep after" hint="Sleeping services free memory but show no notifications or unread counts until you open them again. Selecting a service wakes it up.">
                 <select prop:value=move || hibernate_after().filter(|&minutes| minutes > 0).map_or_default(|minutes| minutes.to_string())
                     on:change=move |event| { let minutes = event_target_value(&event).parse::<u32>().ok(); update_settings(snapshot, |settings| settings.hibernate_after_min = minutes) }>
@@ -55,7 +56,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {move || number_options(&HIBERNATE_MINUTES, hibernate_after(), minutes_label)}
                 </select>
             </Row>
-            <Row label="After waking from sleep" hint=AFTER_WAKE_HINT>
+            <Row label="After waking from sleep" hint=texts.after_wake_hint>
                 <select prop:value=move || after_wake().name()
                     on:change=move |event| if let Some(mode) = AfterWake::from_name(&event_target_value(&event)) { update_settings(snapshot, |settings| settings.after_wake = mode) }>
                     {after_wake_options()}
@@ -90,7 +91,7 @@ pub(super) fn DockTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
         }
     };
     view! {
-        <h2>"Dock badge"</h2>
+        <h2>{platform_texts::texts().badge_tab}</h2>
         <div class="form">
             <Row label="Show" hint="Accounts can be excluded individually in their settings (Accounts tab).">
                 {mode_option(DockBadgeMode::All, "Unread count and dot")}
@@ -204,6 +205,9 @@ pub(super) fn AboutTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             <Row label="Config directory"><code>{move || app.get().config_dir}</code></Row>
             <Row label="Log file"><code>{move || app.get().log_file}</code></Row>
             <Row label="Services directory"><code>{move || app.get().services_dir}</code></Row>
+            {platform_texts::texts().web_process_sandbox.map(|state| view! {
+                <Row label="Web process sandbox">{state}</Row>
+            })}
         </div>
         <UpdateSection />
     }

@@ -9,8 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Atrium runs on Linux (WebKitGTK 4.1) when built from source; each account keeps its web data in a folder of its own
+- Atrium runs on Linux (WebKitGTK 4.1) when built from source; each account keeps its web data in a folder of its own; WebKit's web process sandbox is not available on Linux builds (Settings > About says so)
 - On Linux, starting Atrium again brings the running Atrium to the front instead of opening a second one
+- On Linux the settings say tray icon, launcher badge and desktop light or dark setting instead of menu bar, dock badge and macOS
 
 ### Changed
 
@@ -21,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - A woken account no longer keeps a small yellow remnant of its sleeping moon on the sidebar icon on macOS
+- Drop-down lists draw their own arrow, so their text is no longer cut off on Linux
 - The *Added* note after adding an account appears beside the *Add* button instead of below it, so the settings no longer jump
 
 ## 0.2.0

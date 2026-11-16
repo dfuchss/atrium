@@ -7,6 +7,7 @@ mod commands;
 mod demo;
 mod demo_files;
 mod glyphs;
+mod platform_texts;
 mod query;
 mod service_api;
 mod settings;
@@ -16,7 +17,7 @@ mod update;
 mod widgets;
 
 use leptos::prelude::*;
-use protocol::{Snapshot, UiCommand};
+use protocol::{OperatingSystem, Snapshot, UiCommand};
 
 use crate::commands::{Dispatch, send_command};
 use crate::query::query_param;
@@ -71,6 +72,14 @@ fn layout_variables(snapshot: &Snapshot) -> String {
     )
 }
 
+/// The root's classes: `os-<system>` lets the stylesheet adapt to the platform's web view.
+fn root_class(snapshot: &Snapshot) -> &'static str {
+    match snapshot.app.os {
+        OperatingSystem::MacOs => "root os-macos",
+        OperatingSystem::Linux => "root os-linux",
+    }
+}
+
 #[component]
 fn App() -> impl IntoView {
     let (snapshot, set_snapshot) = signal(Snapshot::default());
@@ -78,6 +87,7 @@ fn App() -> impl IntoView {
     connect(set_snapshot, open_dialog);
     provide_context(Dispatch(set_snapshot));
     provide_context(ui_state);
+    platform_texts::provide(snapshot);
     let (update_status, set_update_status) = signal(None::<protocol::UpdateStatus>);
     update::connect_updates(set_update_status);
     provide_context(update::UpdateStatusSignal(update_status));
@@ -93,7 +103,7 @@ fn App() -> impl IntoView {
     let dialog_open = Memo::new(move |_| snapshot.with(|snapshot| snapshot.dialog_open));
     let variables = Memo::new(move |_| snapshot.with(layout_variables));
     view! {
-        <div class="root" style=move || variables.get()>
+        <div class=move || root_class(&snapshot.get()) style=move || variables.get()>
             <Sidebar snapshot=snapshot />
             <Show when=move || dialog_open.get()>
                 <SettingsDialog snapshot=snapshot />

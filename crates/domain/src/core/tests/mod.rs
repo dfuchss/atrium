@@ -3,7 +3,8 @@
 use super::snapshot::initials;
 use super::*;
 use protocol::{
-    AccountSettings, AfterWake, CustomService, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme,
+    AccountSettings, AfterWake, CustomService, DockBadgeMode, IconSize, LinkTarget,
+    OperatingSystem, Snapshot, Theme,
 };
 
 /// The host's part of the user agent presets in the tests.

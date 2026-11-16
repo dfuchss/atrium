@@ -215,6 +215,7 @@ pub(super) fn EditForm(
     global_after_wake: AfterWake,
 ) -> impl IntoView {
     let id = account.id;
+    let loaded = !account.hibernated;
     let draft = AccountDraft::new(&account.settings);
     let service_name = account.service_name.clone();
     let instance_label = account.instance_label.clone();
@@ -254,7 +255,7 @@ pub(super) fn EditForm(
                 </select>
             </Row>
             <IconRows account=account draft=draft />
-            <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake />
+            <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake account=id loaded=loaded />
             <Row label="">
                 <div class="actions">
                     <button class="btn primary" type="submit">"Save"</button>
@@ -354,6 +355,9 @@ fn BehaviourRows(
     media_default: bool,
     global_hibernate: Option<u32>,
     global_after_wake: AfterWake,
+    account: Uuid,
+    /// The account has a view to reload (neither sleeping nor disabled).
+    loaded: bool,
 ) -> impl IntoView {
     let zoom_options = number_options(
         &ZOOM_PERCENTS,
@@ -392,6 +396,9 @@ fn BehaviourRows(
                 <option value="">{format!("Use global setting ({})", after_wake_label(global_after_wake))}</option>
                 {after_wake_options()}
             </select>
+        </Row>
+        <Row label="Force reload" hint="Reloads the page without the cache, for a service that stays broken after a normal reload. Sleeping and disabled services have nothing to reload.">
+            <button class="btn small" type="button" disabled=!loaded on:click=move |_| send_command(UiCommand::ForceReload { account })>"Force reload"</button>
         </Row>
         <Row label="User agent" hint="Changing the user agent reloads the account.">
             <select prop:value=move || draft.user_agent_mode.get() on:change=move |event| draft.user_agent_mode.set(event_target_value(&event))>

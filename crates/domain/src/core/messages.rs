@@ -253,6 +253,8 @@ pub enum Effect {
     /// Delete cookies/storage/cache of a loaded view, then reload it.
     ClearData(Uuid),
     Reload(Uuid),
+    /// Reload bypassing the cache: every resource is revalidated with the server.
+    ForceReload(Uuid),
     /// Link target and media permission of this account's views (incl. its popups); the
     /// adapter decides synchronously from it. Emitted before every [`Effect::CreateView`] and
     /// whenever the effective policy changes (no view recreation needed).

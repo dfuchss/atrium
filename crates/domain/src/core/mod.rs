@@ -199,6 +199,7 @@ impl Core {
             UiCommand::SetMuted { account, muted } => self.set_muted(account, muted),
             UiCommand::Move { account, delta } => self.move_account(account, delta),
             UiCommand::Reload { account } => self.reload(account),
+            UiCommand::ForceReload { account } => self.force_reload(account),
             UiCommand::SetDialog { open } => self.set_dialog(open),
             UiCommand::SetDnd { enabled } => self.set_dnd(enabled),
             UiCommand::UpdateSettings { settings } => self.update_settings(settings),

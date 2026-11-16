@@ -277,3 +277,31 @@ fn settings_without_after_wake_load_with_defaults() {
     let account: Account = serde_json::from_value(v).unwrap();
     assert_eq!(account.after_wake, None);
 }
+
+#[test]
+fn force_reload_bypasses_the_cache_and_ends_the_check() {
+    let mut core = three_accounts_one_hibernated();
+    wake(&mut core);
+    let effects = core.handle(Input::Ui(UiCommand::ForceReload { account: id(2) }));
+    assert_eq!(
+        effects,
+        vec![
+            Effect::Log(format!("[{}] force reload", id(2))),
+            Effect::ForceReload(id(2))
+        ]
+    );
+    assert!(reloads(&effects).is_empty(), "not the soft reload");
+    assert_eq!(reloads(&tick_through_grace(&mut core)), vec![id(1)]);
+}
+
+#[test]
+fn force_reload_of_an_account_without_view_is_only_logged() {
+    let mut core = three_accounts_one_hibernated();
+    for account in [id(3), id(9)] {
+        let effects = core.handle(Input::Ui(UiCommand::ForceReload { account }));
+        assert!(
+            matches!(effects.as_slice(), [Effect::Log(_)]),
+            "{effects:?}"
+        );
+    }
+}

@@ -77,6 +77,7 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
         }
         Effect::ClearData(account) => ("ClearData", ports.host.clear_data(account)),
         Effect::Reload(account) => ("Reload", ports.host.reload(account)),
+        Effect::ForceReload(account) => ("ForceReload", ports.host.force_reload(account)),
         Effect::SetViewPolicy { account, policy } => {
             ("SetViewPolicy", ports.host.set_view_policy(account, policy))
         }
@@ -177,6 +178,9 @@ mod tests {
             Ok(())
         }
         fn reload(&self, _: Uuid) -> PortResult {
+            Ok(())
+        }
+        fn force_reload(&self, _: Uuid) -> PortResult {
             Ok(())
         }
         fn eval(&self, _: Uuid, _: &str) -> PortResult {

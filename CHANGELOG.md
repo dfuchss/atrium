@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Force reload in an account's settings reloads the service without its cache, for a page that stays broken after a normal reload
+
 ### Changed
 
 - After your Mac wakes from sleep, only services that stop responding are reloaded instead of all of them, and only once you wake the Mac, not during Power Nap. Choose Check, Reload or Do nothing in the settings, also per account

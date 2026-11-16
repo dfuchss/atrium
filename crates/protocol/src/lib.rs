@@ -91,6 +91,10 @@ pub enum UiCommand {
     Reload {
         account: Uuid,
     },
+    /// Reload bypassing the cache (every resource revalidated with the server).
+    ForceReload {
+        account: Uuid,
+    },
     /// The manage/add dialog covers the whole window: service views are hidden while it is open.
     SetDialog {
         open: bool,

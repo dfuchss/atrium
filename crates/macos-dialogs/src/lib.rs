@@ -20,11 +20,13 @@
 //! completes.
 //!
 //! It also builds the `WebKit` configuration of service webviews (`configuration`), which
-//! needs the same Objective-C calls, and reports display wakes (`wake`).
+//! needs the same Objective-C calls, reports display wakes (`wake`) and reloads webviews from
+//! their origin (`reload`).
 //!
 //! The only crate of the workspace with `unsafe` code; every block says why it is sound.
 
 mod configuration;
+mod reload;
 mod wake;
 
 use std::cell::RefCell;
@@ -47,6 +49,7 @@ use objc2_web_kit::{WKFrameInfo, WKWebView};
 use tauri::webview::PlatformWebview;
 
 pub use configuration::{forbid_automatic_windows, service_configuration};
+pub use reload::reload_from_origin;
 pub use wake::observe_screens_wake;
 
 /// Which panel the page asked for.

@@ -34,7 +34,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
   - Per account, you can list hosts that always open in the app, e.g. your single-sign-on provider.
 - **Icons.** Site favicons are fetched automatically. You can also use a [Simple Icons](https://simpleicons.org/) glyph or your own image.
 - **Customisable.**
-  - Per account: zoom, user agent, custom CSS, camera and microphone permission, enable/disable.
+  - Per account: zoom, user agent, custom CSS, camera and microphone permission, enable/disable, force reload without the cache.
   - Custom services can be created in the settings, optionally starting from a built-in one.
   - **Expert mode:** edit service definitions as TOML files in the services folder and reload them without restarting.
 - **macOS integration.**

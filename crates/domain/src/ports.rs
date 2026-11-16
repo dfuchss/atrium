@@ -30,6 +30,8 @@ pub trait WebviewHost: Send + Sync {
     fn hide(&self, account: Uuid) -> PortResult;
     fn destroy(&self, account: Uuid) -> PortResult;
     fn reload(&self, account: Uuid) -> PortResult;
+    /// Reloads bypassing the cache (every resource revalidated with the server).
+    fn force_reload(&self, account: Uuid) -> PortResult;
     fn eval(&self, account: Uuid, script: &str) -> PortResult;
     /// Evaluates `script`; the adapter later sends `Input::PollResult` with the raw callback string.
     fn poll(&self, account: Uuid, script: &str) -> PortResult;

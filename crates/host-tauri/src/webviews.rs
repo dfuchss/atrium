@@ -398,6 +398,12 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         self.webview(account)?.reload().map_err(port_err)
     }
 
+    fn force_reload(&self, account: Uuid) -> PortResult {
+        self.webview(account)?
+            .with_webview(|platform| macos_dialogs::reload_from_origin(&platform))
+            .map_err(port_err)
+    }
+
     fn eval(&self, account: Uuid, script: &str) -> PortResult {
         self.webview(account)?.eval(script).map_err(port_err)
     }

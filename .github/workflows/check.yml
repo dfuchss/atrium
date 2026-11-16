@@ -24,12 +24,12 @@ jobs:
       - name: Run checks
         run: scripts/check.sh
 
-  # Every push to main also gets an unsigned debug bundle to try out, kept for two weeks under the
-  # run's artifacts. A debug build never updates itself and shares its data with an installed Atrium.
+  # Every push to main and every pull request also gets an unsigned debug bundle to try out, kept
+  # for two weeks under the run's artifacts. A debug build never updates itself and shares its data
+  # with an installed Atrium.
   debug-build:
     name: Debug build ${{ matrix.arch }}
     needs: check
-    if: github.event_name == 'push'
     runs-on: macos-latest
     strategy:
       matrix:

@@ -1,11 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" width="44" height="44">
-  <!-- Atrium seen from above: outer wall, four sloping roof lines, open courtyard. Black on transparent (macOS template image). -->
-  <rect x="3" y="3" width="38" height="38" rx="8" fill="none" stroke="#000" stroke-width="3"/>
-  <g stroke="#000" stroke-width="2.5" stroke-linecap="round">
-    <line x1="9" y1="9" x2="14" y2="14"/>
-    <line x1="35" y1="9" x2="30" y2="14"/>
-    <line x1="9" y1="35" x2="14" y2="30"/>
-    <line x1="35" y1="35" x2="30" y2="30"/>
-  </g>
-  <rect x="14" y="14" width="16" height="16" rx="2" fill="#000"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="22" height="22">
+  <title>Atrium (menu bar template)</title>
+  <!-- Solid rounded hexagon with the central doorway cut out (even-odd) -->
+  <path fill="#000000" fill-rule="evenodd" d="
+    M9.63,1.82 Q11,1 12.37,1.82 L19.32,6 Q20.35,6.62 20.35,7.82 L20.35,15.87 Q20.35,17.07 19.25,17.53
+    L12.84,20.23 Q11,21 9.16,20.23 L2.75,17.53 Q1.65,17.07 1.65,15.87 L1.65,7.82 Q1.65,6.62 2.68,6 Z
+    M7.75,17.25 V11.25 A3.25,3.25 0 0 1 14.25,11.25 V17.25 Z"/>
 </svg>

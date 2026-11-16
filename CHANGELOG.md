@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- New app icon: an atrium courtyard with arched walls around a lit floor
+
 ### Fixed
 
 - A woken account no longer keeps a small yellow remnant of its sleeping moon on the sidebar icon on macOS

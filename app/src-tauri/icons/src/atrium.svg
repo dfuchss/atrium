@@ -1,29 +1,127 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Atrium</title>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0f766e"/>
-      <stop offset="1" stop-color="#312e81"/>
-    </linearGradient>
-    <radialGradient id="light" cx="0.5" cy="0.4" r="0.7">
-      <stop offset="0" stop-color="#fffbeb"/>
-      <stop offset="0.45" stop-color="#fde68a"/>
-      <stop offset="1" stop-color="#f59e0b"/>
+    <!-- Outer silhouette: rounded hexagon (left/right symmetric about x=512) -->
+    <path id="hexagon" d="M460.6,140.9 Q512,110 563.4,140.9 L848.6,312.3 Q888,336 888,382 L888,712 Q888,756 847.4,773 L585.8,883 Q512,914 438.2,883 L176.6,773 Q136,756 136,712 L136,382 Q136,336 175.4,312.3 Z"/>
+    <clipPath id="clip-hexagon"><use href="#hexagon"/></clipPath>
+
+    <radialGradient id="grad-rim" gradientUnits="userSpaceOnUse" cx="560" cy="120" r="470">
+      <stop offset="0" stop-color="#3CCBFD"/>
+      <stop offset="0.45" stop-color="#2E92FE"/>
+      <stop offset="1" stop-color="#1D5BFC"/>
     </radialGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
-      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000" flood-opacity="0.35"/>
-    </filter>
-    <clipPath id="roof"><rect x="232" y="232" width="560" height="560" rx="70"/></clipPath>
+    <radialGradient id="grad-upper-wall" gradientUnits="userSpaceOnUse" cx="512" cy="440" r="300">
+      <stop offset="0" stop-color="#4A8BDF"/>
+      <stop offset="0.55" stop-color="#1557D2"/>
+      <stop offset="1" stop-color="#0A3CC4"/>
+    </radialGradient>
+    <linearGradient id="grad-rim-lip" gradientUnits="userSpaceOnUse" x1="232" y1="0" x2="792" y2="0">
+      <stop offset="0" stop-color="#0A3FC8"/>
+      <stop offset="0.5" stop-color="#0262DE"/>
+      <stop offset="1" stop-color="#0A47CC"/>
+    </linearGradient>
+    <linearGradient id="grad-window" gradientUnits="userSpaceOnUse" x1="0" y1="300" x2="0" y2="440">
+      <stop offset="0" stop-color="#FAFDFF"/>
+      <stop offset="1" stop-color="#CDEFFD"/>
+    </linearGradient>
+    <linearGradient id="grad-window-small" gradientUnits="userSpaceOnUse" x1="0" y1="340" x2="0" y2="440">
+      <stop offset="0" stop-color="#C4E6FD"/>
+      <stop offset="1" stop-color="#A6D4FB"/>
+    </linearGradient>
+    <linearGradient id="grad-back-wall" gradientUnits="userSpaceOnUse" x1="0" y1="476" x2="0" y2="690">
+      <stop offset="0" stop-color="#6E87D0"/>
+      <stop offset="1" stop-color="#B08AB0"/>
+    </linearGradient>
+    <radialGradient id="grad-door-glow" gradientUnits="userSpaceOnUse" cx="512" cy="620" r="150">
+      <stop offset="0" stop-color="#FFF6E6" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#FFF6E6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="grad-door" gradientUnits="userSpaceOnUse" x1="0" y1="522" x2="0" y2="690">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FEF1D4"/>
+    </linearGradient>
+    <linearGradient id="grad-wall-left" gradientUnits="userSpaceOnUse" x1="372" y1="440" x2="140" y2="780">
+      <stop offset="0" stop-color="#A673FD"/>
+      <stop offset="0.45" stop-color="#9156FC"/>
+      <stop offset="1" stop-color="#743EEA"/>
+    </linearGradient>
+    <linearGradient id="grad-wall-right" gradientUnits="userSpaceOnUse" x1="652" y1="440" x2="884" y2="780">
+      <stop offset="0" stop-color="#3ADCD3"/>
+      <stop offset="0.45" stop-color="#22CFCC"/>
+      <stop offset="1" stop-color="#08B6C4"/>
+    </linearGradient>
+    <linearGradient id="grad-reveal-left" gradientUnits="userSpaceOnUse" x1="212" y1="0" x2="332" y2="0">
+      <stop offset="0" stop-color="#4E3896"/>
+      <stop offset="1" stop-color="#7A52D2"/>
+    </linearGradient>
+    <linearGradient id="grad-reveal-right" gradientUnits="userSpaceOnUse" x1="812" y1="0" x2="692" y2="0">
+      <stop offset="0" stop-color="#0A6FA2"/>
+      <stop offset="1" stop-color="#1A9DBE"/>
+    </linearGradient>
+    <linearGradient id="grad-opening-left" gradientUnits="userSpaceOnUse" x1="0" y1="550" x2="0" y2="760">
+      <stop offset="0" stop-color="#F2E6FB"/>
+      <stop offset="1" stop-color="#D9C6F6"/>
+    </linearGradient>
+    <linearGradient id="grad-opening-right" gradientUnits="userSpaceOnUse" x1="0" y1="550" x2="0" y2="760">
+      <stop offset="0" stop-color="#E1EEFE"/>
+      <stop offset="1" stop-color="#BED8FB"/>
+    </linearGradient>
+    <linearGradient id="grad-cornice-left" gradientUnits="userSpaceOnUse" x1="136" y1="0" x2="372" y2="0">
+      <stop offset="0" stop-color="#C39AFC"/>
+      <stop offset="1" stop-color="#EEE6FD"/>
+    </linearGradient>
+    <linearGradient id="grad-cornice-right" gradientUnits="userSpaceOnUse" x1="888" y1="0" x2="652" y2="0">
+      <stop offset="0" stop-color="#7EEDEA"/>
+      <stop offset="1" stop-color="#DDFBF9"/>
+    </linearGradient>
+    <linearGradient id="grad-ledge" gradientUnits="userSpaceOnUse" x1="0" y1="446" x2="0" y2="486">
+      <stop offset="0" stop-color="#D3E1FA"/>
+      <stop offset="1" stop-color="#AFC4F0"/>
+    </linearGradient>
+    <linearGradient id="grad-floor-lip" gradientUnits="userSpaceOnUse" x1="0" y1="760" x2="0" y2="914">
+      <stop offset="0" stop-color="#FE7048"/>
+      <stop offset="1" stop-color="#FC5F2C"/>
+    </linearGradient>
+    <radialGradient id="grad-floor" gradientUnits="userSpaceOnUse" cx="512" cy="680" r="330" gradientTransform="translate(512 680) scale(1 0.62) translate(-512 -680)">
+      <stop offset="0" stop-color="#FFEDB4"/>
+      <stop offset="0.35" stop-color="#FECB7A"/>
+      <stop offset="0.75" stop-color="#FEAA5E"/>
+      <stop offset="1" stop-color="#FD9A52"/>
+    </radialGradient>
   </defs>
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#shadow)"/>
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="4"/>
-  <!-- the roof, seen from above, sloping inwards to the open centre (compluvium) -->
-  <g clip-path="url(#roof)">
-    <polygon points="232,232 792,232 642,382 382,382" fill="#ffffff" fill-opacity="0.97"/>
-    <polygon points="792,232 792,792 642,642 642,382" fill="#ffffff" fill-opacity="0.72"/>
-    <polygon points="232,792 792,792 642,642 382,642" fill="#ffffff" fill-opacity="0.55"/>
-    <polygon points="232,232 232,792 382,642 382,382" fill="#ffffff" fill-opacity="0.84"/>
+
+  <!-- Roof rim: the whole silhouette, the rest is drawn on top of it -->
+  <use href="#hexagon" fill="url(#grad-rim)"/>
+
+  <g clip-path="url(#clip-hexagon)">
+    <!-- Upper back wall under the rim, with its three windows -->
+    <path id="upper-wall" fill="url(#grad-upper-wall)" d="M232,366 L470,264 Q512,246 554,264 L792,366 L652,440 L372,440 Z"/>
+    <path id="rim-lip" fill="url(#grad-rim-lip)" d="M232,366 L470,264 Q512,246 554,264 L792,366 L554,284 Q512,270 470,284 Z"/>
+    <path id="window-left" fill="url(#grad-window-small)" d="M335,440 V378 A31.5,31.5 0 0 1 398,378 V440 Z"/>
+    <path id="window-centre" fill="url(#grad-window)" d="M457,440 V363 A55,55 0 0 1 567,363 V440 Z"/>
+    <path id="window-right" fill="url(#grad-window-small)" d="M626,440 V378 A31.5,31.5 0 0 1 689,378 V440 Z"/>
+
+    <!-- Lower back wall with the lit central doorway -->
+    <rect id="back-wall" fill="url(#grad-back-wall)" x="372" y="440" width="280" height="260"/>
+    <ellipse id="door-glow" fill="url(#grad-door-glow)" cx="512" cy="620" rx="150" ry="150"/>
+    <path id="door-centre" fill="url(#grad-door)" d="M444,700 V590 A68,68 0 0 1 580,590 V700 Z"/>
+
+    <!-- Side walls, each with one doorway (reveal + light opening) -->
+    <path id="wall-left" fill="url(#grad-wall-left)" d="M100,322 L372,450 V720 L100,820 Z"/>
+    <path id="wall-right" fill="url(#grad-wall-right)" d="M924,322 L652,450 V720 L924,820 Z"/>
+    <path id="door-left" fill="url(#grad-reveal-left)" d="M212,780 V582 A60,60 0 0 1 332,582 V780 Z"/>
+    <path id="door-left-opening" fill="url(#grad-opening-left)" d="M212,780 V578 A28,28 0 0 1 268,578 V780 Z"/>
+    <path id="door-right" fill="url(#grad-reveal-right)" d="M692,780 V582 A60,60 0 0 1 812,582 V780 Z"/>
+    <path id="door-right-opening" fill="url(#grad-opening-right)" d="M756,780 V578 A28,28 0 0 1 812,578 V780 Z"/>
+
+    <!-- Cornice: light top faces of the side walls and the ledge over the door -->
+    <path id="cornice-left" fill="url(#grad-cornice-left)" d="M100,304 L372,432 V464 L100,336 Z"/>
+    <path id="cornice-right" fill="url(#grad-cornice-right)" d="M924,304 L652,432 V464 L924,336 Z"/>
+    <path id="ledge-front" fill="url(#grad-ledge)" d="M364,446 Q512,456 660,446 V470 Q660,478 652,478 Q512,488 372,478 Q364,478 364,470 Z"/>
+    <path id="ledge-top" fill="#EDF4FE" d="M372,430 H652 Q660,430 660,438 V446 Q512,456 364,446 V438 Q364,430 372,430 Z"/>
+
+    <!-- Floor: red-orange lip, warm top surface -->
+    <path id="floor-lip" fill="url(#grad-floor-lip)" d="M100,802 L350,690 Q372,680 395,680 H629 Q652,680 674,690 L924,802 V1000 H100 Z"/>
+    <path id="floor" fill="url(#grad-floor)" d="M201,757 L350,690 Q372,680 395,680 H629 Q652,680 674,690 L823,757 L560,854 Q512,872 464,854 Z"/>
   </g>
-  <!-- light falling into the courtyard -->
-  <rect x="382" y="382" width="260" height="260" rx="22" fill="url(#light)"/>
-  <rect x="382" y="382" width="260" height="260" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="6"/>
 </svg>

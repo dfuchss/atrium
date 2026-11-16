@@ -99,7 +99,7 @@ Known limitations on Linux:
 - The unread count appears as the tray label only where the panel supports it. The launcher badge works only where the desktop supports the Unity launcher API.
 - "Open links in" takes a command name (e.g. `firefox`) instead of an application name.
 - No self-update.
-- A second launch is not prevented yet.
+- On Wayland, starting Atrium again may only highlight the running Atrium in the task bar instead of bringing its window to the front.
 - Session cookies are stored unencrypted in the per-account web data folder (mode `0700`): exclude `webdata/` from backups and sync.
 
 ## Usage

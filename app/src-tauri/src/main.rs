@@ -374,15 +374,15 @@ fn app_info(
 /// while loading the settings that decide how the window is created.
 fn setup(
     app: &App,
+    dev: &DevHooks,
     feed: &Feed,
     inputs: Receiver<Input>,
     snapshot_cache: &Arc<Mutex<Snapshot>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let dev = DevHooks::from_env();
-    let host = create_host(app, &dev, feed.clone());
+    let host = create_host(app, dev, feed.clone());
     let version = app.package_info().version.to_string();
     host.log(&format!("---- Atrium {version} starting ----"));
-    let config_dir = config_dir(app, &dev, &host)?;
+    let config_dir = config_dir(app, dev, &host)?;
     let store = FsStore::new(config_dir.clone());
     updates::start(app, config_dir.clone(), host.log_sink())?;
     let load = load_persisted(&store, &host);
@@ -409,7 +409,7 @@ fn setup(
 
     // Before the window exists, so a forced theme doesn't flash the system one at start.
     app.set_theme(host_tauri::native_theme(persisted.settings.app.theme));
-    let (window, size) = build_window_with_sidebar(app, &dev, &persisted.settings.app)?;
+    let (window, size) = build_window_with_sidebar(app, dev, &persisted.settings.app)?;
     // Needs the sidebar webview and must precede the service views: see `install_dialogs`.
     host.install_dialogs();
 
@@ -445,11 +445,31 @@ fn setup(
     Ok(())
 }
 
+/// A Tauri builder with the plugins. The single-instance guard comes first (see
+/// `host_tauri::guard_single_instance`); a development instance with its own config folder runs
+/// beside the regular one.
+fn builder_with_plugins(dev: &DevHooks) -> tauri::Builder<Wry> {
+    let builder = tauri::Builder::default();
+    let builder = if dev.config_dir.is_some() {
+        builder
+    } else {
+        host_tauri::guard_single_instance(builder, MAIN_WINDOW)
+    };
+    builder
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
+}
+
 fn main() {
     // Started as the update helper (see `updater::helper`): swap the bundle, never open a window.
     if let Some(exit_code) = updater::helper::run_if_requested() {
         std::process::exit(exit_code);
     }
+    let dev = DevHooks::from_env();
     let context = tauri::generate_context!();
     host_tauri::set_app_id(&context.config().identifier);
     let (sender, inputs) = mpsc::channel::<Input>();
@@ -462,13 +482,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     let crash_feed = feed.clone();
 
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            None,
-        ))
+    let builder = builder_with_plugins(&dev)
         .manage(Shared {
             feed,
             snapshot: snapshot_cache,
@@ -495,7 +509,7 @@ fn main() {
     #[cfg(target_os = "macos")]
     let builder = host_tauri::register_crash_hook(builder, &crash_feed);
     let app = builder
-        .setup(move |app| setup(app, &setup_feed, inputs, &setup_cache))
+        .setup(move |app| setup(app, &dev, &setup_feed, inputs, &setup_cache))
         .build(context)
         .expect("error while building Atrium");
     app.run(|app, event| match event {

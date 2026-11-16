@@ -13,7 +13,8 @@
 //! - Crashed web processes: `register_crash_hook` (macOS) has the core reload a service
 //!   view whose web process died.
 //! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_screens_wake`],
-//!   [`NOTIFICATION_SOUND`], the tray icon and whether an app menu is shown.
+//!   [`guard_single_instance`], [`NOTIFICATION_SOUND`], the tray icon and whether an app menu
+//!   is shown.
 //! - Settings: [`open_url_with`] opens links in the chosen browser.
 
 #[cfg(target_os = "linux")]

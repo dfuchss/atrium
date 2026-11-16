@@ -8,7 +8,7 @@ use domain::{Bounds, DockBadge};
 use protocol::UI_WEBVIEW;
 use tauri::webview::NewWindowFeatures;
 use tauri::{
-    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder,
+    AppHandle, Builder, LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder,
     WebviewWindowBuilder, Window,
 };
 use tauri_plugin_opener::OpenerExt;
@@ -157,6 +157,15 @@ pub(crate) fn open_url_with<R: Runtime>(
     browser: Option<&str>,
 ) -> PortResult {
     app.opener().open_url(url, browser).map_err(port_err)
+}
+
+/// Leaves `builder` as it is: started again, macOS activates the running app itself (Launch
+/// Services), and a development instance may run beside it.
+pub(crate) fn guard_single_instance<R: Runtime>(
+    builder: Builder<R>,
+    _window_label: &'static str,
+) -> Builder<R> {
+    builder
 }
 
 /// Shows the unread count or a dot on the Dock icon, or clears it.

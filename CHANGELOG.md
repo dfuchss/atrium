@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - Atrium runs on Linux (WebKitGTK 4.1) when built from source; each account keeps its web data in a folder of its own
+- On Linux, starting Atrium again brings the running Atrium to the front instead of opening a second one
 
 ### Changed
 

@@ -291,7 +291,7 @@ fn write_swap_result(fixture: &Fixture, success: bool) {
         }
         .into(),
     };
-    crate::store::write_atomically(
+    crate::store::write_private(
         &UpdaterFiles::result_file(&updates),
         &serde_json::to_string(&result).unwrap(),
     )

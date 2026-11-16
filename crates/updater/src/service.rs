@@ -13,7 +13,7 @@ use crate::native;
 use crate::release::{RELEASES_PAGE, Release};
 use crate::source::ReleaseSource;
 use crate::staging::{StageRequest, remove_if_present, stage};
-use crate::store::{SwapResult, UpdaterFiles, UpdaterSettings, write_atomically};
+use crate::store::{SwapResult, UpdaterFiles, UpdaterSettings, write_private};
 use crate::swap::{new_update_path, old_update_path, partial_update_path};
 use crate::version::Version;
 
@@ -245,7 +245,7 @@ impl Updater {
                     message: format!("the update helper did not start: {error}"),
                 };
                 let json = serde_json::to_string(&result).unwrap_or_default();
-                let _ = write_atomically(&UpdaterFiles::result_file(&plan.updates_dir), &json);
+                let _ = write_private(&UpdaterFiles::result_file(&plan.updates_dir), &json);
                 false
             }
         }

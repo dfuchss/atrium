@@ -1361,6 +1361,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-util"
+version = "0.2.0"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1837,6 +1844,7 @@ version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "domain",
+ "fs-util",
  "protocol",
  "tauri",
  "tauri-plugin-autostart",
@@ -4398,6 +4406,7 @@ name = "store-fs"
 version = "0.2.0"
 dependencies = [
  "domain",
+ "fs-util",
  "protocol",
  "serde_json",
  "tempfile",
@@ -5342,6 +5351,7 @@ checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
 name = "updater"
 version = "0.2.0"
 dependencies = [
+ "fs-util",
  "plist",
  "protocol",
  "serde",

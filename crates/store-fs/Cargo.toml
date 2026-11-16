@@ -9,6 +9,7 @@ description.workspace = true
 
 [dependencies]
 domain.workspace = true
+fs-util.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]

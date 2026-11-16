@@ -8,6 +8,7 @@ authors.workspace = true
 description.workspace = true
 
 [dependencies]
+fs-util.workspace = true
 protocol.workspace = true
 serde.workspace = true
 serde_json.workspace = true

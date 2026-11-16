@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/protocol",
+    "crates/fs-util",
     "crates/domain",
     "crates/store-fs",
     "crates/webview-dialogs",
@@ -13,6 +14,7 @@ members = [
 # app/ui is a wasm crate built by Trunk; keep it out of plain `cargo build/test`.
 default-members = [
     "crates/protocol",
+    "crates/fs-util",
     "crates/domain",
     "crates/store-fs",
     "crates/webview-dialogs",
@@ -31,6 +33,7 @@ description = "A lightweight messenger aggregator for macOS, built with Rust and
 
 [workspace.dependencies]
 protocol = { path = "crates/protocol" }
+fs-util = { path = "crates/fs-util" }
 domain = { path = "crates/domain" }
 store-fs = { path = "crates/store-fs" }
 webview-dialogs = { path = "crates/webview-dialogs" }

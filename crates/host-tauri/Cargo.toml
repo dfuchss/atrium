@@ -9,6 +9,7 @@ description.workspace = true
 
 [dependencies]
 domain.workspace = true
+fs-util.workspace = true
 protocol.workspace = true
 uuid.workspace = true
 url.workspace = true

@@ -1,7 +1,6 @@
 //! The updater's files: `<app data>/updater.json` (settings and the staged release) and the
 //! helper's `<app data>/updates/update-result.json`.
 
-use std::io::Write as _;
 use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 
@@ -75,7 +74,7 @@ impl UpdaterFiles {
 
     pub(crate) fn save_settings(&self, settings: &UpdaterSettings) -> std::io::Result<()> {
         let json = serde_json::to_string_pretty(settings).map_err(std::io::Error::other)?;
-        write_atomically(&self.data_dir.join(SETTINGS_FILE), &json)
+        write_private(&self.data_dir.join(SETTINGS_FILE), &json)
     }
 
     /// Reads and removes the helper's result and log of the previous swap, if any.
@@ -95,18 +94,9 @@ impl UpdaterFiles {
     }
 }
 
-/// Writes `<path>.tmp` and renames it over `path`, so readers never see half a file.
-pub(crate) fn write_atomically(path: &Path, contents: &str) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let mut temporary = path.as_os_str().to_os_string();
-    temporary.push(".tmp");
-    let mut file = open_private(&temporary, false)?;
-    file.write_all(contents.as_bytes())?;
-    file.sync_all()?;
-    drop(file);
-    std::fs::rename(&temporary, path)
+/// Writes `contents` to `path` atomically with mode 0600.
+pub(crate) fn write_private(path: &Path, contents: &str) -> std::io::Result<()> {
+    fs_util::write_atomically(path, contents.as_bytes(), PRIVATE_FILE_MODE)
 }
 
 /// Opens `path` for writing (truncated, or appended to with `append`) with mode 0600, also
@@ -125,14 +115,16 @@ pub(crate) fn open_private(path: impl AsRef<Path>, append: bool) -> std::io::Res
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write as _;
+
     use super::*;
 
     #[test]
-    fn files_are_owner_only_even_over_a_leftover() {
+    fn files_are_owner_only_even_over_a_readable_one() {
         let dir = tempfile::tempdir().unwrap();
-        let leftover = dir.path().join(format!("{SETTINGS_FILE}.tmp"));
-        std::fs::write(&leftover, "old").unwrap();
-        std::fs::set_permissions(&leftover, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let readable = dir.path().join(SETTINGS_FILE);
+        std::fs::write(&readable, "old").unwrap();
+        std::fs::set_permissions(&readable, std::fs::Permissions::from_mode(0o644)).unwrap();
         let files = UpdaterFiles::new(dir.path().to_path_buf());
         files.save_settings(&UpdaterSettings::default()).unwrap();
         let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
@@ -178,7 +170,7 @@ mod tests {
             message: "no".into(),
         };
         let updates = files.updates_dir();
-        write_atomically(
+        write_private(
             &UpdaterFiles::result_file(&updates),
             &serde_json::to_string(&result).unwrap(),
         )

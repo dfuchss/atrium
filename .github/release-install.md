@@ -1,5 +1,7 @@
 ## Download and install
 
+### macOS
+
 Unsigned macOS builds of Atrium (macOS 14 or later). Pick the file for your Mac:
 
 | Mac | File |
@@ -30,7 +32,22 @@ xattr -cr /Applications/Atrium.app
 
 </details>
 
+### Linux
+
+`atrium-linux-x86_64.AppImage` runs on 64-bit Intel/AMD Linux and `atrium-linux-aarch64.AppImage` on 64-bit ARM Linux; both bring their own WebKitGTK and need glibc 2.39 or newer (e.g. Ubuntu 24.04, Debian 13, Fedora 40). Make it executable and start it:
+
+```bash
+chmod +x atrium-linux-x86_64.AppImage
+./atrium-linux-x86_64.AppImage
+```
+
+AppImages need FUSE 2 (`libfuse2` on Debian/Ubuntu, `fuse` on Fedora); without it, start Atrium with `--appimage-extract-and-run`. To get a launcher entry and the window icon, integrate the AppImage with an AppImage manager such as Gear Lever. `SHA256SUMS` holds the checksums (`sha256sum -c SHA256SUMS --ignore-missing`).
+
 ### Updating
 
-An Atrium in the Applications folder updates itself: Settings > About shows new versions and
+On macOS, an Atrium in the Applications folder updates itself: Settings > About shows new versions and
 **Restart and update** installs them.
+
+On Linux, the AppImage updates itself when it lies in a folder you can write to (e.g. `~/Applications`):
+Settings > About shows new versions and **Quit and update** swaps in the new AppImage; open Atrium again
+afterwards.

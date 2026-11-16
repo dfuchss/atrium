@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Atrium
+Comment=All your messengers in one calm place
+Exec={{exec}} %U
+Icon={{icon}}
+StartupWMClass=org.fuchss.atrium
+Categories=Network;InstantMessaging;Chat;
+Terminal=false

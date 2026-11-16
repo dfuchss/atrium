@@ -22,7 +22,7 @@ Copy `Atrium.app` to `/Applications`. The app is not signed; the first time, ope
 
 ### Linux
 
-Atrium runs on Linux with WebKitGTK 4.1 when built from source. Install the development packages:
+To build from source, install the development packages:
 
 ```sh
 # Debian/Ubuntu
@@ -35,11 +35,14 @@ Then install [Rust](https://rustup.rs/) with the `wasm32-unknown-unknown` target
 
 ```sh
 cd atrium/app/src-tauri
-cargo tauri build --debug --no-bundle    # → target/debug/atrium (the bundle target is macOS-only for now)
+cargo tauri build                        # → target/release/bundle/appimage/atrium_<version>_<arch>.AppImage
+cargo tauri build --debug --no-bundle    # only the binary: target/debug/atrium
 cargo tauri dev                          # run with live-reloading UI
 ```
 
-On immutable distributions, build inside a distrobox or toolbox container. `scripts/linux-check.sh` runs the Linux checks (formatting, clippy, tests) on a Linux host or in such a container, e.g. `distrobox enter atrium-dev -- scripts/linux-check.sh`. Set `CARGO_TARGET_DIR` to keep the Linux build apart from a macOS `target/` folder on a shared checkout.
+The AppImage is configured by `app/src-tauri/tauri.linux.conf.json` (Linux only; the macOS bundle is unaffected). It bundles the WebKitGTK and GTK libraries of the build machine, so build on the oldest distribution you want to support. It also bundles the build machine's GStreamer plugins, which WebKitGTK needs for audio and video (the libav decoders of `gstreamer1.0-libav` play H.264 video and AAC audio); building it needs them, the tools that copy them and the tools `scripts/linux-check.sh --appimage` checks it with: `sudo apt-get install -y gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav patchelf file xxd jq` (Fedora: `gstreamer1-plugins-base gstreamer1-plugins-good gstreamer1-libav patchelf file xxd jq`, with `gstreamer1-libav` from RPM Fusion free; remove `gstreamer1-plugins-bad-free`, a weak dependency of `webkit2gtk4.1`, or the plugin check of `scripts/linux-check.sh` rejects the AppImage). To run it, see [Linux](README.md#linux) in the README.
+
+On immutable distributions, build inside a distrobox or toolbox container. `scripts/linux-check.sh` runs the Linux checks (formatting, clippy, tests) on a Linux host or in such a container, e.g. `distrobox enter atrium-dev -- scripts/linux-check.sh`. With `--appimage` it also builds the AppImage, checks its desktop entry, icon and binary, and starts it under `xvfb-run` for a few seconds if that is installed. Set `CARGO_TARGET_DIR` to keep the Linux build apart from a macOS `target/` folder on a shared checkout.
 
 ## Architecture
 

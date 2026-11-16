@@ -1,0 +1,10 @@
+{
+  "productName": "atrium",
+  "bundle": {
+    "targets": ["appimage"],
+    "linux": {
+      "deb": { "desktopTemplate": "linux/atrium.desktop" },
+      "appimage": { "bundleMediaFramework": true }
+    }
+  }
+}

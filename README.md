@@ -12,7 +12,7 @@
 
 Atrium is a lightweight messenger aggregator for macOS and Linux. It puts Element, Slack, Discord, WhatsApp, Teams and any other web app into one window with a compact sidebar. Every account runs in its own isolated web view, so you can stay signed in to several accounts of the same service side by side.
 
-It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's WebKit (WebKitGTK on Linux) instead of bundling Chromium. Release builds exist for macOS only; on Linux, build from source (see [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md).
+It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's WebKit (WebKitGTK on Linux) instead of bundling Chromium. Release builds exist for macOS and Linux (x86_64 and aarch64 AppImages); see [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md for building from source.
 
 ## Features
 
@@ -75,6 +75,8 @@ On macOS, download `atrium-macos-arm64.zip` (Apple silicon) or `atrium-macos-x86
 
 The builds are not signed, so macOS blocks the first start: open Atrium once, then allow it in System Settings → Privacy & Security → *Open Anyway*. If macOS reports the app as "damaged", remove the download quarantine with `xattr -cr /Applications/Atrium.app`.
 
+On Linux, download `atrium-linux-x86_64.AppImage` (or `atrium-linux-aarch64.AppImage` on 64-bit ARM), make it executable (`chmod +x`) and run it; see [Linux](#linux) for FUSE and the launcher entry.
+
 ### Updates
 
 Atrium checks for a new release on startup and every six hours (Settings → About; the check can be switched off there). An update is downloaded, verified against the release's `SHA256SUMS` and placed next to the app; *Restart and update* quits Atrium, swaps in the new version and starts it again. This works only for an Atrium in `/Applications` or `~/Applications`; development builds and other locations just point to the release page.
@@ -85,11 +87,15 @@ To build Atrium yourself, see [Building from source](DEVELOPMENT.md#building-fro
 
 ### Linux
 
-Atrium runs on Linux with WebKitGTK 4.1 when built from source; how to build it is described under [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md.
+Releases include AppImages for x86_64 and aarch64 (`atrium-linux-x86_64.AppImage`, `atrium-linux-aarch64.AppImage`): make it executable and run it (it needs FUSE 2, see below). To build from source, see [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md.
+
+Running it needs FUSE 2 (`libfuse2` on Debian/Ubuntu, `fuse` on Fedora), or start it with `--appimage-extract-and-run`.
+
+The window icon and launcher entry come from a desktop entry that matches the window's app id `org.fuchss.atrium`: by its name, `org.fuchss.atrium.desktop`, or by `StartupWMClass=org.fuchss.atrium`. The AppImage contains one (`atrium.desktop`, matched by its `StartupWMClass`), which an AppImage manager such as Gear Lever installs.
 
 Data locations on Linux:
 - **Config:** `~/.config/org.fuchss.atrium/` (`accounts.json`, `services/`)
-- **Web data (per account):** `~/.local/share/org.fuchss.atrium/webdata/<account id>/`. WebKitGTK keeps the cookies there as plain text, and its content processes run without WebKit's bubblewrap sandbox, so a page that breaks out of one could read the web data of every account.
+- **Web data (per account):** `~/.local/share/org.fuchss.atrium/webdata/<account id>/`. WebKitGTK keeps the cookies there as plain text, and its content processes run without WebKit's bubblewrap sandbox, so a page that breaks out of one could read the web data of every account. The WebKit bundled in the AppImage looks for `bwrap` inside the AppImage and stops Atrium if the sandbox is turned on.
 - **Log:** the app log folder, `~/.local/share/org.fuchss.atrium/logs/atrium.log`
 
 Known limitations on Linux:

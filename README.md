@@ -131,7 +131,7 @@ name = "Team Forum"
 color = "#0EA5E9"
 url = "https://{instance}/"             # {instance} is asked for per account
 instance_label = "Forum host"
-user_agent = "safari"               # safari | chrome | default | any literal UA
+user_agent = "webkit"               # webkit | chrome | default | any literal UA
 internal_hosts = ["{instance}"]
 
 [unread]

@@ -327,7 +327,7 @@ pub struct AccountSettings {
     pub show_badge: bool,
     /// Count this account's unread in the dock badge.
     pub in_dock_badge: bool,
-    /// Overrides the service's user agent: "safari" | "chrome" | "default" | literal; None = service default.
+    /// Overrides the service's user agent: "webkit" | "chrome" | "default" | literal; None = service default.
     pub user_agent: Option<String>,
     /// Disabled accounts keep their settings and login but have no view (not loaded at all).
     #[serde(default = "yes")]
@@ -390,7 +390,7 @@ pub struct CustomService {
     pub instance_label: Option<String>,
     /// Regex on the page title; capture group 1 = unread count. None = `^\((\d+)\)`.
     pub title_regex: Option<String>,
-    /// "safari" | "chrome" | "default" | literal; None = "safari".
+    /// "webkit" | "chrome" | "default" | literal; None = "webkit".
     pub user_agent: Option<String>,
 }
 

@@ -88,7 +88,7 @@ fn download(url: &str) -> Result<String, ureq::Error> {
 fn fetch(url: &str) -> Result<String, ureq::Error> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))
-        .user_agent(domain::catalog::UA_SAFARI)
+        .user_agent(domain::catalog::UA_WEBKIT)
         // Only the requested URL passed the host allow-list (`domain::core::icons`); a redirect
         // could lead anywhere, so it is returned as is and refused below.
         .max_redirects(0)

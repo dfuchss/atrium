@@ -25,7 +25,7 @@ pub(super) fn user_agent_mode(
 ) -> (String, String) {
     match user_agent {
         None => (unset_mode.to_string(), String::new()),
-        Some(preset @ ("safari" | "chrome" | "default")) => (preset.to_string(), String::new()),
+        Some(preset @ ("webkit" | "chrome" | "default")) => (preset.to_string(), String::new()),
         Some(literal) => ("custom".to_string(), literal.to_string()),
     }
 }
@@ -407,7 +407,7 @@ fn BehaviourRows(
         <Row label="User agent" hint="Changing the user agent reloads the account.">
             <select prop:value=move || draft.user_agent_mode.get() on:change=move |event| draft.user_agent_mode.set(event_target_value(&event))>
                 <option value="">"Service default"</option>
-                <option value="safari">"Safari"</option>
+                <option value="webkit">"WebKit browser"</option>
                 <option value="chrome">"Chrome"</option>
                 <option value="default">"System WebKit"</option>
                 <option value="custom">"Custom\u{2026}"</option>

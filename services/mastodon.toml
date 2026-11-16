@@ -4,7 +4,7 @@ color = "#6364FF"
 url = "https://{instance}/"
 instance_label = "Instance"
 instance_default = "mastodon.social"
-user_agent = "safari"
+user_agent = "webkit"
 internal_hosts = ["{instance}"]
 
 [unread]

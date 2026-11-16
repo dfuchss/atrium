@@ -2,7 +2,7 @@ id = "slack"
 name = "Slack"
 color = "#4A154B"
 url = "https://app.slack.com/client"
-user_agent = "safari"
+user_agent = "webkit"
 internal_hosts = ["slack.com", "*.slack.com", "*.slack-edge.com"]
 allow_media = true
 

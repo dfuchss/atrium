@@ -111,7 +111,7 @@ struct CustomServiceDraft {
 
 impl CustomServiceDraft {
     fn new(service: &CustomService) -> CustomServiceDraft {
-        let (mode, custom) = user_agent_mode(service.user_agent.as_deref(), "safari");
+        let (mode, custom) = user_agent_mode(service.user_agent.as_deref(), "webkit");
         CustomServiceDraft {
             name: RwSignal::new(service.name.clone()),
             url: RwSignal::new(service.url.clone()),
@@ -134,7 +134,7 @@ impl CustomServiceDraft {
         } else {
             format!("{} (custom)", template.name)
         };
-        let (mode, custom) = user_agent_mode(template.user_agent.as_deref(), "safari");
+        let (mode, custom) = user_agent_mode(template.user_agent.as_deref(), "webkit");
         self.name.set(name);
         self.url.set(template.url);
         self.color.set(displayable_color(template.color));
@@ -162,7 +162,7 @@ impl CustomServiceDraft {
             url,
             title_regex: non_empty(&self.title_regex.get_untracked()),
             user_agent: match self.user_agent_mode.get_untracked().as_str() {
-                "safari" => None,
+                "webkit" => None,
                 "custom" => non_empty(&self.user_agent_custom.get_untracked()),
                 preset => Some(preset.to_string()),
             },
@@ -274,7 +274,7 @@ fn CustomServiceFields(draft: CustomServiceDraft) -> impl IntoView {
         </Row>
         <Row label="User agent">
             <select prop:value=move || draft.user_agent_mode.get() on:change=move |event| draft.user_agent_mode.set(event_target_value(&event))>
-                <option value="safari">"Safari (default)"</option>
+                <option value="webkit">"WebKit browser (default)"</option>
                 <option value="chrome">"Chrome"</option>
                 <option value="default">"System WebKit"</option>
                 <option value="custom">"Custom\u{2026}"</option>

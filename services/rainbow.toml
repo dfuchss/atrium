@@ -2,7 +2,7 @@ id = "rainbow"
 name = "Rainbow"
 color = "#00A5E0"
 url = "https://web.openrainbow.com/"
-user_agent = "safari"
+user_agent = "webkit"
 internal_hosts = ["*.openrainbow.com", "*.openrainbow.net"]
 allow_media = true
 

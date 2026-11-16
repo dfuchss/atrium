@@ -2,7 +2,7 @@ id = "discord"
 name = "Discord"
 color = "#5865F2"
 url = "https://discord.com/app"
-user_agent = "safari"
+user_agent = "webkit"
 internal_hosts = ["discord.com", "*.discord.com", "*.discordapp.com", "discord.gg"]
 allow_media = true
 

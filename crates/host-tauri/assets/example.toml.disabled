@@ -27,9 +27,9 @@
 # Default for the instance value, used when the user leaves it empty.
 # instance_default = "chat.example.org"
 
-# Browser identity: "safari", "chrome", "default" (the web view's own) or a literal
+# Browser identity: "webkit", "chrome", "default" (the web view's own) or a literal
 # User-Agent string. Some sites reject the default.
-# user_agent = "safari"
+# user_agent = "webkit"
 
 # Hosts that belong to the service (diagnostics, window titles and media permission: camera,
 # microphone and screen capture are granted only on these hosts). "*." matches the domain and

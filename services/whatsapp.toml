@@ -2,7 +2,7 @@ id = "whatsapp"
 name = "WhatsApp"
 color = "#25D366"
 url = "https://web.whatsapp.com/"
-user_agent = "safari"
+user_agent = "webkit"
 internal_hosts = ["web.whatsapp.com", "*.whatsapp.com", "*.whatsapp.net"]
 allow_media = true
 

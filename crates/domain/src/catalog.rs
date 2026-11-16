@@ -8,7 +8,7 @@
 //! url = "https://{instance}/"            # {instance} is replaced by the account's instance value
 //! instance_label = "Instance"            # optional: ask for an instance value when adding
 //! instance_default = "mastodon.social"   # optional
-//! user_agent = "safari"              # optional: "safari" | "chrome" | "default" | literal UA
+//! user_agent = "webkit"              # optional: "webkit" | "chrome" | "default" | literal UA
 //! internal_hosts = ["{instance}"]        # `*.` wildcard allowed, {instance} substituted
 //! allow_media = true                # optional: grant camera/mic/screen capture (default false)
 //!
@@ -21,8 +21,10 @@
 use protocol::{CustomService, ServiceProblem};
 use serde::Deserialize;
 
-/// Desktop Safari UA; `WKWebView`'s default UA lacks "Version/... Safari/..." and some sites reject it.
-pub const UA_SAFARI: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15";
+/// Desktop Safari UA. Sites sniff the platform and the "Version/... Safari/..." tokens, which the
+/// engine's bare UA lacks, so some reject it.
+pub const UA_WEBKIT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Safari/605.1.15";
+/// Desktop Chrome UA for sites that only accept Chromium-based browsers.
 pub const UA_CHROME: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36";
 
 /// Unread rule of custom services without an own `title_regex`: "(3) Title".
@@ -443,7 +445,7 @@ fn is_web_url_template(url: &str) -> bool {
 impl ServiceDef {
     /// Converts a user-defined service (see [`normalize_custom`]) into a definition:
     /// internal host = the URL's host (may contain `{instance}`), unread from the title
-    /// ([`DEFAULT_TITLE_REGEX`] unless set), user agent "safari" unless set.
+    /// ([`DEFAULT_TITLE_REGEX`] unless set), user agent "webkit" unless set.
     pub fn from_custom(service: &CustomService) -> Result<ServiceDef, String> {
         let custom = normalize_custom(service)?;
         if custom.id.is_empty() {
@@ -457,7 +459,7 @@ impl ServiceDef {
             url: custom.url,
             instance_label: custom.instance_label,
             instance_default: None,
-            user_agent: Some(custom.user_agent.unwrap_or_else(|| "safari".into())),
+            user_agent: Some(custom.user_agent.unwrap_or_else(|| "webkit".into())),
             internal_hosts: host.into_iter().collect(),
             allow_media: false,
             clear_local_storage: Vec::new(),
@@ -513,12 +515,12 @@ pub fn custom_service_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
     }
 }
 
-/// Resolves a user agent preset: "safari"/"chrome" -> constant, "default"/None -> None
+/// Resolves a user agent preset: "webkit"/"chrome" -> constant, "default"/None -> None
 /// (the engine's own UA), anything else -> literal.
 pub fn resolve_user_agent_preset(preset: Option<&str>) -> Option<String> {
     match preset {
         None | Some("default") => None,
-        Some("safari") => Some(UA_SAFARI.to_string()),
+        Some("webkit") => Some(UA_WEBKIT.to_string()),
         Some("chrome") => Some(UA_CHROME.to_string()),
         Some(other) => Some(other.to_string()),
     }
@@ -713,7 +715,7 @@ mod tests {
         assert_eq!(d.internal_hosts, vec!["{instance}.chat.io"]);
         assert_eq!(d.instance_label.as_deref(), Some("Instance"));
         assert_eq!(d.unread.title_regex.as_deref(), Some(DEFAULT_TITLE_REGEX));
-        assert_eq!(d.resolve_user_agent().as_deref(), Some(UA_SAFARI));
+        assert_eq!(d.resolve_user_agent().as_deref(), Some(UA_WEBKIT));
         assert!(!d.allow_media, "custom services default to no media");
         assert_eq!(d.resolve_hosts(Some("kit")), vec!["kit.chat.io"]);
         assert_eq!(

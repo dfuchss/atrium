@@ -24,7 +24,7 @@ pub struct Account {
     /// Count this account's unread in the dock badge.
     #[serde(default = "yes")]
     pub in_dock_badge: bool,
-    /// Overrides the service's user agent preset ("safari" | "chrome" | "default" | literal).
+    /// Overrides the service's user agent preset ("webkit" | "chrome" | "default" | literal).
     #[serde(default)]
     pub user_agent: Option<String>,
     /// Disabled accounts keep their settings and login but get no view.

@@ -2,7 +2,7 @@ id = "bluesky"
 name = "Bluesky"
 color = "#1185FE"
 url = "https://bsky.app/"
-user_agent = "safari"
+user_agent = "webkit"
 internal_hosts = ["bsky.app", "*.bsky.app", "*.bsky.social", "*.bsky.network"]
 
 [unread]

@@ -4,7 +4,7 @@ color = "#0DBD8B"
 url = "https://{instance}/"
 instance_label = "Element web host"
 instance_default = "app.element.io"
-user_agent = "safari"
+user_agent = "webkit"
 internal_hosts = ["{instance}", "*.element.io", "*.matrix.org"]
 allow_media = true
 

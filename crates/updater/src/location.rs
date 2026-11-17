@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallLocation {
-    /// `bundle` is the installation (`Atrium.app`, or the `AppImage` on Linux) that gets swapped
-    /// after Atrium quit.
+    /// `bundle` is the installation (`Atrium.app`, the `AppImage` on Linux, the executable on
+    /// Windows) that gets swapped after Atrium quit.
     SelfUpdatable { bundle: PathBuf },
     /// Updates are only announced; the user installs them from the release page.
     ManualOnly { reason: String },

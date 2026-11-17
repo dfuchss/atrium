@@ -20,7 +20,7 @@ pub enum UpdateCommand {
     /// Turn the automatic check on startup and every few hours on or off.
     SetAutoCheck { enabled: bool },
     /// Quit and swap in the staged update (only while [`UpdateState::Ready`]); macOS starts
-    /// Atrium again, Linux leaves that to the user ([`UpdateStatus::relaunches`]).
+    /// Atrium again, Linux and Windows leave that to the user ([`UpdateStatus::relaunches`]).
     ApplyUpdate,
     /// Open the release page of the offered update (or the latest release) in the browser.
     OpenReleasePage,

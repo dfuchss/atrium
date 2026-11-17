@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On Windows, a service whose page process crashed or was ended is reloaded instead of showing WebView2's error page, at most three times a minute as on macOS and Linux
 - On Windows, Atrium's windows carry its app id (`org.fuchss.atrium`), so the taskbar groups them under a Start menu shortcut with that id, with its name and icon
 - On Windows, Settings > Links > Browser lists the installed browsers to open links in; a browser that cannot be started falls back to the system default, and mail links open in the default mail app
+- On Windows, a release build updates itself: *Quit and update* swaps in the verified new executable under the same file name after Atrium has quit; open Atrium again afterwards. It must lie in a folder you can write to; builds that run from Cargo's target folder just point to the release page
 
 ## 0.3.0
 

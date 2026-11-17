@@ -1,13 +1,13 @@
-//! Self-update from GitHub Releases for macOS and Linux.
+//! Self-update from GitHub Releases for macOS, Linux and Windows.
 //!
 //! A check fetches the latest release, picks the asset for this machine (a zip of the app
-//! bundle on macOS, an `AppImage` on Linux), verifies it against the release's `SHA256SUMS`
+//! bundle on macOS, an `AppImage` on Linux, an executable on Windows), verifies it against the release's `SHA256SUMS`
 //! under `<app data>/updates/<tag>/`, checks it and moves it next to the installation
 //! (`<install>.new-update`). The running installation is never written: "Restart and update"
-//! (macOS) or "Quit and update" (Linux) quits Atrium, and a helper (the installed app started
-//! with [`helper::APPLY_UPDATE_ARGUMENT`]) waits for the exit, swaps the installations (on
-//! Linux in one atomic rename, on macOS with a rollback on failure) and, on macOS, opens Atrium
-//! again. What differs per platform lives in `native`.
+//! (macOS) or "Quit and update" (Linux, Windows) quits Atrium, and a helper (the installed app
+//! started with [`helper::APPLY_UPDATE_ARGUMENT`]) waits for the exit, swaps the installations
+//! (on Linux in one atomic rename, on macOS and Windows with a rollback on failure) and, on
+//! macOS, opens Atrium again. What differs per platform lives in `native`.
 //!
 //! Releases are unsigned; the checksum file guards against broken or swapped downloads, not
 //! against a compromised release.

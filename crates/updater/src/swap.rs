@@ -1,5 +1,6 @@
 //! Replacing the installation with the staged update on one volume: a file in one atomic
-//! rename, a folder in two renames with a rollback when the second fails. Runs only after
+//! rename, a folder (or a running Windows executable) in two renames with a rollback when the
+//! second fails. Runs only after
 //! Atrium exited (see `helper`).
 
 use std::io;
@@ -82,7 +83,8 @@ impl SwapOutcome {
 
 /// Puts the staged update in place of `install`: `in_one_rename` (a file) renames it over the
 /// install, so either version is always there and running copies keep the old file; otherwise
-/// (a folder, which a rename cannot replace) see [`move_aside_and_swap`].
+/// (a folder, or a running Windows executable, which a rename cannot replace) see
+/// [`move_aside_and_swap`].
 pub(crate) fn swap(install: &Path, fs: &dyn BundleFs, in_one_rename: bool) -> SwapOutcome {
     let staged = new_update_path(install);
     if !fs.exists(&staged) {
@@ -98,7 +100,8 @@ pub(crate) fn swap(install: &Path, fs: &dyn BundleFs, in_one_rename: bool) -> Sw
 }
 
 /// Moves `install` aside, the staged update in its place, then removes the old version
-/// (a leftover is removed on the next start).
+/// (a leftover, such as the executable the Windows helper runs from, is removed on the next
+/// start).
 fn move_aside_and_swap(install: &Path, staged: &Path, fs: &dyn BundleFs) -> SwapOutcome {
     let backup = old_update_path(install);
     if fs.exists(&backup)

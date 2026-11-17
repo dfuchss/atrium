@@ -1,6 +1,6 @@
 //! The swap helper. Atrium starts its own installed (already trusted) app again with
 //! [`APPLY_UPDATE_ARGUMENT`] right before it exits (the bundle's executable on macOS, the
-//! `AppImage` on Linux); that process waits until Atrium is gone, swaps the installation unless
+//! `AppImage` on Linux, the executable on Windows); that process waits until Atrium is gone, swaps the installation unless
 //! another process still runs from it, records the result and, where the platform does that,
 //! opens Atrium again. It never initialises Tauri.
 
@@ -158,7 +158,7 @@ pub(crate) fn run(plan: &HelperPlan, io: &HelperIo<'_>) -> SwapResult {
         log(&format!("cannot write the result: {error}"));
     }
     // Even without a swap: a user who asked for a restart should not be left without Atrium
-    // (on macOS `open` only activates an instance that still runs; Linux does nothing here).
+    // (on macOS `open` only activates an instance that still runs; Linux and Windows do nothing here).
     (io.relaunch)(&plan.install);
     result
 }

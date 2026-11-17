@@ -83,6 +83,8 @@ Atrium checks for a new release on startup and every six hours (Settings → Abo
 
 On Linux, an Atrium started as an AppImage updates itself the same way, except that *Quit and update* only quits Atrium and swaps in the new AppImage under the same file name; open Atrium again afterwards. The AppImage must lie in a folder you can write to (e.g. `~/Applications`); builds from source just point to the release page.
 
+On Windows, a release build of Atrium updates itself the same way as the AppImage: *Quit and update* quits Atrium and swaps in the new executable under the same file name (the old one is removed when Atrium starts again); open Atrium again afterwards. The executable must lie in a folder you can write to (e.g. `%LOCALAPPDATA%\Programs\Atrium`); development builds and builds that run from Cargo's `target` folder just point to the release page.
+
 To build Atrium yourself, see [Building from source](DEVELOPMENT.md#building-from-source) in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ### Linux

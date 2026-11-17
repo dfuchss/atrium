@@ -79,9 +79,6 @@ impl Store for FsStore {
 
 #[cfg(test)]
 mod tests {
-    use std::fs::Permissions;
-    use std::os::unix::fs::PermissionsExt as _;
-
     use super::*;
     use domain::{Account, Settings};
     use protocol::AppSettings;
@@ -194,8 +191,12 @@ mod tests {
         assert_eq!(fs::read_dir(d.path().join("nested")).unwrap().count(), 1);
     }
 
+    #[cfg(unix)]
     #[test]
     fn saved_file_is_owner_only() {
+        use std::fs::Permissions;
+        use std::os::unix::fs::PermissionsExt as _;
+
         let d = tempfile::tempdir().unwrap();
         fs::write(d.path().join("accounts.json"), "readable").unwrap();
         fs::set_permissions(

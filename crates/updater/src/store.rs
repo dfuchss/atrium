@@ -1,7 +1,7 @@
 //! The updater's files: `<app data>/updater.json` (settings and the staged release) and the
 //! helper's `<app data>/updates/update-result.json`.
 
-use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,8 @@ const SETTINGS_FILE: &str = "updater.json";
 const UPDATES_DIR: &str = "updates";
 const RESULT_FILE: &str = "update-result.json";
 const HELPER_LOG_FILE: &str = "helper.log";
-/// The updater's files name versions and paths of this computer: readable by the user only.
+/// The updater's files name versions and paths of this computer: readable by the user only
+/// (Unix; see `fs_util`).
 pub(crate) const PRIVATE_FILE_MODE: u32 = 0o600;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,26 +102,28 @@ pub(crate) fn write_private(path: &Path, contents: &str) -> std::io::Result<()> 
 
 /// Opens `path` for writing (truncated, or appended to with `append`) with mode 0600, also
 /// when it existed with another mode.
-pub(crate) fn open_private(path: impl AsRef<Path>, append: bool) -> std::io::Result<std::fs::File> {
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(append)
-        .truncate(!append)
-        .mode(PRIVATE_FILE_MODE)
-        .open(path)?;
-    file.set_permissions(std::fs::Permissions::from_mode(PRIVATE_FILE_MODE))?;
-    Ok(file)
+pub(crate) fn open_private(path: impl AsRef<Path>, append: bool) -> std::io::Result<File> {
+    fs_util::open_with_mode(
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .append(append)
+            .truncate(!append),
+        path.as_ref(),
+        PRIVATE_FILE_MODE,
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write as _;
-
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn files_are_owner_only_even_over_a_readable_one() {
+        use std::io::Write as _;
+        use std::os::unix::fs::PermissionsExt as _;
+
         let dir = tempfile::tempdir().unwrap();
         let readable = dir.path().join(SETTINGS_FILE);
         std::fs::write(&readable, "old").unwrap();

@@ -6,7 +6,6 @@
 
 use std::ffi::OsString;
 use std::io::Write as _;
-use std::os::unix::process::CommandExt as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -72,19 +71,27 @@ impl HelperPlan {
         }))
     }
 
-    /// Starts the helper detached from Atrium (own process group, no terminal), so it outlives
-    /// the app; output goes nowhere, the helper writes its own log.
+    /// Starts the helper detached from Atrium, so it outlives the app; output goes nowhere,
+    /// the helper writes its own log.
     pub fn spawn(&self, executable: &Path) -> std::io::Result<()> {
-        Command::new(executable)
-            .args(self.to_args())
-            .current_dir("/")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .process_group(0)
-            .spawn()
-            .map(|_| ())
+        detach(
+            Command::new(executable)
+                .args(self.to_args())
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null()),
+        )
+        .spawn()
+        .map(|_| ())
     }
+}
+
+/// Runs `command` in a process group of its own (no terminal), in `/`.
+#[cfg(unix)]
+fn detach(command: &mut Command) -> &mut Command {
+    use std::os::unix::process::CommandExt as _;
+
+    command.current_dir("/").process_group(0)
 }
 
 /// Runs the helper when the process was started as one; returns its exit code then. Call it

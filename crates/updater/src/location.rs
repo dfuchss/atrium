@@ -1,7 +1,6 @@
 //! Where Atrium runs from, and whether that installation may replace itself.
 
-use std::fs::OpenOptions;
-use std::os::unix::fs::MetadataExt as _;
+use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,8 +31,18 @@ pub(crate) fn can_replace(bundle: &Path) -> bool {
     let Ok(file) = OpenOptions::new().write(true).create_new(true).open(&probe) else {
         return false;
     };
-    let own_uid = file.metadata().map(|meta| meta.uid());
+    let owned = owns(&file, bundle);
+    drop(file);
     let _ = std::fs::remove_file(&probe);
+    owned
+}
+
+/// Whether the owner of `probe`, a file the user just created, owns `bundle`.
+#[cfg(unix)]
+fn owns(probe: &File, bundle: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+
+    let own_uid = probe.metadata().map(|meta| meta.uid());
     let bundle_uid = std::fs::metadata(bundle).map(|meta| meta.uid());
     matches!((own_uid, bundle_uid), (Ok(own), Ok(owner)) if own == owner)
 }

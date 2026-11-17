@@ -200,8 +200,6 @@ pub(crate) fn uninstall(dirs: &DesktopDirs) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::PermissionsExt as _;
-
     use super::*;
 
     fn dirs_in(root: &Path) -> DesktopDirs {
@@ -304,8 +302,13 @@ mod tests {
             let icon = dirs.icon_path(&size(name));
             assert_eq!(std::fs::read_to_string(icon).unwrap(), name);
         }
-        let mode = std::fs::metadata(dirs.entry_path()).unwrap().permissions();
-        assert_eq!(mode.mode() & 0o777, FILE_MODE);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+
+            let mode = std::fs::metadata(dirs.entry_path()).unwrap().permissions();
+            assert_eq!(mode.mode() & 0o777, FILE_MODE);
+        }
         let leftovers = std::fs::read_dir(dirs.entry_path().parent().unwrap())
             .unwrap()
             .count();

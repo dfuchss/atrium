@@ -29,6 +29,9 @@ zbus = "5"
 [target.'cfg(any(target_os = "linux", windows))'.dependencies]
 tauri-plugin-single-instance = "2.5"
 
+[target.'cfg(windows)'.dependencies]
+windows-registry = "0.6"
+
 [dev-dependencies]
 tempfile.workspace = true
 

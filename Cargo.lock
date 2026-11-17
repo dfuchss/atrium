@@ -1860,6 +1860,7 @@ dependencies = [
  "uuid",
  "webkit2gtk",
  "webview-dialogs",
+ "windows-registry",
  "zbus 5.19.0",
 ]
 

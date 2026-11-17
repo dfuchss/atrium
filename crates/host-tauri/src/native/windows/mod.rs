@@ -1,7 +1,7 @@
 //! Windows (`WebView2`): a `WebView2` user data folder per account (see `web_data`), child
 //! webviews that Tauri lays out like on macOS (see `child_views`), the unread dot on the
-//! taskbar button, Atrium's own JavaScript dialogs (`dialogs`) and the keyboard shortcuts of
-//! the main window's webviews (`shortcuts`). The browser list and the resume and crash
+//! taskbar button, Atrium's own JavaScript dialogs (`dialogs`), the browser list (`browsers`)
+//! and the keyboard shortcuts of the main window's webviews (`shortcuts`). The resume and crash
 //! observers are still missing: those hooks do nothing yet.
 //!
 //! Environments: `WebView2` runs one browser process per user data folder and requires every
@@ -25,18 +25,18 @@
 
 use domain::ports::PortResult;
 use domain::{Bounds, DockBadge};
-use protocol::BrowserChoice;
 use tauri::image::Image;
 use tauri::webview::NewWindowFeatures;
 use tauri::{AppHandle, Manager, Runtime, Webview, WebviewBuilder, WebviewWindowBuilder, Window};
-use tauri_plugin_opener::OpenerExt;
 
 use super::child_views::add_child_at;
 use crate::{Feed, Logger, port_err};
 
+mod browsers;
 mod dialogs;
 mod shortcuts;
 
+pub(crate) use browsers::{installed_browsers, open_url_with};
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
 pub(crate) use shortcuts::Shortcuts;
 
@@ -132,21 +132,6 @@ pub(crate) fn prepare_popup<'a, R: Runtime, M: Manager<R>>(
 
 /// No resume signal yet: nothing is called.
 pub(crate) fn observe_resume(_logger: &Logger, _on_resume: impl Fn() + Send + Sync + 'static) {}
-
-/// Opens `url` in the program `browser`, or in the default browser.
-pub(crate) fn open_url_with<R: Runtime>(
-    app: &AppHandle<R>,
-    url: &str,
-    browser: Option<&str>,
-    _logger: &Logger,
-) -> PortResult {
-    app.opener().open_url(url, browser).map_err(port_err)
-}
-
-/// No list yet: the settings take the browser as text.
-pub(crate) fn installed_browsers() -> Option<Vec<BrowserChoice>> {
-    None
-}
 
 /// Nothing in the environment of a Windows launch overrides the theme or the other settings.
 pub(crate) fn clean_launch_environment() {}

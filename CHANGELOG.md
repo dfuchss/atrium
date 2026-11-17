@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On Windows, the keyboard shortcuts of the macOS menu work with Ctrl, as on Linux: settings, reload, back and forward, zoom (also Ctrl++ and Ctrl with the numeric keypad's +, - and 0), open in browser, close, quit and switching accounts with Ctrl+1 to Ctrl+9; keys count by their place on a US keyboard, as in Chrome and Edge
 - On Windows, the *Auto* appearance follows the light or dark app mode of Windows, also when it changes while Atrium runs
 - On Windows, Atrium's windows carry its app id (`org.fuchss.atrium`), so the taskbar groups them under a Start menu shortcut with that id, with its name and icon
+- On Windows, Settings > Links > Browser lists the installed browsers to open links in; a browser that cannot be started falls back to the system default, and mail links open in the default mail app
 
 ## 0.3.0
 

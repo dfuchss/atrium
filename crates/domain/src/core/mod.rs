@@ -152,7 +152,8 @@ impl Core {
     }
 
     /// New accounts of services that ask for the `webkit` user agent preset get `preset`
-    /// instead, where the host's engine is no `WebKit`. Existing accounts keep theirs.
+    /// instead, where the host's engine is no `WebKit` (Windows: `chrome`, as `WebView2` is
+    /// Chromium). Existing accounts keep theirs.
     pub fn set_new_account_user_agent(&mut self, preset: Option<String>) {
         self.new_account_user_agent = preset;
     }

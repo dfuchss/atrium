@@ -51,8 +51,9 @@ pub(crate) fn user_agent_platform() -> String {
     "Windows NT 10.0; Win64; x64".into()
 }
 
-/// New accounts follow their service's user agent preset.
-pub(crate) const NEW_ACCOUNT_USER_AGENT: Option<&str> = None;
+/// New accounts of services that ask for a `WebKit` browser's user agent present Chrome's:
+/// `WebView2` is Chromium, and sites would otherwise serve it their code for Safari.
+pub(crate) const NEW_ACCOUNT_USER_AGENT: Option<&str> = Some("chrome");
 
 /// The app icon in colour: Windows does not tint tray icons.
 pub(crate) const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray-icon-color.png");

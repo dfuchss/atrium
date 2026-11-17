@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- On Windows, new accounts present Chrome's user agent instead of Safari's, as WebView2 is Chromium; it can still be changed per account
 
 ## 0.3.0
 

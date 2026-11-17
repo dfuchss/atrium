@@ -3,56 +3,93 @@
 All notable changes to Atrium are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow
-[Semantic Versioning](https://semver.org/) (`X.Y.Z`); a release is tagged `vX.Y.Z`.
+[Semantic Versioning](https://semver.org/) (`X.Y.Z`); a release is tagged `vX.Y.Z`. Each version starts
+with a few lines of highlights and, where needed, upgrade notes; the sections below are grouped by
+platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#changelog)).
 
 ## [Unreleased]
 
-### Added
-
-- Releases include an unsigned Windows x86_64 executable (`atrium-windows-x86_64.exe`), a single file without an installer; pushes and pull requests get a Windows debug executable among the run's artifacts
-- On Windows, `alert`, `confirm` and `prompt` of service pages and their sign-in popups show Atrium's own dialogs, in a small window in Atrium's style: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
-- On Windows, *Force reload* reloads the service without its cache, as on macOS and Linux
-- On Windows, new accounts present Chrome's user agent instead of Safari's, as WebView2 is Chromium; it can still be changed per account
-- On Windows, the keyboard shortcuts of the macOS menu work with Ctrl, as on Linux: settings, reload, back and forward, zoom (also Ctrl++ and Ctrl with the numeric keypad's +, - and 0), open in browser, close, quit and switching accounts with Ctrl+1 to Ctrl+9; keys count by their place on a US keyboard, as in Chrome and Edge
-- On Windows, the *Auto* appearance follows the light or dark app mode of Windows, also when it changes while Atrium runs
-- On Windows, *After waking from sleep* works too: services are checked or reloaded once the system resumes from sleep or hibernation
-- On Windows, a service whose page process crashed or was ended is reloaded instead of showing WebView2's error page, at most three times a minute as on macOS and Linux
-- On Windows, Atrium's windows carry its app id (`org.fuchss.atrium`), so the taskbar groups them under a Start menu shortcut with that id, with its name and icon
-- On Windows, Settings > Links > Browser lists the installed browsers to open links in; a browser that cannot be started falls back to the system default, and mail links open in the default mail app
-- On Windows, a release build updates itself: *Quit and update* swaps in the verified new executable under the same file name after Atrium has quit; open Atrium again afterwards. It must lie in a folder you can write to; builds that run from Cargo's target folder just point to the release page
-- On Windows, Settings > General > Desktop integration installs or removes a Start menu shortcut to the running Atrium (*Install*, *Update*, *Uninstall*); it carries Atrium's identifier as app id, so Windows shows Atrium's name on its notifications
-
-## 0.3.0
+Atrium comes to Windows: an unsigned, self-updating executable for 64-bit Windows 10 and 11, with Atrium's own JavaScript dialogs, the keyboard shortcuts, wake and crash recovery, a browser choice and a Start menu entry. Element's unread count now includes the spaces when Home shows only some rooms.
 
 ### Added
 
-- Atrium runs on Linux (WebKitGTK 4.1) when built from source; each account keeps its web data in a folder of its own; WebKit's web process sandbox is not available on Linux builds (Settings > About says so)
-- Releases include Linux AppImages for x86_64 and aarch64 (`atrium-linux-x86_64.AppImage`, `atrium-linux-aarch64.AppImage`); they play H.264 and AAC videos
-- `cargo tauri build` on Linux produces an AppImage with a desktop entry and icon
-- The Linux AppImage updates itself: *Quit and update* swaps in the verified new version after Atrium has quit; open Atrium again afterwards
-- On Linux, Settings > General > Desktop integration installs or removes the launcher entry and icons of the running AppImage (*Install*, *Update*, *Uninstall*)
-- On Linux, starting Atrium again brings the running Atrium to the front instead of opening a second one
-- On Linux, `alert`, `confirm` and `prompt` of service pages show Atrium's own dialogs, as on macOS: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
-- On Linux, the keyboard shortcuts of the macOS menu work with Ctrl: settings, reload, back and forward, zoom (also Ctrl++ and Ctrl with the numeric keypad's +, - and 0), open in browser, close, quit and switching accounts with Ctrl+1 to Ctrl+9
-- On Linux, the *Auto* appearance follows changes of the desktop's light or dark colour scheme while Atrium runs
-- On Linux, Settings > Links > Browser lists the installed browsers to open links in; a browser that is no longer installed falls back to the system default, and mail links open in the default mail app
-- On Linux, *After waking from sleep* works too: services are checked or reloaded once the system resumes from suspend
-- On Linux, a service whose web process crashed or ran out of memory is reloaded instead of staying blank; on macOS and Linux, a page that keeps crashing is reloaded at most three times a minute and then left until you reload it
-- On Linux the settings say tray icon, launcher badge and desktop light or dark setting instead of menu bar, dock badge and macOS
+#### Windows
+
+- Releases include an unsigned x86_64 executable, `atrium-windows-x86_64.exe`: a single file without an installer
+- Pushes and pull requests get a Windows debug executable among the run's artifacts
+- A release build updates itself: *Quit and update* swaps in the verified new executable under the same file name after Atrium has quit; open Atrium again afterwards. It must lie in a folder you can write to; builds that run from Cargo's target folder just point to the release page
+- Settings > General > Desktop integration installs or removes a Start menu shortcut to the running Atrium (*Install*, *Update*, *Uninstall*); it carries Atrium's identifier as app id, so Windows shows Atrium's name on its notifications
+- Atrium's windows carry its app id (`org.fuchss.atrium`), so the taskbar groups them under a Start menu shortcut with that id, with its name and icon
+- `alert`, `confirm` and `prompt` of service pages and their sign-in popups show Atrium's own dialogs, in a small window in Atrium's style: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
+- The keyboard shortcuts of the macOS menu work with Ctrl, as on Linux: settings, reload, back and forward, zoom (also Ctrl++ and Ctrl with the numeric keypad's +, - and 0), open in browser, close, quit and switching accounts with Ctrl+1 to Ctrl+9; keys count by their place on a US keyboard, as in Chrome and Edge
+- *Force reload* reloads the service without its cache, as on macOS and Linux
+- The *Auto* appearance follows the light or dark app mode of Windows, also when it changes while Atrium runs
+- *After waking from sleep* works too: services are checked or reloaded once the system resumes from sleep or hibernation
+- A service whose page process crashed or was ended is reloaded instead of showing WebView2's error page, at most three times a minute as on macOS and Linux
+- Settings > Links > Browser lists the installed browsers to open links in; a browser that cannot be started falls back to the system default, and mail links open in the default mail app
+- New accounts present Chrome's user agent instead of Safari's, as WebView2 is Chromium; it can still be changed per account
 
 ### Changed
 
-- **Breaking:** the `safari` user agent preset is renamed `webkit`: services and accounts that set `user_agent = "safari"` must use `"webkit"`
-- On Linux the WebKit and Chrome presets report a Linux platform
+#### All platforms
+
+- Element's unread count adds the badges of the top-level spaces when Home shows only some rooms (*Show all rooms in Home* off), and is at least the number of unread rooms in the title
+
+## 0.3.0
+
+Atrium runs on Linux: AppImages for x86_64 and aarch64 that update themselves, with Atrium's own JavaScript dialogs, the keyboard shortcuts with Ctrl, desktop integration, wake and crash recovery and a browser choice. Atrium also has a new app icon.
+
+> **Upgrade notes:** the `safari` user agent preset is renamed `webkit`: services and accounts that set `user_agent = "safari"` must use `"webkit"`.
+
+### Added
+
+#### All platforms
+
+- A page that keeps crashing is reloaded at most three times a minute and then left until you reload it
+
+#### Linux
+
+- Atrium runs on Linux (WebKitGTK 4.1) when built from source; each account keeps its web data in a folder of its own; WebKit's web process sandbox is not available on Linux builds (Settings > About says so)
+- Releases include AppImages for x86_64 and aarch64 (`atrium-linux-x86_64.AppImage`, `atrium-linux-aarch64.AppImage`); they play H.264 and AAC videos
+- `cargo tauri build` produces an AppImage with a desktop entry and icon
+- The AppImage updates itself: *Quit and update* swaps in the verified new version after Atrium has quit; open Atrium again afterwards
+- Settings > General > Desktop integration installs or removes the launcher entry and icons of the running AppImage (*Install*, *Update*, *Uninstall*)
+- Starting Atrium again brings the running Atrium to the front instead of opening a second one
+- `alert`, `confirm` and `prompt` of service pages show Atrium's own dialogs, as on macOS: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
+- The keyboard shortcuts of the macOS menu work with Ctrl: settings, reload, back and forward, zoom (also Ctrl++ and Ctrl with the numeric keypad's +, - and 0), open in browser, close, quit and switching accounts with Ctrl+1 to Ctrl+9
+- The *Auto* appearance follows changes of the desktop's light or dark colour scheme while Atrium runs
+- Settings > Links > Browser lists the installed browsers to open links in; a browser that is no longer installed falls back to the system default, and mail links open in the default mail app
+- *After waking from sleep* works too: services are checked or reloaded once the system resumes from suspend
+- A service whose web process crashed or ran out of memory is reloaded instead of staying blank
+- The settings say tray icon, launcher badge and desktop light or dark setting instead of menu bar, dock badge and macOS
+
+### Changed
+
+#### All platforms
+
 - New app icon: an atrium courtyard with arched walls around a lit floor
+
+#### Linux
+
+- The WebKit and Chrome presets report a Linux platform
 
 ### Fixed
 
-- A woken account no longer keeps a small yellow remnant of its sleeping moon on the sidebar icon on macOS
-- Drop-down lists draw their own arrow, so their text is no longer cut off on Linux
+#### All platforms
+
 - The *Added* note after adding an account appears beside the *Add* button instead of below it, so the settings no longer jump
 
+#### macOS
+
+- A woken account no longer keeps a small yellow remnant of its sleeping moon on the sidebar icon
+
+#### Linux
+
+- Drop-down lists draw their own arrow, so their text is no longer cut off
+
 ## 0.2.0
+
+Services can start asleep and be force-reloaded without the cache. After a wake, Atrium reloads only the services that stopped responding, and downloads never replace an existing file.
 
 ### Added
 
@@ -73,7 +110,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 0.1.0
 
-First release.
+First release, for macOS: all your messengers in one window, each account in its own isolated web view, with notifications, unread badges, sleep, custom services and automatic updates.
 
 ### Added
 

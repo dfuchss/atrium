@@ -47,6 +47,13 @@ fn owns(probe: &File, bundle: &Path) -> bool {
     matches!((own_uid, bundle_uid), (Ok(own), Ok(owner)) if own == owner)
 }
 
+/// Whether `bundle` exists: Windows has no owner ids to compare, so the probe file the user
+/// could create next to it has to do.
+#[cfg(not(unix))]
+fn owns(_probe: &File, bundle: &Path) -> bool {
+    bundle.exists()
+}
+
 impl InstallLocation {
     /// Why updates are only announced; None for an installation that replaces itself.
     pub fn manual_reason(&self) -> Option<&str> {

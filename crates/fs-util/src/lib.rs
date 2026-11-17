@@ -1,6 +1,7 @@
 //! File operations shared by Atrium's crates.
 //!
-//! Permission bits (`mode`) exist on Unix only.
+//! Permission bits (`mode`) exist on Unix only. On Windows they are ignored: Atrium's files lie
+//! in the user's profile, whose folders pass on an access list that leaves other users out.
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write as _};
@@ -48,10 +49,22 @@ pub fn open_with_mode(options: &mut OpenOptions, path: &Path, mode: u32) -> io::
     Ok(file)
 }
 
+/// Opens `path` with `options`; Windows has no permission bits.
+#[cfg(not(unix))]
+pub fn open_with_mode(options: &mut OpenOptions, path: &Path, _mode: u32) -> io::Result<File> {
+    options.open(path)
+}
+
 /// Gives the file or folder `path` the permission bits `mode`.
 #[cfg(unix)]
 pub fn set_mode(path: &Path, mode: u32) -> io::Result<()> {
     std::fs::set_permissions(path, permissions(mode))
+}
+
+/// Nothing to do: Windows has no permission bits.
+#[cfg(not(unix))]
+pub fn set_mode(_path: &Path, _mode: u32) -> io::Result<()> {
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -65,6 +78,13 @@ fn permissions(mode: u32) -> std::fs::Permissions {
 #[cfg(unix)]
 pub fn sync_folder(folder: &Path) -> io::Result<()> {
     File::open(folder)?.sync_all()
+}
+
+/// Nothing to do: a folder cannot be opened as a file on Windows, and NTFS logs the change of
+/// its entries itself.
+#[cfg(not(unix))]
+pub fn sync_folder(_folder: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]

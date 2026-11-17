@@ -11,11 +11,22 @@ pub fn opener_url_allowed(url: &str) -> bool {
     })
 }
 
-/// Navigation allow-list of service views and their popup/app windows (main frame and
-/// iframes alike): web content only. Denies `file:`, `tauri:`, `ipc:`, `asset:` and every
-/// other custom scheme.
+/// Hosts under which Tauri serves Atrium's own UI and IPC on Windows, where its schemes are
+/// mapped to `http://tauri.localhost` and `http://ipc.localhost` in every webview.
+const APP_UI_HOSTS: [&str; 2] = ["tauri.localhost", "ipc.localhost"];
+
+/// Navigation allow-list of service views and their popup/app windows: web content only.
+/// Denies `file:`, `tauri:`, `ipc:`, `asset:` and every other custom scheme, and the hosts of
+/// Atrium's own UI, so a page cannot load the UI and reach its commands. macOS and Linux check
+/// iframes too; `WebView2` reports only main-frame navigations.
 pub fn nav_allowed(url: &url::Url) -> bool {
-    matches!(url.scheme(), "https" | "http" | "about" | "blob" | "data")
+    match url.scheme() {
+        "https" | "http" => !url
+            .host_str()
+            .is_some_and(|host| APP_UI_HOSTS.contains(&host)),
+        "about" | "blob" | "data" => true,
+        _ => false,
+    }
 }
 
 /// Longest URL path kept by [`redact_url`], in characters.
@@ -108,6 +119,9 @@ mod tests {
             "file:///Users/x",
             "tauri://localhost/index.html",
             "ipc://localhost/cmd",
+            "http://tauri.localhost/index.html?dialog=accounts",
+            "https://tauri.localhost/",
+            "http://IPC.localhost/cmd",
             "asset://localhost/x",
             "http2://x",
             "x-apple.systempreferences:a",

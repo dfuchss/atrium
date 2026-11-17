@@ -1,6 +1,7 @@
 //! A web data folder per account, named by the account id, where the platform's webviews keep
 //! their data in a folder given to them (not on macOS, where `WebKit` keeps data stores): on
-//! Linux each folder is a `WebContext` of its own.
+//! Linux each folder is a `WebContext` of its own, on Windows a `WebView2` user data folder
+//! with a browser process of its own.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -18,7 +19,8 @@ pub(crate) fn isolate_view<R: Runtime>(
 }
 
 /// Keeps the window's web data in the account's folder, with its view: on Linux the same
-/// `WebContext`.
+/// `WebContext`; on Windows the window already runs in its opener's `WebView2` environment
+/// (see `links`), and the folder keys Tauri's web context of it.
 pub(crate) fn isolate_window<'a, R: Runtime, M: Manager<R>>(
     builder: WebviewWindowBuilder<'a, R, M>,
     app: &AppHandle<R>,
@@ -34,7 +36,8 @@ pub(crate) fn data_store_ids<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Ve
 
 /// Deletes the web data folder of `store_id`. The engine may still use the folder of a
 /// just-closed account: on Linux Tauri keeps a `WebContext` alive until the app exits
-/// (tauri#14626). What it leaves is removed again at the next start.
+/// (tauri#14626), on Windows the browser process of `WebView2` keeps its files open until it
+/// has exited after the last view. What it leaves is removed again at the next start.
 pub(crate) fn remove_data_store<R: Runtime>(
     app: &AppHandle<R>,
     store_id: [u8; 16],
@@ -79,6 +82,12 @@ fn create_private_dir(folder: &Path) -> io::Result<()> {
         .mode(PRIVATE_DIR_MODE)
         .create(folder)?;
     fs_util::set_mode(folder, PRIVATE_DIR_MODE)
+}
+
+/// Creates `folder`, which the user's profile keeps private (see `fs_util`).
+#[cfg(not(unix))]
+fn create_private_dir(folder: &Path) -> io::Result<()> {
+    std::fs::create_dir_all(folder)
 }
 
 /// The stores in `root`: its folders named by a hyphenated UUID; anything else is ignored. A

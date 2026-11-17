@@ -25,6 +25,8 @@ base64 = "0.23"
 gtk = "0.18"
 webkit2gtk = "2.0"
 zbus = "5"
+
+[target.'cfg(any(target_os = "linux", windows))'.dependencies]
 tauri-plugin-single-instance = "2.5"
 
 [dev-dependencies]

@@ -78,6 +78,7 @@ fn root_class(snapshot: &Snapshot) -> &'static str {
     match snapshot.app.os {
         OperatingSystem::MacOs => "root os-macos",
         OperatingSystem::Linux => "root os-linux",
+        OperatingSystem::Windows => "root os-windows",
     }
 }
 

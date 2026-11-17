@@ -1,9 +1,9 @@
-//! What differs between the platforms Atrium runs on, one item per concern; `macos` and
-//! `linux` export the same items (`linux` also `on_requested_size` and
+//! What differs between the platforms Atrium runs on, one item per concern; `macos`, `linux`
+//! and `windows` export the same items (`linux` also `on_requested_size` and
 //! `UNDECIDED_WINDOW_SIZE`, for `links`), everything else of the host is shared. What the
 //! platforms other than macOS share lives here too: the per-account web data folders
-//! (`web_data`) and the single-instance guard (`single_instance`); the platforms other than
-//! Linux share the child webviews Tauri lays out by itself (`child_views`).
+//! (`web_data`) and the single-instance guard (`single_instance`); macOS and Windows share the
+//! child webviews Tauri lays out by itself (`child_views`).
 //!
 //! - Web data: each account's views and windows keep their cookies and storage apart
 //!   ([`isolate_view`], [`isolate_window`]); [`data_store_ids`] and [`remove_data_store`] list
@@ -33,10 +33,12 @@ mod child_views;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", windows))]
 mod single_instance;
 #[cfg(not(target_os = "macos"))]
 mod web_data;
+#[cfg(windows)]
+mod windows;
 
 #[cfg(not(target_os = "linux"))]
 pub(crate) use child_views::{place, set_visible};
@@ -44,10 +46,12 @@ pub(crate) use child_views::{place, set_visible};
 pub(crate) use linux::*;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::*;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", windows))]
 pub(crate) use single_instance::guard_single_instance;
 #[cfg(not(target_os = "macos"))]
 pub(crate) use web_data::{data_store_ids, isolate_view, isolate_window, remove_data_store};
+#[cfg(windows)]
+pub(crate) use windows::*;
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-compile_error!("Atrium runs on macOS and Linux only");
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
+compile_error!("Atrium runs on macOS, Linux and Windows only");

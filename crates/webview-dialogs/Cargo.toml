@@ -54,9 +54,13 @@ gtk = "0.18"
 webkit2gtk = { version = "2.0", features = ["v2_40"] }
 url.workspace = true
 
+# The version wry builds on, so the crate is built once.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_UI_WindowsAndMessaging"] }
+
 # The workspace lints, except that `unsafe_code` is allowed: on macOS this crate talks to the
-# Objective-C runtime and AppKit, which no safe binding covers. Keep it in sync with the
-# workspace table in the root Cargo.toml.
+# Objective-C runtime and AppKit, on Windows to Win32, which no safe binding covers. Keep it in
+# sync with the workspace table in the root Cargo.toml.
 [lints.rust]
 unused = { level = "deny", priority = -1 }
 dead_code = "deny"

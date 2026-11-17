@@ -47,11 +47,25 @@ const LINUX: Texts = Texts {
     app_menu: "application menu",
 };
 
+const WINDOWS: Texts = Texts {
+    theme_hint: "Auto follows the light or dark app mode of Windows. Service pages follow if they support it.",
+    tray_label: "Tray icon",
+    tray_hint: "Account menu in the notification area of the taskbar.",
+    badge_tab: "Taskbar badge",
+    account_badge_toggle: "Count in taskbar badge",
+    after_wake_hint: "Check: reload only services that stop responding after your computer wakes from sleep. Reload: reload every service.",
+    web_process_sandbox: None,
+    system_user_agent: "System WebView2",
+    app_menu_label: "Start menu",
+    app_menu: "Start menu",
+};
+
 impl Texts {
     fn of(os: OperatingSystem) -> &'static Texts {
         match os {
             OperatingSystem::MacOs => &MACOS,
             OperatingSystem::Linux => &LINUX,
+            OperatingSystem::Windows => &WINDOWS,
         }
     }
 }
@@ -76,8 +90,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn linux_wording_avoids_macos_terms() {
-        let texts = Texts::of(OperatingSystem::Linux);
+    fn linux_and_windows_wording_avoids_macos_terms() {
+        for os in [OperatingSystem::Linux, OperatingSystem::Windows] {
+            assert_avoids_macos_terms(Texts::of(os));
+        }
+    }
+
+    fn assert_avoids_macos_terms(texts: &Texts) {
         for text in [
             texts.theme_hint,
             texts.tray_label,
@@ -101,6 +120,10 @@ mod tests {
     #[test]
     fn only_linux_tells_about_the_web_process_sandbox() {
         assert_eq!(Texts::of(OperatingSystem::MacOs).web_process_sandbox, None);
+        assert_eq!(
+            Texts::of(OperatingSystem::Windows).web_process_sandbox,
+            None
+        );
         assert!(
             Texts::of(OperatingSystem::Linux)
                 .web_process_sandbox

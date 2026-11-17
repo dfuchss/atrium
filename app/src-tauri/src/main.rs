@@ -259,6 +259,8 @@ fn spawn_ticker(feed: Feed) -> std::io::Result<()> {
 fn host_os() -> OperatingSystem {
     if cfg!(target_os = "linux") {
         OperatingSystem::Linux
+    } else if cfg!(windows) {
+        OperatingSystem::Windows
     } else {
         OperatingSystem::MacOs
     }

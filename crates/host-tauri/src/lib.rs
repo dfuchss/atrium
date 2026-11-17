@@ -12,8 +12,8 @@
 //! thread must never wait on the caller.
 //!
 //! New-window policy: see `links`. JavaScript dialogs: see `dialogs`. Native menus and
-//! tray: see `menus`. Quitting: see [`graceful_quit`]. What differs between macOS and Linux:
-//! see `native`.
+//! tray: see `menus`. Quitting: see [`graceful_quit`]. What differs between macOS, Linux and
+//! Windows: see `native`.
 //!
 //! [`WebviewHost`]: domain::ports::WebviewHost
 //! [`Notifier`]: domain::ports::Notifier

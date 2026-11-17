@@ -187,6 +187,26 @@ pub(crate) fn permission_hook<R: Runtime>(
 }
 
 /// New-window decisions of one account's view and of the windows it opens.
+/// What a new-window request may become before the account's link policy decides.
+#[derive(Debug, PartialEq, Eq)]
+enum NewWindowGate {
+    /// `mailto:` goes to the core as an external link (mail app), as in the navigation hook.
+    MailApp,
+    /// Not a page a window may load ([`nav_allowed`]), e.g. Atrium's own UI hosts.
+    Denied,
+    Open,
+}
+
+fn new_window_gate(url: &Url) -> NewWindowGate {
+    if url.scheme() == "mailto" {
+        NewWindowGate::MailApp
+    } else if nav_allowed(url) {
+        NewWindowGate::Open
+    } else {
+        NewWindowGate::Denied
+    }
+}
+
 pub(crate) struct LinkPolicy<R: Runtime> {
     pub(crate) app: AppHandle<R>,
     pub(crate) spec: Arc<ViewSpec>,
@@ -225,6 +245,18 @@ impl<R: Runtime> LinkPolicy<R> {
     ) -> NewWindowResponse<R> {
         let account = self.spec.account;
         let shown_url = redact_url(url.as_str());
+        match new_window_gate(url) {
+            NewWindowGate::MailApp => {
+                self.open_in_browser(url);
+                return NewWindowResponse::Deny;
+            }
+            NewWindowGate::Denied => {
+                self.logger
+                    .log(&format!("[{account}] new window {shown_url} -> denied"));
+                return NewWindowResponse::Deny;
+            }
+            NewWindowGate::Open => {}
+        }
         let kind = self.kind_of(url);
         if let Some(size) = features.size() {
             self.logger.log(&format!(
@@ -265,9 +297,9 @@ impl<R: Runtime> LinkPolicy<R> {
         });
     }
 
-    /// A request without a size: a link for the system browser. macOS tells a sign-in popup's
-    /// size with the request.
-    #[cfg(target_os = "macos")]
+    /// A request without a size: a link for the system browser. macOS and Windows tell a
+    /// sign-in popup's size with the request.
+    #[cfg(not(target_os = "linux"))]
     fn system_browser(
         self: &Arc<Self>,
         url: &Url,
@@ -407,11 +439,12 @@ impl<R: Runtime> LinkPolicy<R> {
         let title_on_load = title_on_change.clone();
         let blank = Url::parse("about:blank").expect("valid URL");
         let builder = WebviewWindowBuilder::new(&self.app, label, WebviewUrl::External(blank));
-        // Like the account's view: `window.open` only from a click.
+        // Like the account's view: `window.open` only from a click, page drag and drop.
         let builder = native::prepare_popup(builder, &features)
             // Requested size/position and, on macOS, the opener's WKWebViewConfiguration, which
             // WebKit requires for the returned view (it also carries the opener's data store);
-            // on Linux the opener as related view.
+            // on Linux the opener as related view; on Windows the opener's WebView2
+            // environment, which WebView2 requires (it also carries the opener's data folder).
             .window_features(features);
         let mut builder = native::isolate_window(builder, &self.app, self.spec.store_id)?
             .title(self.window_title_for("", url))
@@ -571,6 +604,18 @@ mod tests {
     fn close_hook_only_records_the_call() {
         assert!(CLOSE_HOOK.contains("window.close=function(){window.__msgrClosed=true;}"));
         assert!(!CLOSE_HOOK.contains(".close("));
+    }
+
+    #[test]
+    fn new_windows_send_mail_links_to_the_mail_app_and_deny_the_app_ui() {
+        let gate = |url: &str| new_window_gate(&Url::parse(url).unwrap());
+        assert_eq!(gate("mailto:a@b.org"), NewWindowGate::MailApp);
+        assert_eq!(gate("https://example.org/"), NewWindowGate::Open);
+        assert_eq!(gate("about:blank"), NewWindowGate::Open);
+        assert_eq!(gate("http://tauri.localhost/"), NewWindowGate::Denied);
+        assert_eq!(gate("https://ipc.localhost/x"), NewWindowGate::Denied);
+        assert_eq!(gate("file:///C:/Windows/win.ini"), NewWindowGate::Denied);
+        assert_eq!(gate("javascript:alert(1)"), NewWindowGate::Denied);
     }
 
     #[test]

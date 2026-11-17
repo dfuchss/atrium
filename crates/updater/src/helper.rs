@@ -94,6 +94,16 @@ fn detach(command: &mut Command) -> &mut Command {
     command.current_dir("/").process_group(0)
 }
 
+/// Runs `command` without a console, in a process group of its own.
+#[cfg(windows)]
+fn detach(command: &mut Command) -> &mut Command {
+    use std::os::windows::process::CommandExt as _;
+
+    const DETACHED_PROCESS: u32 = 0x0000_0008;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
+}
+
 /// Runs the helper when the process was started as one; returns its exit code then. Call it
 /// first thing in `main`.
 pub fn run_if_requested() -> Option<i32> {
@@ -207,7 +217,7 @@ mod tests {
 
     #[test]
     fn arguments_round_trip() {
-        let plan = plan(Path::new("/tmp/x"));
+        let plan = plan(&std::env::temp_dir());
         let mut args = vec![OsString::from(
             "/Applications/Atrium.app/Contents/MacOS/atrium",
         )];

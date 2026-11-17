@@ -2,10 +2,11 @@
 //! platform-neutral request and answer types, decided by a [`DialogHandler`], and the glue to
 //! the engine of each platform: `WKWebView` on macOS (`macos`), `WebKitGTK` on Linux (`linux`).
 //! On macOS it also holds the other `WebKit` calls Tauri has no API for: the service view
-//! configuration, reloads from origin and display wakes.
+//! configuration, reloads from origin and display wakes. On Windows (`windows`) it holds the
+//! Win32 calls Tauri has no API for.
 //!
-//! The macOS glue holds the `unsafe` code of this crate; every block says why it is sound. Besides
-//! it, only the Linux theme of `host-tauri` has `unsafe` code.
+//! The macOS and Windows glue holds the `unsafe` code of this crate; every block says why it is
+//! sound. Besides it, only the Linux theme of `host-tauri` has `unsafe` code.
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -18,6 +19,12 @@ mod linux;
 
 #[cfg(target_os = "linux")]
 pub use linux::*;
+
+#[cfg(windows)]
+mod windows;
+
+#[cfg(windows)]
+pub use windows::*;
 
 /// Host and port of the page at `uri`; an empty host for pages without one (`about:blank`,
 /// `data:`).

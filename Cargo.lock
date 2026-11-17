@@ -5736,6 +5736,7 @@ dependencies = [
  "tauri",
  "url",
  "webkit2gtk",
+ "windows",
 ]
 
 [[package]]

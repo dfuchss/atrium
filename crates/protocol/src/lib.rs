@@ -404,6 +404,7 @@ pub enum OperatingSystem {
     #[default]
     MacOs,
     Linux,
+    Windows,
 }
 
 /// Read-only information for the "About" section.

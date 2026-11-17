@@ -16,7 +16,7 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 - Right-clicking a service in the sidebar opens its menu: *Sleep* or *Wake Up*, *Settings…* (opens the service's settings), *Enable Notifications* or *Disable Notifications*, and *Reload*; the shown service cannot be put to sleep, and waking one up loads it in the background
 - Settings > Notifications > *Badge when muted* decides if an account with notifications off keeps its unread badge on the sidebar icon (on by default)
 - Sidebar badges show mentions and direct messages in red and other unread messages as a white dot; choose a count or a dot in Settings > General
-- *Urgent only* in Settings > General > Sidebar badges shows only the red count of mentions and direct messages and hides the white dot
+- *Urgent only* in Settings > General > Sidebar badges shows only the red count of mentions and direct messages and hides the white dot (Element counts all its notified messages as urgent)
 
 ### Fixed
 

@@ -1,14 +1,12 @@
 //! Linux: the release is an `AppImage` that replaces the running one in place (in any folder the
 //! user may write to, the file name is kept); the user opens Atrium again after the swap.
 
-use std::fs::{File, OpenOptions, Permissions};
-use std::io;
-use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+use std::fs::Permissions;
+use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 
 use crate::location::{InstallLocation, RunningAppImage, can_replace};
-use crate::staging::remove_if_present;
-use crate::swap::{new_update_path, partial_update_path};
+use crate::staging::{EXECUTABLE_MODE, place_next_to_install};
 use crate::version::Version;
 
 /// The user opens Atrium again after the swap.
@@ -16,8 +14,6 @@ pub(crate) const RELAUNCHES_AFTER_SWAP: bool = false;
 /// The `AppImage` is one file, which one rename replaces atomically.
 pub(crate) const SWAPS_IN_ONE_RENAME: bool = true;
 
-/// Mode of the staged `AppImage`: it has to run after the swap.
-const EXECUTABLE_MODE: u32 = 0o755;
 /// The release asset for a Linux machine of the given architecture
 /// (`std::env::consts::ARCH`); the names are fixed by `.github/workflows/release.yml`. A
 /// release without the file for this machine is only announced.
@@ -127,48 +123,6 @@ pub(crate) fn prepare_update(
     place_next_to_install(downloaded, install)
 }
 
-/// Moves the `AppImage` to `<install>.new-update`, replacing a leftover. Across file systems
-/// it is copied to a new `.partial` sibling and synced first, so a broken copy never looks
-/// complete. The folder is synced last, so the staged update outlives a crash.
-fn place_next_to_install(appimage: &Path, install: &Path) -> Result<PathBuf, String> {
-    let target = new_update_path(install);
-    let partial = partial_update_path(install);
-    remove_if_present(&partial)?;
-    remove_if_present(&target)?;
-    let placed = std::fs::rename(appimage, &target).or_else(|_| {
-        copy_to_new_file(appimage, &partial)
-            .and_then(|()| std::fs::rename(&partial, &target))
-            .inspect_err(|_| {
-                let _ = remove_if_present(&partial);
-            })
-    });
-    placed
-        .and_then(|()| sync_folder_of(&target))
-        .map_err(|error| format!("cannot place the update next to the installation: {error}"))?;
-    Ok(target)
-}
-
-/// Copies `from` to the executable file `to`, which must not exist yet (so a file or link
-/// someone else put there is never written through), and syncs it.
-fn copy_to_new_file(from: &Path, to: &Path) -> io::Result<()> {
-    let mut source = File::open(from)?;
-    let mut copy = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(EXECUTABLE_MODE)
-        .open(to)?;
-    // The umask may have removed bits from the mode.
-    copy.set_permissions(Permissions::from_mode(EXECUTABLE_MODE))?;
-    io::copy(&mut source, &mut copy)?;
-    copy.sync_all()
-}
-
-/// Syncs the folder that holds `path`, so a rename into it is on disk.
-fn sync_folder_of(path: &Path) -> io::Result<()> {
-    let folder = path.parent().ok_or_else(|| io::Error::other("no folder"))?;
-    File::open(folder)?.sync_all()
-}
-
 /// The helper is started through the `AppImage` (`install`): the running executable lives in
 /// the `AppImage`'s mount, which goes away when the app exits.
 #[expect(
@@ -208,6 +162,7 @@ pub(crate) fn relaunch(_install: &Path) {}
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::swap::{new_update_path, partial_update_path};
 
     /// The release asset the flow tests use.
     pub(crate) const ASSET: &str = "atrium-linux-x86_64.AppImage";
@@ -311,24 +266,6 @@ pub(crate) mod tests {
                 env.appimage
             );
         }
-    }
-
-    #[test]
-    fn copies_only_to_a_new_executable_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let source = dir.path().join("download.AppImage");
-        std::fs::write(&source, fake_asset(dir.path(), "0.2.0")).unwrap();
-        let copy = dir.path().join("copy");
-        copy_to_new_file(&source, &copy).unwrap();
-        verify_staged(&copy, "0.2.0");
-        let error = copy_to_new_file(&source, &copy).unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
-        let victim = dir.path().join("victim");
-        std::fs::write(&victim, "keep").unwrap();
-        let link = dir.path().join("link");
-        std::os::unix::fs::symlink(&victim, &link).unwrap();
-        assert!(copy_to_new_file(&source, &link).is_err());
-        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
     }
 
     #[test]

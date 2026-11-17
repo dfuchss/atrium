@@ -79,10 +79,11 @@ fn BadgeRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
         }
     };
     view! {
-        <Row label="Sidebar badges" hint="Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages.">
+        <Row label="Sidebar badges" hint="Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
             <div class="btn-group seg">
                 {badge_button(BadgeStyle::Count, "Count")}
                 {badge_button(BadgeStyle::Dot, "Dot")}
+                {badge_button(BadgeStyle::UrgentOnly, "Urgent only")}
             </div>
         </Row>
     }

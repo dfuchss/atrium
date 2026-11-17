@@ -321,6 +321,8 @@ pub enum BadgeStyle {
     Count,
     /// A red dot for urgent unread.
     Dot,
+    /// A red badge with the urgent count; normal unread shows nothing.
+    UrgentOnly,
 }
 
 impl BadgeStyle {
@@ -328,9 +330,9 @@ impl BadgeStyle {
     /// ([`AccountView::indirect`]); urgent unread hides the normal dot.
     pub fn badge(self, urgent: u32, normal: bool) -> Badge {
         match (urgent, self) {
-            (0, _) if normal => Badge::NormalDot,
+            (0, BadgeStyle::Count | BadgeStyle::Dot) if normal => Badge::NormalDot,
             (0, _) => Badge::None,
-            (count, BadgeStyle::Count) => Badge::Count(count),
+            (count, BadgeStyle::Count | BadgeStyle::UrgentOnly) => Badge::Count(count),
             (_, BadgeStyle::Dot) => Badge::UrgentDot,
         }
     }
@@ -514,5 +516,8 @@ mod tests {
         assert_eq!(BadgeStyle::Dot.badge(0, false), Badge::None);
         assert_eq!(BadgeStyle::Dot.badge(0, true), Badge::NormalDot);
         assert_eq!(BadgeStyle::Dot.badge(3, true), Badge::UrgentDot);
+        assert_eq!(BadgeStyle::UrgentOnly.badge(0, false), Badge::None);
+        assert_eq!(BadgeStyle::UrgentOnly.badge(0, true), Badge::None);
+        assert_eq!(BadgeStyle::UrgentOnly.badge(3, true), Badge::Count(3));
     }
 }

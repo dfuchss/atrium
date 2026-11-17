@@ -47,7 +47,7 @@ Below them, *Service definition files* lists the TOML files of the services fold
 | Setting | What it does |
 |---|---|
 | Sidebar icon size | Small, medium or large icons; the sidebar width follows. |
-| Sidebar badges | *Count* or *Dot*. Mentions and direct messages show red, with their number or as a dot; other unread messages show a white dot. |
+| Sidebar badges | *Count*, *Dot* or *Urgent only*. Mentions and direct messages show red, with their number or as a dot; other unread messages show a white dot. *Urgent only* shows the red number and hides the white dot. |
 | Appearance | *Auto*, *Light* or *Dark*. Auto follows the system; service pages follow if they support it. |
 | Launch at login | Start Atrium when you log in. |
 | Start hidden | Start without showing the window. |

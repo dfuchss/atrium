@@ -15,7 +15,28 @@ clear_local_storage = ["react_sdk_session_lock_ping", "react_sdk_session_lock_ow
 [unread]
 # Element's own badge: the count on the first space button (Home) in the space panel, which counts
 # messages while the title counts rooms. No value (panel not rendered yet) falls back to the title.
-poll = """(s=>s&&(b=>({direct:parseInt(b?.textContent)||0,indirect:!!b&&!parseInt(b.textContent)}))(s.querySelector('.mx_SpacePanel_notificationBadge')))(document.querySelector('.mx_SpaceButton'))"""
+# With "Show all rooms in Home" off, Home counts only rooms outside any space. A Home count below
+# the title's room count means Home is partial: then the badges of the top-level joined spaces
+# (draggable items, so no meta spaces or invites) are added, and the result is at least the title
+# count. Dots on those spaces count as indirect unread either way.
+poll = """(() => {
+  const home = document.querySelector('.mx_SpaceButton');
+  if (!home) return;
+  const badge = button => button?.querySelector('.mx_SpacePanel_notificationBadge');
+  const count = b => parseInt(b?.textContent) || 0;
+  const homeBadge = badge(home);
+  const rooms = parseInt(document.title.match(/\\[(\\d+)\\]/)?.[1]) || 0;
+  const partial = count(homeBadge) < rooms;
+  let direct = count(homeBadge);
+  let dot = !!homeBadge && !direct;
+  for (const space of document.querySelectorAll('li.mx_SpaceItem[data-rbd-draggable-id]')) {
+    const b = badge(space.querySelector('.mx_SpaceButton'));
+    if (partial) direct += count(b);
+    dot ||= !!b && !count(b);
+  }
+  if (partial) direct = Math.max(direct, rooms);
+  return { direct, indirect: !direct && dot };
+})()"""
 # Fallback: the window title counts rooms, e.g. "Element [3]"
 title_regex = '\[(\d+)\]'
 title_indirect_regex = '\*'

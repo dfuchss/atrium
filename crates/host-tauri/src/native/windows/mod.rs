@@ -88,10 +88,21 @@ pub(crate) fn build_service_view<R: Runtime>(
     add_child(window, builder, bounds).map_err(port_err)
 }
 
-/// Reloads `webview`. Not yet past the cache: `WebView2` offers that only through the
-/// `DevTools` protocol.
-pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, _logger: &Logger) -> PortResult {
-    webview.reload().map_err(port_err)
+/// Reloads `webview` past the cache, through the `DevTools` protocol (the only way `WebView2`
+/// offers); a failure is logged.
+pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, logger: &Logger) -> PortResult {
+    let (label, logger) = (webview.label().to_string(), logger.clone());
+    let report =
+        move |error: String| logger.log(&format!("[{label}] force reload failed: {error}"));
+    webview
+        .with_webview(move |platform| {
+            let controller = platform.controller();
+            if let Err(error) = webview_dialogs::reload_ignoring_cache(&controller, report.clone())
+            {
+                report(error.to_string());
+            }
+        })
+        .map_err(port_err)
 }
 
 /// Gives the popup's page its own drag and drop. `WebView2` has no popup blocker: whether a

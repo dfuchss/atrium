@@ -1,6 +1,6 @@
 //! Windows (`WebView2`): Atrium's own `alert`, `confirm` and `prompt` for pages in service
-//! webviews and the windows they open, and the warning box: the `WebView2` and Win32 calls
-//! Tauri has no API for.
+//! webviews and the windows they open, the reload past the cache and the warning box: the
+//! `WebView2` and Win32 calls Tauri has no API for.
 //!
 //! [`attach`] turns `WebView2`'s own dialogs of a webview off and handles its
 //! `ScriptDialogOpening` event: what a dialog shows is decided by the [`DialogHandler`] (text,
@@ -23,7 +23,9 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM, COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT,
     ICoreWebView2Controller, ICoreWebView2Deferral, ICoreWebView2ScriptDialogOpeningEventArgs,
 };
-use webview2_com::{ScriptDialogOpeningEventHandler, take_pwstr};
+use webview2_com::{
+    CallDevToolsProtocolMethodCompletedHandler, ScriptDialogOpeningEventHandler, take_pwstr,
+};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     HWND_TOP, MB_ICONWARNING, MB_OK, MB_SETFOREGROUND, MB_TASKMODAL, MessageBoxW,
@@ -257,6 +259,31 @@ impl Pending {
             }
             self.deferral.Complete()
         }
+    }
+}
+
+/// Reloads the page of `controller`'s webview past the cache (the `DevTools` protocol's
+/// `Page.reload` with `ignoreCache`, as a browser's hard reload) without waiting for it; a
+/// failure on the way is handed to `on_error`. Call it on the main thread.
+pub fn reload_ignoring_cache(
+    controller: &ICoreWebView2Controller,
+    on_error: impl FnOnce(String) + 'static,
+) -> windows::core::Result<()> {
+    let completed =
+        CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |result, _response| {
+            if let Err(error) = result {
+                on_error(error.to_string());
+            }
+            Ok(())
+        }));
+    // SAFETY: plain COM calls on the main thread, which owns the controller; the strings are
+    // valid, null-terminated UTF-16 for the duration of the call, the handler a valid COM object.
+    unsafe {
+        controller.CoreWebView2()?.CallDevToolsProtocolMethod(
+            &HSTRING::from("Page.reload"),
+            &HSTRING::from(r#"{"ignoreCache":true}"#),
+            &completed,
+        )
     }
 }
 

@@ -19,6 +19,21 @@ mod linux;
 #[cfg(target_os = "linux")]
 pub use linux::*;
 
+/// Host and port of the page at `uri`; an empty host for pages without one (`about:blank`,
+/// `data:`).
+#[cfg(target_os = "linux")]
+fn origin_of(uri: &str) -> PageOrigin {
+    let url = url::Url::parse(uri).ok();
+    PageOrigin {
+        host: url
+            .as_ref()
+            .and_then(url::Url::host_str)
+            .unwrap_or_default()
+            .to_string(),
+        port: url.as_ref().and_then(url::Url::port).unwrap_or(0),
+    }
+}
+
 /// Which panel the page asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DialogKind {
@@ -73,4 +88,25 @@ pub enum DialogAnswer {
 pub trait DialogHandler: Send + Sync {
     fn present(&self, request: &DialogRequest) -> Presentation;
     fn answered(&self, request: &DialogRequest, answer: &DialogAnswer, suppress_further: bool);
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn origin_is_host_and_non_default_port() {
+        let origin = origin_of("https://chat.example.org/room/1");
+        assert_eq!(origin.host, "chat.example.org");
+        assert_eq!(origin.port, 0);
+        assert_eq!(origin_of("http://127.0.0.1:8765/").port, 8765);
+        assert_eq!(origin_of("https://example.org:443/").port, 0);
+    }
+
+    #[test]
+    fn pages_without_host_have_an_empty_origin() {
+        for uri in ["about:blank", "data:text/html,hi", "not a uri"] {
+            assert_eq!(origin_of(uri).host, "", "{uri}");
+        }
+    }
 }

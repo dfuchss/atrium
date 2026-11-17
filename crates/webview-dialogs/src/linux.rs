@@ -24,11 +24,11 @@ use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 
 use gtk::prelude::*;
-use url::Url;
 use webkit2gtk::{LoadEvent, ScriptDialog, ScriptDialogType, WebView, WebViewExt};
 
 use crate::{
     DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
+    origin_of,
 };
 
 #[derive(Debug)]
@@ -145,20 +145,6 @@ fn kind_of(
             default_text: default_text(),
         }),
         _ => None,
-    }
-}
-
-/// Host and port of the page at `uri`; an empty host for pages without one (`about:blank`,
-/// `data:`).
-fn origin_of(uri: &str) -> PageOrigin {
-    let url = Url::parse(uri).ok();
-    PageOrigin {
-        host: url
-            .as_ref()
-            .and_then(Url::host_str)
-            .unwrap_or_default()
-            .to_string(),
-        port: url.as_ref().and_then(Url::port).unwrap_or(0),
     }
 }
 
@@ -330,22 +316,6 @@ impl Drop for Pending {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn origin_is_host_and_non_default_port() {
-        let origin = origin_of("https://chat.example.org/room/1");
-        assert_eq!(origin.host, "chat.example.org");
-        assert_eq!(origin.port, 0);
-        assert_eq!(origin_of("http://127.0.0.1:8765/").port, 8765);
-        assert_eq!(origin_of("https://example.org:443/").port, 0);
-    }
-
-    #[test]
-    fn pages_without_host_have_an_empty_origin() {
-        for uri in ["about:blank", "data:text/html,hi", "not a uri"] {
-            assert_eq!(origin_of(uri).host, "", "{uri}");
-        }
-    }
 
     #[test]
     fn the_origin_is_the_committed_page() {

@@ -1,8 +1,8 @@
 //! Windows (`WebView2`): a `WebView2` user data folder per account (see `web_data`), child
-//! webviews that Tauri lays out like on macOS (see `child_views`) and the unread dot on the
-//! taskbar button. Atrium's own JavaScript dialogs, keyboard shortcuts, the browser list and
-//! the resume and crash observers are still missing: `WebView2` shows its own dialogs, the
-//! other hooks do nothing yet.
+//! webviews that Tauri lays out like on macOS (see `child_views`), the unread dot on the
+//! taskbar button and Atrium's own JavaScript dialogs (`dialogs`). Keyboard shortcuts, the
+//! browser list and the resume and crash observers are still missing: those hooks do nothing
+//! yet.
 //!
 //! Environments: `WebView2` runs one browser process per user data folder and requires every
 //! webview of a folder to be created with the same environment options, so Atrium sets none
@@ -19,8 +19,6 @@
 //! webview turns it off: the sidebar reorders its accounts by dragging, pages take dropped
 //! uploads.
 
-use std::sync::Arc;
-
 use domain::ports::PortResult;
 use domain::{Bounds, DockBadge, MenuModel};
 use protocol::BrowserChoice;
@@ -28,10 +26,13 @@ use tauri::image::Image;
 use tauri::webview::NewWindowFeatures;
 use tauri::{AppHandle, Manager, Runtime, Webview, WebviewBuilder, WebviewWindowBuilder, Window};
 use tauri_plugin_opener::OpenerExt;
-use webview_dialogs::DialogHandler;
 
 use super::child_views::add_child_at;
 use crate::{Feed, Logger, port_err};
+
+mod dialogs;
+
+pub(crate) use dialogs::{attach_dialogs, install_dialogs};
 
 /// Sound name of an instant message (`ms-winsoundevent:Notification.IM`).
 pub(crate) const NOTIFICATION_SOUND: &str = "IM";
@@ -170,18 +171,6 @@ pub(crate) fn show_warning<R: Runtime>(
     let (title, text) = (title.to_string(), text.to_string());
     app.run_on_main_thread(move || webview_dialogs::show_warning(&title, &text))
 }
-
-/// `WebView2` shows its own JavaScript dialogs for now.
-pub(crate) fn install_dialogs<R: Runtime>(
-    _app: &AppHandle<R>,
-    _handler: Arc<dyn DialogHandler>,
-    logger: &Logger,
-) {
-    logger.log("JavaScript dialogs: WebView2's own");
-}
-
-/// Nothing to attach: `WebView2` shows its own dialogs.
-pub(crate) fn attach_dialogs<R: Runtime>(_webview: &Webview<R>, _logger: &Logger) {}
 
 /// Nothing to register: Tauri's hook for terminated web processes does not exist on Windows.
 pub(crate) fn register_crash_hook<R: Runtime>(

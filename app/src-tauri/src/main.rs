@@ -568,4 +568,21 @@ mod tests {
             serde_json::json!([protocol::UI_WEBVIEW])
         );
     }
+
+    /// Only the dialog windows may answer dialogs; they get nothing else.
+    #[test]
+    fn script_dialog_capability_targets_only_the_dialog_windows() {
+        let capability: Value =
+            serde_json::from_str(include_str!("../capabilities/script-dialog.json"))
+                .expect("capability is valid JSON");
+        assert!(capability.get("webviews").is_none());
+        assert_eq!(
+            capability["windows"],
+            serde_json::json!(["script-dialog-*"])
+        );
+        assert_eq!(
+            capability["permissions"],
+            serde_json::json!(["script-dialog:default"])
+        );
+    }
 }

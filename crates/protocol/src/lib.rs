@@ -7,12 +7,14 @@
 //!   besides form inputs.
 
 mod desktop;
+mod script_dialog;
 mod update;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use desktop::*;
+pub use script_dialog::*;
 pub use update::*;
 
 pub const CMD_UI_COMMAND: &str = "ui_command";

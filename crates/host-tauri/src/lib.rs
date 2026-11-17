@@ -237,7 +237,7 @@ impl<R: Runtime> TauriHost<R> {
     /// Makes `alert`, `confirm` and `prompt` of the service views show native panels. Call it
     /// once the sidebar webview exists and before the first service view is created (see
     /// `native::install_dialogs`); without it the pages get the default answers (macOS) or
-    /// `WebKitGTK`'s own dialogs (Linux).
+    /// the engine's own dialogs (`WebKitGTK` on Linux, `WebView2` on Windows).
     pub fn install_dialogs(&self) {
         self.dialogs.install(&self.app, &self.logger);
     }

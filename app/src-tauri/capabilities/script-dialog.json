@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "script-dialog",
+  "description": "The window of a JavaScript dialog (Windows) may only answer its own dialog.",
+  "platforms": ["windows"],
+  "windows": ["script-dialog-*"],
+  "permissions": ["script-dialog:default"]
+}

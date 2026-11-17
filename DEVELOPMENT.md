@@ -76,6 +76,7 @@ ATRIUM_CONFIG_DIR="$TEMP/atrium-dev" ../../target/debug/atrium.exe
 ```
 
 Known limitations on Windows:
+- A JavaScript dialog opens in a small window above the window that asks; it is not modal, the rest of Atrium stays usable while the page waits for the answer.
 - There is no app menu; Settings and Quit are in the tray menu.
 - The taskbar button shows a red dot for unread messages, not their count; the tray icon shows no count.
 - Pages may open windows without a click (the window quota still applies); WebView2 has no popup blocker.
@@ -94,7 +95,7 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 | `crates/store-fs` | Adapter: atomic JSON store (`accounts.json`). |
 | `crates/fs-util` | File operations shared by the crates: atomic writes with a fixed mode. |
 | `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting; the macOS app bundle or the Linux AppImage, platform-specific code in `native/`. |
-| `crates/webview-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, with platform-neutral dialog types; on macOS added to the system webview's delegate at runtime, on Linux shown from WebKitGTK's `script-dialog` signal; on Windows the Win32 calls Tauri has no API for. The only crate built on `unsafe` code; elsewhere it is denied, except for one environment change at start-up on Linux in `host-tauri`. |
+| `crates/webview-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, with platform-neutral dialog types; on macOS added to the system webview's delegate at runtime, on Linux shown from WebKitGTK's `script-dialog` signal, on Windows taken from WebView2's `ScriptDialogOpening` event and shown in a window of Atrium's UI; on Windows also the WebView2 and Win32 calls Tauri has no API for. The only crate built on `unsafe` code; elsewhere it is denied, except for one environment change at start-up on Linux in `host-tauri`. |
 | `app/src-tauri` | Composition root: window, actor thread, Tauri commands. |
 | `app/ui` | Sidebar and settings in [Leptos](https://leptos.dev/) (CSR, built with Trunk). |
 | `services/*.toml` | Built-in service definitions. |

@@ -1,4 +1,5 @@
-//! Sidebar and settings UI of Atrium (Leptos, client-side rendered in the `ui` webview).
+//! Sidebar and settings UI of Atrium (Leptos, client-side rendered in the `ui` webview), and
+//! the windows of JavaScript dialogs on Windows (`script_dialog`).
 
 // Leptos' `#[component]` generates `pub` props structs inside restricted modules.
 #![allow(unreachable_pub)]
@@ -10,6 +11,7 @@ mod desktop;
 mod glyphs;
 mod platform_texts;
 mod query;
+mod script_dialog;
 mod service_api;
 mod settings;
 mod sidebar;
@@ -18,10 +20,11 @@ mod update;
 mod widgets;
 
 use leptos::prelude::*;
-use protocol::{OperatingSystem, Snapshot, UiCommand};
+use protocol::{OperatingSystem, SCRIPT_DIALOG_QUERY, Snapshot, UiCommand};
 
 use crate::commands::{Dispatch, send_command};
 use crate::query::query_param;
+use crate::script_dialog::ScriptDialogWindow;
 use crate::settings::{SettingsDialog, Tab, UiState};
 use crate::sidebar::Sidebar;
 
@@ -114,6 +117,11 @@ fn App() -> impl IntoView {
     }
 }
 
+/// The sidebar, or in a dialog window (`?script-dialog`, Windows) the JavaScript dialog.
 fn main() {
-    mount_to_body(App);
+    if query_param(SCRIPT_DIALOG_QUERY).is_some() {
+        mount_to_body(ScriptDialogWindow);
+    } else {
+        mount_to_body(App);
+    }
 }

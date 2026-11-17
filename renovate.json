@@ -23,7 +23,7 @@
     {
       "description": "The Windows bindings must match the version Tauri (wry) uses; they are updated with Tauri",
       "matchDatasources": ["crate"],
-      "matchPackageNames": ["windows"],
+      "matchPackageNames": ["windows", "webview2-com"],
       "enabled": false
     }
   ]

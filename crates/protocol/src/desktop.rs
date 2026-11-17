@@ -1,9 +1,10 @@
 //! Desktop integration: the desktop entry (launcher entry and icon) that Atrium installs for
-//! itself on Linux, and the installed browsers to open links in.
+//! itself on Linux, the Start menu shortcut on Windows, and the installed browsers to open links
+//! in.
 //!
 //! - UI initial load: Tauri command [`CMD_GET_DESKTOP_ENTRY`] returns a
-//!   `Result<Option<DesktopEntryState>, String>` (`None`: nothing to offer, because this is not
-//!   Linux or Atrium does not run as an `AppImage`).
+//!   `Result<Option<DesktopEntryState>, String>` (`None`: nothing to offer, because this is
+//!   macOS or Atrium does not run as an `AppImage` on Linux).
 //! - UI -> backend: [`CMD_INSTALL_DESKTOP_ENTRY`] (also rewrites an outdated entry) and
 //!   [`CMD_UNINSTALL_DESKTOP_ENTRY`] return the new `Result<DesktopEntryState, String>`.
 //! - UI initial load: Tauri command [`CMD_LIST_BROWSERS`] returns an
@@ -22,9 +23,10 @@ pub const CMD_LIST_BROWSERS: &str = "list_browsers";
 pub enum DesktopEntryState {
     /// There is no entry.
     NotInstalled,
-    /// The entry starts the running `AppImage`.
+    /// The entry starts the running `AppImage` (Linux) or executable (Windows).
     Installed,
-    /// The entry starts another file, e.g. before the `AppImage` was moved or renamed.
+    /// The entry starts another file, e.g. before the `AppImage` or executable was moved or
+    /// renamed.
     OtherPath { path: String },
 }
 

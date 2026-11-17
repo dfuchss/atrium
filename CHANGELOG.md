@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On Windows, Atrium's windows carry its app id (`org.fuchss.atrium`), so the taskbar groups them under a Start menu shortcut with that id, with its name and icon
 - On Windows, Settings > Links > Browser lists the installed browsers to open links in; a browser that cannot be started falls back to the system default, and mail links open in the default mail app
 - On Windows, a release build updates itself: *Quit and update* swaps in the verified new executable under the same file name after Atrium has quit; open Atrium again afterwards. It must lie in a folder you can write to; builds that run from Cargo's target folder just point to the release page
+- On Windows, Settings > General > Desktop integration installs or removes a Start menu shortcut to the running Atrium (*Install*, *Update*, *Uninstall*); it carries Atrium's identifier as app id, so Windows shows Atrium's name on its notifications
 
 ## 0.3.0
 

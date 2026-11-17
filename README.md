@@ -77,7 +77,7 @@ The builds are not signed, so macOS blocks the first start: open Atrium once, th
 
 On Linux, download `atrium-linux-x86_64.AppImage` (or `atrium-linux-aarch64.AppImage` on 64-bit ARM), make it executable (`chmod +x`) and run it; see [Linux](#linux) for FUSE and the launcher entry.
 
-On Windows, download `atrium-windows-x86_64.exe` (64-bit Intel/AMD), move it to a folder of your own (e.g. `%LOCALAPPDATA%\Programs\Atrium`) and run it. It is not signed, so SmartScreen warns on the first start: click *More info*, then *Run anyway*.
+On Windows, download `atrium-windows-x86_64.exe` (64-bit Intel/AMD), move it to a folder of your own (e.g. `%LOCALAPPDATA%\Programs\Atrium`) and run it. It is not signed, so SmartScreen warns on the first start: click *More info*, then *Run anyway*. See [Windows](#windows) for the Start menu entry.
 
 ### Updates
 
@@ -110,6 +110,10 @@ Known limitations on Linux:
 - *Auto* appearance starts light and follows the desktop's light or dark colour scheme only once it changes while Atrium runs ([tao#1378](https://github.com/tauri-apps/tao/issues/1378)); such a change also overrides Light or Dark ([tao#1382](https://github.com/tauri-apps/tao/issues/1382)). A GTK theme named `*-dark` also keeps pages dark when Light is selected.
 - On Wayland, starting Atrium again may only highlight the running Atrium in the task bar instead of bringing its window to the front.
 - Session cookies are stored unencrypted in the per-account web data folder (mode `0700`): exclude `webdata/` from backups and sync.
+
+### Windows
+
+Atrium on Windows is a single program file that you run from any folder; it adds nothing to the Start menu by itself. To get a Start menu entry, open Settings > General > Desktop integration and press **Install**: it writes the shortcut `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Atrium.lnk` to the running program, with Atrium's identifier `org.fuchss.atrium` as app id, so Windows shows Atrium's name on its notifications. **Update** points the shortcut at the program again after you moved it, and **Uninstall** removes the shortcut (and nothing else). Data locations and known limitations: see [Windows](DEVELOPMENT.md#windows) in DEVELOPMENT.md.
 
 ## Usage
 

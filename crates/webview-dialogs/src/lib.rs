@@ -3,7 +3,8 @@
 //! the engine of each platform: `WKWebView` on macOS (`macos`), `WebKitGTK` on Linux (`linux`),
 //! `WebView2` on Windows (`windows`). On macOS it also holds the other `WebKit` calls Tauri has
 //! no API for: the service view configuration, reloads from origin and display wakes; on
-//! Windows the `WebView2` and Win32 calls Tauri has no API for.
+//! Windows the `WebView2` and Win32 calls Tauri has no API for, and the shell shortcuts of the Start
+//! menu (`shortcut`).
 //!
 //! The macOS and Windows glue holds the `unsafe` code of this crate; every block says why it is
 //! sound. Besides it, only the Linux theme of `host-tauri` has `unsafe` code.
@@ -25,6 +26,12 @@ mod windows;
 
 #[cfg(windows)]
 pub use windows::*;
+
+#[cfg(windows)]
+mod shortcut;
+
+#[cfg(windows)]
+pub use shortcut::{Shortcut, read_shortcut, write_shortcut};
 
 /// Host and port of the page at `uri`; an empty host for pages without one (`about:blank`,
 /// `data:`).

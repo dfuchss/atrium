@@ -5,7 +5,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod desktop;
+#[cfg(not(windows))]
 mod desktop_entry;
+#[cfg(windows)]
+mod start_menu;
 mod updates;
 
 use std::path::{Path, PathBuf};

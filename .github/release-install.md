@@ -53,7 +53,8 @@ of your own, for example `%LOCALAPPDATA%\Programs\Atrium`, and start it from the
 > ("Windows protected your PC"). Click **More info**, then **Run anyway**. You only need to do this once.
 
 The browser marks the download as coming from the internet, which is what SmartScreen checks; the updates Atrium
-downloads itself are not marked and start without the warning. `SHA256SUMS` holds the checksums
+downloads itself are not marked and start without the warning. To get a Start menu entry, press **Install** under
+Settings > General > Desktop integration (**Uninstall** removes it again). `SHA256SUMS` holds the checksums
 (`sha256sum -c SHA256SUMS --ignore-missing` in Git Bash, or compare with
 `Get-FileHash atrium-windows-x86_64.exe` in PowerShell).
 

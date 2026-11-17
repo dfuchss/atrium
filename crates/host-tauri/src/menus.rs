@@ -32,10 +32,10 @@ const ID_QUIT: &str = "quit";
 /// Prefix of the account items (app menu "Accounts" and tray), followed by the account id.
 const ID_ACCOUNT: &str = "account:";
 const TRAY_ID: &str = "atrium-tray";
-/// Accounts 1 to 9 get the shortcuts Cmd+1 to Cmd+9 (Ctrl on Linux).
+/// Accounts 1 to 9 get the shortcuts Cmd+1 to Cmd+9 (Ctrl elsewhere).
 pub(crate) const ACCOUNT_SHORTCUTS: usize = 9;
 
-/// A keyboard shortcut: `key` held with Cmd on macOS and Ctrl on Linux, and with Shift if
+/// A keyboard shortcut: `key` held with Cmd on macOS and Ctrl elsewhere, and with Shift if
 /// `shift`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Shortcut {
@@ -60,8 +60,8 @@ impl Shortcut {
     }
 }
 
-/// The menu items with a shortcut, by id: the macOS menu and the Linux window both take their
-/// shortcuts from here.
+/// The menu items with a shortcut, by id: the macOS menu and the window shortcuts elsewhere
+/// (`window_shortcuts`) both take their shortcuts from here.
 pub(crate) const ITEM_SHORTCUTS: [(&str, Shortcut); 9] = [
     (ID_SETTINGS, Shortcut::key(',')),
     (ID_QUIT, Shortcut::key('q')),
@@ -75,7 +75,7 @@ pub(crate) const ITEM_SHORTCUTS: [(&str, Shortcut); 9] = [
 ];
 
 /// The shortcut of the account at `index` (from 0) in the menu, for the first
-/// [`ACCOUNT_SHORTCUTS`] accounts: Cmd+1 to Cmd+9 (Ctrl on Linux).
+/// [`ACCOUNT_SHORTCUTS`] accounts: Cmd+1 to Cmd+9 (Ctrl elsewhere).
 pub(crate) fn account_shortcut(index: usize) -> Option<Shortcut> {
     if index >= ACCOUNT_SHORTCUTS {
         return None;

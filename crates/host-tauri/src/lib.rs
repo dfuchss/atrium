@@ -30,6 +30,8 @@ mod platform;
 mod quit;
 pub mod services;
 mod webviews;
+#[cfg(target_os = "linux")]
+mod window_shortcuts;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;

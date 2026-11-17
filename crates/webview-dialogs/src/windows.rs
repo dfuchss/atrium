@@ -1,7 +1,7 @@
 //! Windows (`WebView2`): Atrium's own `alert`, `confirm` and `prompt` for pages in service
 //! webviews and the windows they open, the reload past the cache and the warning box, and in a
-//! module each the key presses of a webview (`keys`): the `WebView2` and Win32 calls Tauri has
-//! no API for.
+//! module each the key presses of a webview (`keys`) and the app's `AppUserModelID`
+//! (`app_id`): the `WebView2` and Win32 calls Tauri has no API for.
 //!
 //! [`attach`] turns `WebView2`'s own dialogs of a webview off and handles its
 //! `ScriptDialogOpening` event: what a dialog shows is decided by the [`DialogHandler`] (text,
@@ -14,8 +14,10 @@
 //! as another. `WebView2` raises the event on the main thread, whose objects stay there: the
 //! dialogs waiting for their answer are kept per thread, and [`answer`] must run there too.
 
+mod app_id;
 mod keys;
 
+pub use app_id::*;
 pub use keys::*;
 
 use std::cell::{Cell, RefCell};

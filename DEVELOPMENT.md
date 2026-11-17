@@ -82,6 +82,7 @@ Known limitations on Windows:
 - Pages may open windows without a click (the window quota still applies); WebView2 has no popup blocker.
 - Hidden services keep running, but Chromium throttles their timers like those of a background tab (Tauri's background throttling setting does not apply to WebView2).
 - A debug build's notifications are shown under the name of PowerShell: Windows needs a Start menu entry to show Atrium's name.
+- A click on a notification shows its account only while the notification is on screen, not once it moved to the notification centre.
 
 ## Architecture
 

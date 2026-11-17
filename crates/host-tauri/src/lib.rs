@@ -69,7 +69,7 @@ pub fn clean_launch_environment() {
 }
 
 /// Names the app `identifier` for the desktop, so it matches the windows to Atrium's desktop
-/// entry (Linux). Call it before the app is built.
+/// entry (Linux) or Start menu shortcut (Windows). Call it before the app is built.
 pub fn set_app_id(identifier: &str) {
     native::set_app_id(identifier);
 }

@@ -36,11 +36,18 @@ mod shortcuts;
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
 pub(crate) use shortcuts::Shortcuts;
 
-/// Sound name of an instant message (`ms-winsoundevent:Notification.IM`).
+/// Sound name of an instant message (`ms-winsoundevent:Notification.IM`), as
+/// `tauri-winrt-notification` names it.
 pub(crate) const NOTIFICATION_SOUND: &str = "IM";
 
-/// Nothing to do yet: the taskbar groups Atrium's windows by its executable.
-pub(crate) fn set_app_id(_identifier: &str) {}
+/// Gives the process the `AppUserModelID` `identifier`, before any window exists: the taskbar
+/// groups Atrium's windows by it, and a Start menu shortcut with the same id gives them its
+/// name and icon. The notification plugin shows notifications under the same id, except for a
+/// build in `target\debug` or `target\release`, whose notifications it shows as `PowerShell`'s.
+pub(crate) fn set_app_id(identifier: &str) {
+    // Fails only for an id longer than 128 characters, which a bundle identifier is not.
+    let _ = webview_dialogs::set_app_user_model_id(identifier);
+}
 
 /// Nothing to announce: Atrium installs no icons on Windows.
 #[expect(clippy::unnecessary_wraps, reason = "same signature as on Linux")]

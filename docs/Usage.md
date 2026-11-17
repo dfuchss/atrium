@@ -6,6 +6,8 @@ To install Atrium, see [macOS](macOS#install), [Linux](Linux#install) or [Window
 
 **Add accounts** with the **+** button at the bottom of the sidebar: choose the service, a label and, for services such as Element or Mastodon, the instance (the server host). The settings dialog stays open, so you can add several in a row. Drag icons in the sidebar to reorder them, or use *Move up* / *Move down* in the account list.
 
+**Right-click** a service icon in the sidebar for its menu: *Sleep* or *Wake Up*, *Settings…*, *Enable Notifications* or *Disable Notifications*, and *Reload*. The service on screen cannot be put to sleep.
+
 Each account in Settings → Accounts has these actions: *Edit*, *Reload*, *Remove* (asks to confirm and deletes the account's web data), *Open in browser*, *Back*, *Forward*, *Sleep now* (unloads the view to save memory) and *Clear website data…* (logs you out of the service).
 
 ## Settings

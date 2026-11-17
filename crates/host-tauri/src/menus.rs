@@ -35,10 +35,20 @@ const ID_ACCOUNT: &str = "account:";
 /// Prefix of the account menu items, followed by `<action>:<account id>`.
 const ID_ACCOUNT_MENU: &str = "account-menu:";
 /// Id part and text of each account menu item.
-const ACCOUNT_MENU_ITEMS: [(AccountMenuAction, &str, &str); 4] = [
+const ACCOUNT_MENU_ITEMS: [(AccountMenuAction, &str, &str); 6] = [
     (AccountMenuAction::Sleep, "sleep", "Sleep"),
     (AccountMenuAction::WakeUp, "wake-up", "Wake Up"),
     (AccountMenuAction::Settings, "settings", "Settings…"),
+    (
+        AccountMenuAction::EnableNotifications,
+        "enable-notifications",
+        "Enable Notifications",
+    ),
+    (
+        AccountMenuAction::DisableNotifications,
+        "disable-notifications",
+        "Disable Notifications",
+    ),
     (AccountMenuAction::Reload, "reload", "Reload"),
 ];
 const TRAY_ID: &str = "atrium-tray";

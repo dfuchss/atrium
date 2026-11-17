@@ -137,7 +137,7 @@ pub enum UiCommand {
         account: Uuid,
     },
     /// Right-click on the account's sidebar icon: show its native menu (sleep or wake up,
-    /// settings, reload).
+    /// settings, notifications on or off, reload).
     ShowAccountMenu {
         account: Uuid,
     },

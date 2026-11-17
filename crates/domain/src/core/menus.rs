@@ -28,7 +28,8 @@ impl Core {
     }
 
     /// The menu of an account's sidebar icon: Sleep for a loaded background account (the
-    /// shown one stays awake), otherwise Wake Up for an enabled one.
+    /// shown one stays awake), otherwise Wake Up for an enabled one; the notification item
+    /// switches the account's mute.
     pub(super) fn show_account_menu(&self, account_id: Uuid) -> Vec<Effect> {
         let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
@@ -40,11 +41,17 @@ impl Core {
         } else {
             item(AccountMenuAction::WakeUp, account.enabled)
         };
+        let notifications = if account.muted {
+            AccountMenuAction::EnableNotifications
+        } else {
+            AccountMenuAction::DisableNotifications
+        };
         vec![Effect::ShowAccountMenu(AccountMenu {
             account: account_id,
             items: vec![
                 first,
                 item(AccountMenuAction::Settings, true),
+                item(notifications, true),
                 item(AccountMenuAction::Reload, loaded),
             ],
         })]
@@ -59,6 +66,8 @@ impl Core {
             AccountMenuAction::Sleep => self.hibernate(account_id),
             AccountMenuAction::WakeUp => self.wake_up(account_id),
             AccountMenuAction::Settings => self.open_account_settings(account_id),
+            AccountMenuAction::EnableNotifications => self.set_muted(account_id, false),
+            AccountMenuAction::DisableNotifications => self.set_muted(account_id, true),
             AccountMenuAction::Reload => self.reload(account_id),
         }
     }

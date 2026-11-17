@@ -119,6 +119,8 @@ pub enum AccountMenuAction {
     Sleep,
     WakeUp,
     Settings,
+    EnableNotifications,
+    DisableNotifications,
     Reload,
 }
 

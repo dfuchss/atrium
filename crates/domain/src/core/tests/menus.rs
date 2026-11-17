@@ -179,7 +179,7 @@ fn account_menu(core: &mut Core, n: u128) -> Vec<(AccountMenuAction, bool)> {
 
 #[test]
 fn account_menu_items_follow_the_account_state() {
-    use AccountMenuAction::{Reload, Settings, Sleep, WakeUp};
+    use AccountMenuAction::{DisableNotifications, Reload, Settings, Sleep, WakeUp};
     let mut disabled = account(3, "slack", "C");
     disabled.enabled = false;
     let (mut core, _) = started(vec![
@@ -189,27 +189,69 @@ fn account_menu_items_follow_the_account_state() {
     ]);
     assert_eq!(
         account_menu(&mut core, 1),
-        [(Sleep, false), (Settings, true), (Reload, true)],
+        [
+            (Sleep, false),
+            (Settings, true),
+            (DisableNotifications, true),
+            (Reload, true)
+        ],
         "the shown account stays awake"
     );
     assert_eq!(
         account_menu(&mut core, 2),
-        [(Sleep, true), (Settings, true), (Reload, true)]
+        [
+            (Sleep, true),
+            (Settings, true),
+            (DisableNotifications, true),
+            (Reload, true)
+        ]
     );
     assert_eq!(
         account_menu(&mut core, 3),
-        [(WakeUp, false), (Settings, true), (Reload, false)]
+        [
+            (WakeUp, false),
+            (Settings, true),
+            (DisableNotifications, true),
+            (Reload, false)
+        ]
     );
     core.handle(Input::Ui(UiCommand::Hibernate { account: id(2) }));
     assert_eq!(
         account_menu(&mut core, 2),
-        [(WakeUp, true), (Settings, true), (Reload, false)]
+        [
+            (WakeUp, true),
+            (Settings, true),
+            (DisableNotifications, true),
+            (Reload, false)
+        ]
     );
     assert!(matches!(
         core.handle(Input::Ui(UiCommand::ShowAccountMenu { account: id(9) }))
             .as_slice(),
         [Effect::Log(_)]
     ));
+}
+
+#[test]
+fn account_menu_switches_notifications() {
+    let (mut core, _) = started(vec![account(1, "slack", "A")]);
+    let menu = |action| Input::AccountMenu {
+        account: id(1),
+        action,
+    };
+    let effects = core.handle(menu(AccountMenuAction::DisableNotifications));
+    assert!(last_snapshot(&effects).accounts[0].settings.muted);
+    assert!(
+        effects.iter().any(
+            |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].muted)
+        )
+    );
+    assert_eq!(
+        account_menu(&mut core, 1)[2],
+        (AccountMenuAction::EnableNotifications, true)
+    );
+    let effects = core.handle(menu(AccountMenuAction::EnableNotifications));
+    assert!(!last_snapshot(&effects).accounts[0].settings.muted);
 }
 
 #[test]

@@ -108,9 +108,8 @@ fn App() -> impl IntoView {
     // Only notifies when the dialog flag actually flips, not on every snapshot.
     let dialog_open = Memo::new(move |_| snapshot.with(|snapshot| snapshot.dialog_open));
     let variables = Memo::new(move |_| snapshot.with(layout_variables));
-    let edit_account = Memo::new(move |_| snapshot.with(|snapshot| snapshot.edit_account));
     Effect::new(move || {
-        if let Some(id) = edit_account.get() {
+        if let Some(id) = snapshot.with(|snapshot| snapshot.edit_account) {
             ui_state.tab.set(Tab::Accounts);
             ui_state.edit_account.set(Some(id));
         }

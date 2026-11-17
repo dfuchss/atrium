@@ -41,7 +41,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: #e11d48; color: #fff; font-size: max(9px, calc(var(--icon) * .25)); font-weight: 700; display: grid; place-items: center;
   border: 2px solid var(--bg); box-sizing: content-box; line-height: 1; }
 .dot { position: absolute; top: 3px; right: calc((var(--sidebar) - var(--icon)) / 2 - 2px); width: calc(var(--icon) * .23); height: calc(var(--icon) * .23); border-radius: 50%;
-  background: #fff; border: 2px solid var(--bg); box-sizing: content-box; box-shadow: 0 0 0 1px var(--line); }
+  background: #fff; border: 2px solid var(--bg); box-sizing: content-box; box-shadow: 0 0 0 1px var(--sub); }
 .dot.urgent { background: #e11d48; box-shadow: none; }
 .mute-mark { position: absolute; bottom: -1px; right: calc((var(--sidebar) - var(--icon)) / 2 - 4px); font-size: max(9px, calc(var(--icon) * .25)); line-height: 1; }
 

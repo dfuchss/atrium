@@ -1,7 +1,9 @@
 //! Tabs of the app-wide settings: general, notifications, badge, links and about.
 
 use leptos::prelude::*;
-use protocol::{AfterWake, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand};
+use protocol::{
+    AfterWake, BadgeStyle, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand,
+};
 
 use super::app_toggle;
 use super::browser_row::BrowserRow;
@@ -38,6 +40,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {size_button(IconSize::Large, "Large")}
                 </div>
             </Row>
+            <BadgeRow snapshot=snapshot />
             <Row label="Appearance" hint=texts.theme_hint>
                 <div class="btn-group seg">
                     {theme_button(Theme::Auto, "Auto")}
@@ -64,6 +67,25 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             </Row>
         </div>
         <DesktopIntegration />
+    }
+}
+
+#[component]
+fn BadgeRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
+    let badge = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_style));
+    let badge_button = move |value: BadgeStyle, label: &'static str| {
+        view! {
+            <button class="btn" class:on=move || badge.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.badge_style = value)>{label}</button>
+        }
+    };
+    view! {
+        <Row label="Sidebar badges" hint="Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
+            <div class="btn-group seg">
+                {badge_button(BadgeStyle::Count, "Count")}
+                {badge_button(BadgeStyle::Dot, "Dot")}
+                {badge_button(BadgeStyle::UrgentOnly, "Urgent only")}
+            </div>
+        </Row>
     }
 }
 

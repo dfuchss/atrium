@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use leptos::prelude::*;
-use protocol::{Snapshot, UiCommand, UpdateStatus};
+use protocol::{Badge, Snapshot, UiCommand, UpdateStatus};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 
@@ -357,6 +357,7 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
         })
     });
     let active = move || snapshot.with(|snapshot| snapshot.active == Some(id));
+    let badge_style = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_style));
     view! {
         <button
             class="acct"
@@ -386,8 +387,12 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
                 let hibernated = account.settings.enabled && account.hibernated;
                 view! {
                     {account_icon(&account, false)}
-                    {(show_badge && account.unread > 0).then(|| view! { <span class="badge">{badge_text(account.unread)}</span> })}
-                    {(show_badge && account.unread == 0 && account.indirect).then(|| view! { <span class="dot"></span> })}
+                    {show_badge.then(|| match badge_style.get().badge(account.unread, account.indirect) {
+                        Badge::Count(count) => view! { <span class="badge">{badge_text(count)}</span> }.into_any(),
+                        Badge::UrgentDot => view! { <span class="dot urgent"></span> }.into_any(),
+                        Badge::NormalDot => view! { <span class="dot"></span> }.into_any(),
+                        Badge::None => ().into_any(),
+                    })}
                     {muted.then(|| view! { <span class="mute-mark">"\u{1F507}"</span> })}
                     {hibernated.then(|| view! { <span class="moon-mark" title="Sleeping">"\u{1F319}"</span> })}
                 }

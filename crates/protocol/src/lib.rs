@@ -233,6 +233,8 @@ pub struct AppSettings {
     pub after_wake: AfterWake,
     /// Size of the sidebar icons (and thereby the sidebar width).
     pub icon_size: IconSize,
+    /// How the sidebar icons show unread.
+    pub badge_style: BadgeStyle,
     /// Put background accounts to sleep (unload their view) after this many minutes without
     /// being shown; None = never. Accounts can override it (`AccountSettings::hibernate_after_min`).
     /// Sleeping accounts get no notifications or unread updates until they are opened again.
@@ -256,6 +258,7 @@ impl Default for AppSettings {
             show_tray: true,
             after_wake: AfterWake::Check,
             icon_size: IconSize::Small,
+            badge_style: BadgeStyle::Count,
             hibernate_after_min: None,
             theme: Theme::Auto,
         }
@@ -306,6 +309,40 @@ pub enum DockBadgeMode {
     /// Only the count; indirect unread shows nothing.
     CountOnly,
     Off,
+}
+
+/// Sidebar unread badges. Urgent unread (mentions, direct messages) is red; normal unread
+/// (new messages in a subscribed channel) is a white dot and has no count.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BadgeStyle {
+    /// A red badge with the urgent count.
+    #[default]
+    Count,
+    /// A red dot for urgent unread.
+    Dot,
+}
+
+impl BadgeStyle {
+    /// The badge for `urgent` unread ([`AccountView::unread`]) and `normal` unread
+    /// ([`AccountView::indirect`]); urgent unread hides the normal dot.
+    pub fn badge(self, urgent: u32, normal: bool) -> Badge {
+        match (urgent, self) {
+            (0, _) if normal => Badge::NormalDot,
+            (0, _) => Badge::None,
+            (count, BadgeStyle::Count) => Badge::Count(count),
+            (_, BadgeStyle::Dot) => Badge::UrgentDot,
+        }
+    }
+}
+
+/// What a sidebar icon shows, see [`BadgeStyle::badge`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Badge {
+    None,
+    Count(u32),
+    UrgentDot,
+    NormalDot,
 }
 
 /// Where a link that wants a new window is opened. Sign-in popups (window.open with an explicit
@@ -463,4 +500,19 @@ pub struct ServiceInfo {
     pub url: String,
     pub title_regex: Option<String>,
     pub user_agent: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn badge_shows_urgent_over_normal_unread() {
+        assert_eq!(BadgeStyle::Count.badge(0, false), Badge::None);
+        assert_eq!(BadgeStyle::Count.badge(0, true), Badge::NormalDot);
+        assert_eq!(BadgeStyle::Count.badge(3, true), Badge::Count(3));
+        assert_eq!(BadgeStyle::Dot.badge(0, false), Badge::None);
+        assert_eq!(BadgeStyle::Dot.badge(0, true), Badge::NormalDot);
+        assert_eq!(BadgeStyle::Dot.badge(3, true), Badge::UrgentDot);
+    }
 }

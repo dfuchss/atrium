@@ -137,8 +137,8 @@ pub fn show_warning<R: Runtime>(app: &AppHandle<R>, title: &str, text: &str) -> 
 }
 
 /// Has the core reload a service view whose web content process ended. On macOS one hook of
-/// `builder` covers every webview and reloads the others in place; on Linux each service view
-/// is watched when it is created, so `builder` stays as it is.
+/// `builder` covers every webview and reloads the others in place; on Linux and Windows each
+/// service view is watched when it is created, so `builder` stays as it is.
 pub fn register_crash_hook<R: Runtime>(
     builder: tauri::Builder<R>,
     feed: &Feed,
@@ -229,7 +229,8 @@ impl<R: Runtime> TauriHost<R> {
 
     /// Calls `on_resume` each time the user is back at the computer, from a thread of the
     /// platform: on macOS when the displays wake, on Linux when the system resumed from suspend
-    /// (logind). Without a signal it logs why and never calls.
+    /// (logind), on Windows when it resumed from sleep or hibernation. Without a signal it logs
+    /// why and never calls.
     pub fn observe_resume(&self, on_resume: impl Fn() + Send + Sync + 'static) {
         native::observe_resume(&self.logger, on_resume);
     }

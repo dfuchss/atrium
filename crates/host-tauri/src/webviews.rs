@@ -119,8 +119,7 @@ pub(crate) fn view_label(account: Uuid) -> String {
 }
 
 /// The account whose service webview has `label`; None for any other webview (for the crash
-/// hooks of macOS and Linux).
-#[cfg(not(windows))]
+/// hooks).
 pub(crate) fn view_account(label: &str) -> Option<Uuid> {
     let id = label.strip_prefix(VIEW_LABEL_PREFIX)?;
     Uuid::try_parse(id).ok()
@@ -569,7 +568,6 @@ mod tests {
         assert!(!belongs_to_account("ui", first));
     }
 
-    #[cfg(not(windows))]
     #[test]
     fn view_account_reads_service_view_labels_only() {
         let account = Uuid::from_u128(0x2a);

@@ -15,8 +15,8 @@
 //!   service views and popups as decided by the `dialogs` policy; [`prepare_popup`]: what a
 //!   popup's page may do before it is created.
 //! - Crashed web processes: [`register_crash_hook`] (macOS, for every webview) or
-//!   [`observe_web_process_termination`] (Linux, per service view) has the core reload a service
-//!   view whose web process died.
+//!   [`observe_web_process_termination`] (Linux and Windows, per service view) has the core
+//!   reload a service view whose web process died.
 //! - User agents: [`user_agent_platform`] for the presets, [`NEW_ACCOUNT_USER_AGENT`] for new
 //!   accounts.
 //! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_resume`],

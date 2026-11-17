@@ -1,8 +1,9 @@
 //! Windows (`WebView2`): a `WebView2` user data folder per account (see `web_data`), child
 //! webviews that Tauri lays out like on macOS (see `child_views`), the unread dot on the
 //! taskbar button, Atrium's own JavaScript dialogs (`dialogs`), the browser list (`browsers`)
-//! and the keyboard shortcuts of the main window's webviews (`shortcuts`). The resume and crash
-//! observers are still missing: those hooks do nothing yet.
+//! and the keyboard shortcuts of the main window's webviews (`shortcuts`). Resumes from sleep
+//! come from the power notifications of Windows, crashed pages from each service view's
+//! `ProcessFailed` event (see `webview_dialogs::windows`).
 //!
 //! Environments: `WebView2` runs one browser process per user data folder and requires every
 //! webview of a folder to be created with the same environment options, so Atrium sets none
@@ -28,9 +29,11 @@ use domain::{Bounds, DockBadge};
 use tauri::image::Image;
 use tauri::webview::NewWindowFeatures;
 use tauri::{AppHandle, Manager, Runtime, Webview, WebviewBuilder, WebviewWindowBuilder, Window};
+use webview_dialogs::ProcessFailure;
 
 use super::child_views::add_child_at;
-use crate::{Feed, Logger, port_err};
+use crate::webviews::view_account;
+use crate::{Feed, Input, Logger, port_err};
 
 mod browsers;
 mod dialogs;
@@ -130,8 +133,20 @@ pub(crate) fn prepare_popup<'a, R: Runtime, M: Manager<R>>(
     builder.disable_drag_drop_handler()
 }
 
-/// No resume signal yet: nothing is called.
-pub(crate) fn observe_resume(_logger: &Logger, _on_resume: impl Fn() + Send + Sync + 'static) {}
+/// Calls `on_resume` after each resume from sleep or hibernation, on a thread of the system's:
+/// twice, when the user woke the system, which the core takes for one resume. Without the power
+/// notifications it logs why and never calls.
+pub(crate) fn observe_resume(logger: &Logger, on_resume: impl Fn() + Send + Sync + 'static) {
+    let resume_logger = logger.clone();
+    let registered = webview_dialogs::on_resume(move || {
+        resume_logger.log("resumed from sleep");
+        on_resume();
+    });
+    match registered {
+        Ok(()) => logger.log("listening for resumes from sleep"),
+        Err(error) => logger.log(&format!("no resume signal: {error}")),
+    }
+}
 
 /// Nothing in the environment of a Windows launch overrides the theme or the other settings.
 pub(crate) fn clean_launch_environment() {}
@@ -158,7 +173,8 @@ pub(crate) fn show_warning<R: Runtime>(
     app.run_on_main_thread(move || webview_dialogs::show_warning(&title, &text))
 }
 
-/// Nothing to register: Tauri's hook for terminated web processes does not exist on Windows.
+/// Nothing to register for the whole app: Tauri's hook for terminated web processes does not
+/// exist on Windows, [`observe_web_process_termination`] watches each service view.
 pub(crate) fn register_crash_hook<R: Runtime>(
     builder: tauri::Builder<R>,
     _feed: &Feed,
@@ -166,18 +182,59 @@ pub(crate) fn register_crash_hook<R: Runtime>(
     builder
 }
 
-/// Nothing observed yet: `WebView2` shows its error page in a view whose process died, until
-/// the user reloads it.
+/// Has the core reload the service view `webview` when its page's render process ended
+/// (`WebView2` shows its error page otherwise). Other failures are only logged: a page that
+/// stopped responding may recover, and after its browser process ended the view is gone.
 pub(crate) fn observe_web_process_termination<R: Runtime>(
-    _webview: &Webview<R>,
-    _feed: &Feed,
-    _logger: &Logger,
+    webview: &Webview<R>,
+    feed: &Feed,
+    logger: &Logger,
 ) {
+    let label = webview.label().to_string();
+    let (feed, event_logger) = (feed.clone(), logger.clone());
+    let report = move |failure| {
+        let Some(account) = view_account(&label) else {
+            return;
+        };
+        event_logger.log(&format!("[{account}] web process failed: {failure:?}"));
+        if reload_after(failure) {
+            feed(Input::WebProcessTerminated { account });
+        }
+    };
+    let (label, watch_logger) = (webview.label().to_string(), logger.clone());
+    let scheduled = webview.with_webview(move |platform| {
+        if let Err(error) = webview_dialogs::on_process_failed(&platform.controller(), report) {
+            watch_logger.log(&format!("[{label}] cannot watch the web process: {error}"));
+        }
+    });
+    if let Err(error) = scheduled {
+        logger.log(&format!(
+            "[{}] cannot watch the web process: {error}",
+            webview.label()
+        ));
+    }
+}
+
+/// Whether a failed process is worth a reload: the page's render process ended.
+fn reload_after(failure: ProcessFailure) -> bool {
+    failure == ProcessFailure::RenderProcessExited
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_an_ended_render_process_is_reloaded() {
+        assert!(reload_after(ProcessFailure::RenderProcessExited));
+        for failure in [
+            ProcessFailure::RenderProcessUnresponsive,
+            ProcessFailure::BrowserProcessExited,
+            ProcessFailure::Other,
+        ] {
+            assert!(!reload_after(failure), "{failure:?}");
+        }
+    }
 
     #[test]
     fn the_badge_dot_is_a_png() {

@@ -80,6 +80,7 @@ Known limitations on Windows:
 - There is no app menu; Settings and Quit are in the tray menu. The keyboard shortcuts work while a webview of the main window has the focus, not in popups or dialog windows, and count keys by their place on a US keyboard (Ctrl+[ and Ctrl+] are the two keys right of P).
 - The taskbar button shows a red dot for unread messages, not their count; the tray icon shows no count.
 - Pages may open windows without a click (the window quota still applies); WebView2 has no popup blocker.
+- A service whose page stopped responding is not reloaded, only logged; a service whose WebView2 browser process ended (all processes of its account) stays blank until Atrium starts again.
 - Hidden services keep running, but Chromium throttles their timers like those of a background tab (Tauri's background throttling setting does not apply to WebView2).
 - A debug build's notifications are shown under the name of PowerShell: Windows needs a Start menu entry to show Atrium's name.
 - A click on a notification shows its account only while the notification is on screen, not once it moved to the notification centre.

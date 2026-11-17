@@ -1,7 +1,7 @@
 name: release
 
-# Builds unsigned macOS bundles for Apple silicon and Intel and Linux AppImages for x86_64 and aarch64 on a
-# version tag and publishes them as a GitHub Release with a SHA256SUMS file, which the in-app
+# Builds unsigned macOS bundles for Apple silicon and Intel, Linux AppImages for x86_64 and aarch64 and a
+# Windows x86_64 executable on a version tag and publishes them as a GitHub Release with a SHA256SUMS file, which the in-app
 # updater requires.
 on:
   push:
@@ -127,9 +127,51 @@ jobs:
           path: dist/atrium-linux-${{ matrix.arch }}.AppImage
           if-no-files-found: error
 
+  build-windows:
+    name: Build Windows x86_64
+    needs: version
+    runs-on: windows-latest
+    defaults:
+      run:
+        # Git Bash, like the scripts expect.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: x86_64-pc-windows-msvc
+      - name: Install Trunk and the Tauri CLI
+        run: |
+          .github/scripts/install-trunk-windows.sh
+          cargo install tauri-cli --version '=2.12.4' --locked
+      # Only the executable: Atrium ships on Windows as one portable file that updates itself.
+      - name: Build the executable
+        working-directory: app/src-tauri
+        run: cargo tauri build --no-bundle
+      - name: Check and rename the executable
+        run: |
+          exe=target/release/atrium.exe
+          product_version="$(powershell.exe -NoProfile -Command "(Get-Item '${exe}').VersionInfo.ProductVersion" | tr -d '\r')"
+          if [ "v${product_version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Executable version ${product_version} does not match ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          mkdir dist
+          mv "${exe}" dist/atrium-windows-x86_64.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: atrium-windows-x86_64
+          path: dist/atrium-windows-x86_64.exe
+          if-no-files-found: error
+
   release:
     name: Publish release
-    needs: [build-macos, build-linux]
+    needs: [build-macos, build-linux, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -142,7 +184,7 @@ jobs:
       - name: Write checksums
         working-directory: dist
         run: |
-          sha256sum atrium-macos-*.zip atrium-linux-*.AppImage > SHA256SUMS
+          sha256sum atrium-macos-*.zip atrium-linux-*.AppImage atrium-windows-*.exe > SHA256SUMS
           cat SHA256SUMS
       - name: Build release notes
         run: .github/scripts/release-notes.sh "${GITHUB_REF_NAME}" > release-notes.md
@@ -150,7 +192,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/atrium-macos-*.zip dist/atrium-linux-*.AppImage dist/SHA256SUMS \
+          gh release create "${GITHUB_REF_NAME}" dist/atrium-macos-*.zip dist/atrium-linux-*.AppImage dist/atrium-windows-*.exe dist/SHA256SUMS \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Atrium ${GITHUB_REF_NAME#v}" \
             --notes-file release-notes.md \

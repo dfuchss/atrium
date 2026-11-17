@@ -159,3 +159,41 @@ jobs:
           path: dist/atrium-linux-${{ matrix.arch }}-debug.AppImage
           if-no-files-found: error
           retention-days: 14
+
+  # The Windows debug build of every push to main and every pull request, as the bare executable.
+  # It never updates itself.
+  debug-build-windows:
+    name: Debug build Windows x86_64
+    needs: [check-macos, check-linux, check-windows]
+    runs-on: windows-latest
+    defaults:
+      run:
+        # Git Bash, like the scripts expect.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: debug-x86_64-pc-windows-msvc
+      - name: Install Trunk and the Tauri CLI
+        run: |
+          .github/scripts/install-trunk-windows.sh
+          cargo install tauri-cli --version '=2.12.4' --locked
+      - name: Build the debug executable
+        working-directory: app/src-tauri
+        run: cargo tauri build --debug --no-bundle
+      - name: Rename the executable
+        run: |
+          mkdir dist
+          mv target/debug/atrium.exe dist/atrium-windows-x86_64-debug.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: atrium-windows-x86_64-debug-${{ github.sha }}
+          path: dist/atrium-windows-x86_64-debug.exe
+          if-no-files-found: error
+          retention-days: 14

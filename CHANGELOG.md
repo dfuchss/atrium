@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Releases include an unsigned Windows x86_64 executable (`atrium-windows-x86_64.exe`), a single file without an installer; pushes and pull requests get a Windows debug executable among the run's artifacts
 - On Windows, `alert`, `confirm` and `prompt` of service pages and their sign-in popups show Atrium's own dialogs, in a small window in Atrium's style: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
 - On Windows, *Force reload* reloads the service without its cache, as on macOS and Linux
 - On Windows, new accounts present Chrome's user agent instead of Safari's, as WebView2 is Chromium; it can still be changed per account

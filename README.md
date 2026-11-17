@@ -10,9 +10,9 @@
   <img src="docs/screenshots/main.png" alt="Atrium with a Matrix chat open and several accounts in the sidebar" width="800">
 </p>
 
-Atrium is a lightweight messenger aggregator for macOS and Linux. It puts Element, Slack, Discord, WhatsApp, Teams and any other web app into one window with a compact sidebar. Every account runs in its own isolated web view, so you can stay signed in to several accounts of the same service side by side.
+Atrium is a lightweight messenger aggregator for macOS, Linux and Windows. It puts Element, Slack, Discord, WhatsApp, Teams and any other web app into one window with a compact sidebar. Every account runs in its own isolated web view, so you can stay signed in to several accounts of the same service side by side.
 
-It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's WebKit (WebKitGTK on Linux) instead of bundling Chromium. Release builds exist for macOS and Linux (x86_64 and aarch64 AppImages); see [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md for building from source. Windows support is in progress; see [Windows](DEVELOPMENT.md#windows) in DEVELOPMENT.md for building it from source.
+It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's web view (WebKit on macOS, WebKitGTK on Linux, WebView2 on Windows) instead of bundling its own browser engine. Release builds exist for macOS, Linux (x86_64 and aarch64 AppImages) and Windows (x86_64); see [Linux](DEVELOPMENT.md#linux) and [Windows](DEVELOPMENT.md#windows) in DEVELOPMENT.md for building from source. Windows support is still in progress.
 
 ## Features
 
@@ -76,6 +76,8 @@ On macOS, download `atrium-macos-arm64.zip` (Apple silicon) or `atrium-macos-x86
 The builds are not signed, so macOS blocks the first start: open Atrium once, then allow it in System Settings → Privacy & Security → *Open Anyway*. If macOS reports the app as "damaged", remove the download quarantine with `xattr -cr /Applications/Atrium.app`.
 
 On Linux, download `atrium-linux-x86_64.AppImage` (or `atrium-linux-aarch64.AppImage` on 64-bit ARM), make it executable (`chmod +x`) and run it; see [Linux](#linux) for FUSE and the launcher entry.
+
+On Windows, download `atrium-windows-x86_64.exe` (64-bit Intel/AMD), move it to a folder of your own (e.g. `%LOCALAPPDATA%\Programs\Atrium`) and run it. It is not signed, so SmartScreen warns on the first start: click *More info*, then *Run anyway*.
 
 ### Updates
 

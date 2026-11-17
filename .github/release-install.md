@@ -43,6 +43,20 @@ chmod +x atrium-linux-x86_64.AppImage
 
 AppImages need FUSE 2 (`libfuse2` on Debian/Ubuntu, `fuse` on Fedora); without it, start Atrium with `--appimage-extract-and-run`. To get a launcher entry and the window icon, press **Install** under Settings > General > Desktop integration (**Uninstall** removes it again), or integrate the AppImage with an AppImage manager such as Gear Lever. `SHA256SUMS` holds the checksums (`sha256sum -c SHA256SUMS --ignore-missing`).
 
+### Windows
+
+`atrium-windows-x86_64.exe` runs on 64-bit Windows 10 and 11 (Intel/AMD) with the WebView2 Runtime, which
+Windows 11 and current Windows 10 include. It is a single program file without an installer: move it to a folder
+of your own, for example `%LOCALAPPDATA%\Programs\Atrium`, and start it from there.
+
+> **This build is not signed**, so Windows SmartScreen warns on the first start of a downloaded copy
+> ("Windows protected your PC"). Click **More info**, then **Run anyway**. You only need to do this once.
+
+The browser marks the download as coming from the internet, which is what SmartScreen checks; the updates Atrium
+downloads itself are not marked and start without the warning. `SHA256SUMS` holds the checksums
+(`sha256sum -c SHA256SUMS --ignore-missing` in Git Bash, or compare with
+`Get-FileHash atrium-windows-x86_64.exe` in PowerShell).
+
 ### Updating
 
 On macOS, an Atrium in the Applications folder updates itself: Settings > About shows new versions and
@@ -51,3 +65,6 @@ On macOS, an Atrium in the Applications folder updates itself: Settings > About 
 On Linux, the AppImage updates itself when it lies in a folder you can write to (e.g. `~/Applications`):
 Settings > About shows new versions and **Quit and update** swaps in the new AppImage; open Atrium again
 afterwards.
+
+On Windows, `atrium-windows-x86_64.exe` updates itself the same way when it lies in a folder you can write to:
+**Quit and update** swaps in the new version under the same file name; open Atrium again afterwards.

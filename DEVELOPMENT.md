@@ -46,7 +46,7 @@ On immutable distributions, build inside a distrobox or toolbox container. `scri
 
 ### Windows
 
-Windows support is in progress: Atrium runs on Windows 10 and 11 (x86_64) when built from source. A release build (`cargo tauri build --no-bundle`) updates itself once it runs outside Cargo's `target\` folder (which holds Cargo's `CACHEDIR.TAG`). It needs:
+Windows support is in progress: Atrium runs on Windows 10 and 11 (x86_64). The release is the bare executable `atrium-windows-x86_64.exe`, the `target\release\atrium.exe` of `cargo tauri build --no-bundle`, without an installer; it updates itself once it runs outside Cargo's `target\` folder (which holds Cargo's `CACHEDIR.TAG`). It needs:
 - the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (part of Windows 11 and of current Windows 10),
 - the [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with *Desktop development with C++* and [Rust](https://rustup.rs/) with the MSVC toolchain,
 - [Git for Windows](https://gitforwindows.org/): the scripts run in its Git Bash,
@@ -57,6 +57,7 @@ Then build or run, in Git Bash:
 ```sh
 cd atrium/app/src-tauri
 cargo tauri build --debug --no-bundle    # only the binary: target/debug/atrium.exe
+cargo tauri build --no-bundle            # the release executable: target/release/atrium.exe
 cargo tauri dev                          # run with live-reloading UI
 ```
 

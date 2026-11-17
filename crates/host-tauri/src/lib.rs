@@ -138,9 +138,9 @@ pub fn register_crash_hook<R: Runtime>(
     native::register_crash_hook(builder, feed)
 }
 
-/// Keeps Atrium to one running instance where the platform does not (Linux): a second start
-/// brings the window `window_label` of the running one to the front and exits. Register it
-/// before the other plugins.
+/// Keeps Atrium to one running instance where the platform does not (all but macOS): a second
+/// start brings the window `window_label` of the running one to the front and exits. Register
+/// it before the other plugins.
 pub fn guard_single_instance<R: Runtime>(
     builder: tauri::Builder<R>,
     window_label: &'static str,

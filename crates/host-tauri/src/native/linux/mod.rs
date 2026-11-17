@@ -1,8 +1,7 @@
 //! Linux (`WebKitGTK` 4.1, GTK 3): a web data folder per account, child webviews laid out in a
 //! `gtk::Layout`, and Atrium's own JavaScript dialogs (`dialogs`). Resumes from suspend
-//! come from logind (`resume`); a second start hands over to the running Atrium
-//! (`single_instance`). Keyboard shortcuts (`shortcuts`), the browser for links (`browsers`)
-//! and the appearance (`theme`) have a module each.
+//! come from logind (`resume`). Keyboard shortcuts (`shortcuts`), the browser for links
+//! (`browsers`) and the appearance (`theme`) have a module each.
 //!
 //! Layout: Tauri builds every child webview into the window's vertical `gtk::Box`, where wry
 //! packs it to fill (the views would stack) and cannot move or resize it. So each new child
@@ -35,14 +34,12 @@ mod browsers;
 mod dialogs;
 mod resume;
 mod shortcuts;
-mod single_instance;
 mod theme;
 
 pub(crate) use browsers::{installed_browsers, open_url_with};
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
 pub(crate) use resume::observe_resume;
 pub(crate) use shortcuts::Shortcuts;
-pub(crate) use single_instance::guard_single_instance;
 pub(crate) use theme::clean_launch_environment;
 
 /// How long a D-Bus method call may take; a desktop without the service answers at once, a

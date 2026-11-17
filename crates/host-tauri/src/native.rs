@@ -2,7 +2,7 @@
 //! `linux` export the same items (`linux` also `on_requested_size` and
 //! `UNDECIDED_WINDOW_SIZE`, for `links`), everything else of the host is shared. What the
 //! platforms other than macOS share lives here too: the per-account web data folders
-//! (`web_data`).
+//! (`web_data`) and the single-instance guard (`single_instance`).
 //!
 //! - Web data: each account's views and windows keep their cookies and storage apart
 //!   ([`isolate_view`], [`isolate_window`]); [`data_store_ids`] and [`remove_data_store`] list
@@ -28,6 +28,8 @@
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "linux")]
+mod single_instance;
 #[cfg(not(target_os = "macos"))]
 mod web_data;
 
@@ -35,6 +37,8 @@ mod web_data;
 pub(crate) use linux::*;
 #[cfg(target_os = "macos")]
 pub(crate) use macos::*;
+#[cfg(target_os = "linux")]
+pub(crate) use single_instance::guard_single_instance;
 #[cfg(not(target_os = "macos"))]
 pub(crate) use web_data::{data_store_ids, isolate_view, isolate_window, remove_data_store};
 

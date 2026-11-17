@@ -1,6 +1,7 @@
 //! One running Atrium per user: two processes would share the accounts' web data folders. The
-//! single-instance plugin owns a name on the D-Bus session bus; a second start hands over to the
-//! running Atrium and exits. Without a session bus every start runs.
+//! single-instance plugin claims a name of the user's session (on Linux on the D-Bus session
+//! bus); a second start hands over to the running Atrium and exits. Where the name cannot be
+//! claimed (Linux without a session bus) every start runs.
 
 use tauri::{Builder, Manager, Runtime};
 

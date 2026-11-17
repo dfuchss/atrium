@@ -2,7 +2,8 @@
 //! `linux` export the same items (`linux` also `on_requested_size` and
 //! `UNDECIDED_WINDOW_SIZE`, for `links`), everything else of the host is shared. What the
 //! platforms other than macOS share lives here too: the per-account web data folders
-//! (`web_data`) and the single-instance guard (`single_instance`).
+//! (`web_data`) and the single-instance guard (`single_instance`); the platforms other than
+//! Linux share the child webviews Tauri lays out by itself (`child_views`).
 //!
 //! - Web data: each account's views and windows keep their cookies and storage apart
 //!   ([`isolate_view`], [`isolate_window`]); [`data_store_ids`] and [`remove_data_store`] list
@@ -24,6 +25,8 @@
 //!   lists the browsers to choose from; [`clean_launch_environment`] removes what the launcher
 //!   set that would override the theme.
 
+#[cfg(not(target_os = "linux"))]
+mod child_views;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -33,6 +36,8 @@ mod single_instance;
 #[cfg(not(target_os = "macos"))]
 mod web_data;
 
+#[cfg(not(target_os = "linux"))]
+pub(crate) use child_views::{place, set_visible};
 #[cfg(target_os = "linux")]
 pub(crate) use linux::*;
 #[cfg(target_os = "macos")]

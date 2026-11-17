@@ -8,12 +8,12 @@ use domain::{Bounds, DockBadge, MenuModel};
 use protocol::{BrowserChoice, UI_WEBVIEW};
 use tauri::webview::NewWindowFeatures;
 use tauri::{
-    AppHandle, Builder, LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder,
-    WebviewWindowBuilder, Window,
+    AppHandle, Builder, Manager, Runtime, Webview, WebviewBuilder, WebviewWindowBuilder, Window,
 };
 use tauri_plugin_opener::OpenerExt;
 use webview_dialogs::{DialogHandler, MainThreadMarker};
 
+pub(crate) use super::child_views::add_child_at as add_child;
 use crate::webviews::view_account;
 use crate::{Feed, Input, Logger, port_err};
 
@@ -86,19 +86,6 @@ pub(crate) fn remove_data_store<R: Runtime>(
     tauri::async_runtime::block_on(app.remove_data_store(store_id))
 }
 
-/// Adds `builder` as a child webview of `window` at `bounds`.
-pub(crate) fn add_child<R: Runtime>(
-    window: &Window<R>,
-    builder: WebviewBuilder<R>,
-    bounds: Bounds,
-) -> tauri::Result<Webview<R>> {
-    window.add_child(
-        builder,
-        LogicalPosition::new(bounds.x, bounds.y),
-        LogicalSize::new(bounds.width, bounds.height),
-    )
-}
-
 /// Adds a service view to `window`, on the main thread, with the `WebKit` configuration of
 /// [`webview_dialogs::service_configuration`]: it can only be created there and must be in place
 /// before the page starts.
@@ -119,25 +106,6 @@ pub(crate) fn build_service_view<R: Runtime>(
             )
             .map_err(port_err)
         })
-}
-
-/// Moves and resizes the child webview `webview` to `bounds`.
-pub(crate) fn place<R: Runtime>(webview: &Webview<R>, bounds: Bounds) -> PortResult {
-    webview
-        .set_position(LogicalPosition::new(bounds.x, bounds.y))
-        .map_err(port_err)?;
-    webview
-        .set_size(LogicalSize::new(bounds.width, bounds.height))
-        .map_err(port_err)
-}
-
-/// Shows or hides the child webview `webview`.
-pub(crate) fn set_visible<R: Runtime>(webview: &Webview<R>, visible: bool) -> PortResult {
-    if visible {
-        webview.show().map_err(port_err)
-    } else {
-        webview.hide().map_err(port_err)
-    }
 }
 
 /// Reloads `webview` from its origin, bypassing the cache.

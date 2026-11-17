@@ -16,6 +16,8 @@ The built-in services are defined in [`services/`](https://github.com/<<REPO>>/t
 
 "Title `(n)`" means a page title that starts with the count in brackets, e.g. `(3) WhatsApp`. "Camera and microphone" is the service's default; each account can change it, and it is granted only while the page shows one of the service's own hosts.
 
+Unread has two levels. Urgent unread (mentions, direct messages) shows in red, as a count or a dot (see [Usage](Usage#general)). Normal unread (new messages in a channel) shows as a white dot without a count. Discord, Slack and Element report both levels. The other services report one count only; Atrium shows it as urgent.
+
 Every built-in service presents the user agent of a desktop WebKit browser (the `webkit` preset); on Windows, new accounts present Chrome's instead (see [Windows](Windows)). The user agent can be changed per account.
 
 ## Notes per service

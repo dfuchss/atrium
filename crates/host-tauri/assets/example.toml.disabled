@@ -47,10 +47,10 @@
 # How unread messages are detected. All entries are optional.
 #! [unread]
 # Regular expression on the page title; capture group 1 is the direct unread count
-# (mentions, direct messages). Example title: "(3) Example Chat".
+# (mentions, direct messages; red badge). Example title: "(3) Example Chat".
 #! title_regex = '^\((\d+)\)'
 
-# Regular expression on the page title; a match shows an indirect unread dot.
+# Regular expression on the page title; a match shows an indirect unread dot (white).
 # title_indirect_regex = '^\*'
 
 # JavaScript expression evaluated in the page every second. Returns a number (direct unread

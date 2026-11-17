@@ -18,6 +18,10 @@
 //! app, which takes HTML5 drag and drop from the pages. Atrium uses no file drops, so every
 //! webview turns it off: the sidebar reorders its accounts by dragging, pages take dropped
 //! uploads.
+//!
+//! Appearance: Tauri's theme needs nothing of Atrium's. For `Auto`, tao reads the app mode of
+//! Windows (`AppsUseLightTheme`) at start and after each settings change, and Tauri sets the
+//! preferred colour scheme of the window's webviews to it; a forced Light or Dark stays.
 
 use domain::ports::PortResult;
 use domain::{Bounds, DockBadge};
@@ -144,7 +148,7 @@ pub(crate) fn installed_browsers() -> Option<Vec<BrowserChoice>> {
     None
 }
 
-/// Nothing in the environment of a Windows launch overrides the settings.
+/// Nothing in the environment of a Windows launch overrides the theme or the other settings.
 pub(crate) fn clean_launch_environment() {}
 
 /// Shows a red dot on the taskbar button while anything is unread (a count or a dot), or

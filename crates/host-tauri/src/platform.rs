@@ -70,8 +70,10 @@ impl<R: Runtime> Platform for TauriHost<R> {
 
     /// `AppHandle::set_theme` covers every window, the menus, the tray, the dialogs and the web
     /// views' `prefers-color-scheme` (macOS: `NSApp.appearance`; Linux: GTK's dark-theme
-    /// preference). `Auto` follows the system: on Linux, tao follows the desktop's colour
-    /// scheme from the XDG desktop portal while Atrium runs.
+    /// preference; Windows: each window's dark mode and its webviews' preferred colour scheme).
+    /// `Auto` follows the system: on Linux, tao follows the desktop's colour scheme from the XDG
+    /// desktop portal while Atrium runs; on Windows, tao follows the app mode
+    /// (`AppsUseLightTheme`) and Tauri hands each change to the window's webviews.
     fn apply_theme(&self, theme: Theme) -> PortResult {
         self.app.set_theme(crate::native_theme(theme));
         // A forced theme sends no system theme-changed event, so refresh the title bar color

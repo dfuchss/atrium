@@ -37,6 +37,9 @@ pub(crate) fn user_agent_platform() -> String {
     "Macintosh; Intel Mac OS X 10_15_7".into()
 }
 
+/// New accounts follow their service's user agent preset: the engine is `WebKit`.
+pub(crate) const NEW_ACCOUNT_USER_AGENT: Option<&str> = None;
+
 /// Monochrome template image (black + alpha); macOS tints it for light/dark menu bars.
 pub(crate) const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray-icon.png");
 pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = true;

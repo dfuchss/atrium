@@ -17,6 +17,8 @@
 //! - Crashed web processes: [`register_crash_hook`] (macOS, for every webview) or
 //!   [`observe_web_process_termination`] (Linux, per service view) has the core reload a service
 //!   view whose web process died.
+//! - User agents: [`user_agent_platform`] for the presets, [`NEW_ACCOUNT_USER_AGENT`] for new
+//!   accounts.
 //! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_resume`],
 //!   [`guard_single_instance`], [`NOTIFICATION_SOUND`], the tray icon and whether an app menu
 //!   is shown; [`Shortcuts`] where there is no app menu to carry them; [`announce_new_icons`]

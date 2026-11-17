@@ -439,6 +439,7 @@ fn setup(
     );
     core.set_user_services(user_defs, user_errors);
     core.set_log_page_titles(dev.log_titles);
+    core.set_new_account_user_agent(host_tauri::new_account_user_agent());
     core.set_app_info(app_info(&host, version, &config_dir, &services_dir));
     *snapshot_cache
         .lock()

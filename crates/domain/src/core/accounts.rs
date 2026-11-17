@@ -101,7 +101,10 @@ impl Core {
             return vec![Effect::Log(format!("add account: {error}")), self.emit()];
         }
         let label = account_label(label, service);
-        let account = Account::new((self.new_account_id)(), service_id, label, instance);
+        let mut account = Account::new((self.new_account_id)(), service_id, label, instance);
+        if service.user_agent.as_deref() == Some("webkit") {
+            account.user_agent.clone_from(&self.new_account_user_agent);
+        }
         let account_id = account.id;
         self.persisted.accounts.push(account);
         let mut effects = match (self.started, self.dialog_open) {

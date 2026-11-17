@@ -79,6 +79,12 @@ pub fn user_agent_platform() -> String {
     native::user_agent_platform()
 }
 
+/// The user agent preset of new accounts whose service asks for the `webkit` one, where the
+/// engine is no `WebKit` (see `domain::Core::set_new_account_user_agent`).
+pub fn new_account_user_agent() -> Option<String> {
+    native::NEW_ACCOUNT_USER_AGENT.map(String::from)
+}
+
 /// The native appearance for a theme setting; `None` follows the system.
 #[must_use]
 pub fn native_theme(theme: protocol::Theme) -> Option<Theme> {

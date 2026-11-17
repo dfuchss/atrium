@@ -88,6 +88,9 @@ pub(crate) fn user_agent_platform() -> String {
     format!("X11; Linux {}", std::env::consts::ARCH)
 }
 
+/// New accounts follow their service's user agent preset: the engine is `WebKitGTK`.
+pub(crate) const NEW_ACCOUNT_USER_AGENT: Option<&str> = None;
+
 /// The app icon in colour: panels are light or dark and do not tint tray icons.
 pub(crate) const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray-icon-color.png");
 pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = false;

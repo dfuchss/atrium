@@ -338,3 +338,36 @@ fn disabled_accounts_at_start() {
     assert_eq!(last_snapshot(&effects).active, Some(id(2)));
     assert!(last_snapshot(&effects).accounts[0].hibernated);
 }
+
+#[test]
+fn new_accounts_of_webkit_services_get_the_hosts_preset() {
+    let (mut core, _) = started(vec![account(1, "slack", "A")]);
+    core.set_new_account_user_agent(Some("chrome".into()));
+    let effects = core.handle(Input::Ui(UiCommand::AddAccount {
+        service: "discord".into(),
+        label: "D".into(),
+        instance: None,
+    }));
+    let snapshot = last_snapshot(&effects);
+    assert_eq!(snapshot.accounts[0].settings.user_agent, None);
+    assert_eq!(
+        snapshot.accounts[1].settings.user_agent.as_deref(),
+        Some("chrome")
+    );
+    let user_agent = views(&effects)[0].0.user_agent.clone().unwrap();
+    assert!(user_agent.contains("Chrome/"), "{user_agent}");
+}
+
+#[test]
+fn new_accounts_follow_the_service_without_a_hosts_preset() {
+    let (mut core, _) = started(vec![]);
+    let effects = core.handle(Input::Ui(UiCommand::AddAccount {
+        service: "discord".into(),
+        label: "D".into(),
+        instance: None,
+    }));
+    assert_eq!(
+        last_snapshot(&effects).accounts[0].settings.user_agent,
+        None
+    );
+}

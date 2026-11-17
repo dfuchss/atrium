@@ -84,6 +84,9 @@ pub struct Core {
     startup_log: Vec<String>,
     /// Write page titles into the log (diagnosing unread patterns); off by default.
     log_page_titles: bool,
+    /// User agent preset of new accounts whose service asks for the `webkit` one (see
+    /// [`Core::set_new_account_user_agent`]).
+    new_account_user_agent: Option<String>,
     /// External opens (browser, mail app) per account, so a page cannot flood the desktop.
     external_link_limit: RateLimiter<Uuid>,
     /// Reloads after a crashed web process per account, so a crashing page is not reloaded
@@ -134,6 +137,7 @@ impl Core {
             favicon_attempts: HashMap::new(),
             startup_log: vec![],
             log_page_titles: false,
+            new_account_user_agent: None,
             external_link_limit: RateLimiter::new(1, EXTERNAL_LINK_INTERVAL_MS),
             crash_reload_limit: RateLimiter::new(MAX_CRASH_RELOADS, CRASH_RELOAD_WINDOW_MS),
             crash_reloads_stopped: HashSet::new(),
@@ -145,6 +149,12 @@ impl Core {
     /// Whether title changes are logged with the title itself (it names chats and senders).
     pub fn set_log_page_titles(&mut self, enabled: bool) {
         self.log_page_titles = enabled;
+    }
+
+    /// New accounts of services that ask for the `webkit` user agent preset get `preset`
+    /// instead, where the host's engine is no `WebKit`. Existing accounts keep theirs.
+    pub fn set_new_account_user_agent(&mut self, preset: Option<String>) {
+        self.new_account_user_agent = preset;
     }
 
     /// Read-only app information shown in the snapshot ("About").

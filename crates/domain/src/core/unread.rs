@@ -321,13 +321,13 @@ impl Core {
     }
 
     /// Tells the user that a download of the account landed in the Downloads folder (the
-    /// page cannot show it); silent under Do Not Disturb.
+    /// page cannot show it); silent under Do Not Disturb and for a muted account.
     pub(super) fn download_finished(&self, account_id: Uuid, file_name: &str) -> Vec<Effect> {
         let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
         };
         let settings = self.settings();
-        if settings.dnd {
+        if settings.dnd || account.muted {
             return vec![];
         }
         let service_name = self

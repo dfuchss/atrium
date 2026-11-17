@@ -13,6 +13,10 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 - Right-clicking a service in the sidebar opens its menu: *Sleep* or *Wake Up*, *Settings…* (opens the service's settings) and *Reload*; the shown service cannot be put to sleep, and waking one up loads it in the background
 
+### Fixed
+
+- An account with notifications off no longer notifies you of finished downloads
+
 ## 0.4.0
 
 Atrium comes to Windows: an unsigned, self-updating executable for 64-bit Windows 10 and 11, with Atrium's own JavaScript dialogs, the keyboard shortcuts, wake and crash recovery, a browser choice and a Start menu entry. Element's unread count now includes the spaces when Home shows only some rooms.

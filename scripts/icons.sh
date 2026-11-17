@@ -69,6 +69,6 @@ render "$SRC/atrium-macos.svg" 512 "$ASSETS/about-icon.png"
 render "$SRC/atrium-tray.svg" 44 "$ASSETS/tray-icon.png"
 cp "$SRC/atrium-tray.svg" "$ASSETS/tray-icon.svg"
 # Linux tray icon in colour (panels do not tint it), shown at about 22 px: the small variant.
-render "$SRC/atrium-small.svg" 64 "$ASSETS/tray-icon-linux.png"
+render "$SRC/atrium-small.svg" 64 "$ASSETS/tray-icon-color.png"
 
 echo "icons regenerated"

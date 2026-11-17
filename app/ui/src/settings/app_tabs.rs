@@ -140,7 +140,7 @@ pub(super) fn AboutTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                 <div class="about-tagline">"All your messengers in one calm place."</div>
             </div>
         </div>
-        <p class="note">"Atrium is a lightweight messenger aggregator for macOS and Linux. Every service account runs in its own isolated webview with its own data store, so logins and cookies stay separate."</p>
+        <p class="note">"Atrium is a lightweight messenger aggregator for macOS, Linux and Windows. Every service account runs in its own isolated webview with its own data store, so logins and cookies stay separate."</p>
         <p class="note">"\u{a9} 2026 Dominik Fuchß \u{b7} GNU GPL v3 or later"</p>
         <div class="form">
             <Row label="Project page"><code>{protocol::PROJECT_URL}</code></Row>

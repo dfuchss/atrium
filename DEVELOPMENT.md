@@ -5,7 +5,7 @@ How to build, check and release Atrium. For using it, see the [README](README.md
 ## Building from source
 
 Requirements:
-- macOS 14 or later (release builds). On Linux, see [Linux](#linux). Per-account data stores need WebKit's `WKWebsiteDataStore(forIdentifier:)`.
+- macOS 14 or later (release builds). On Linux, see [Linux](#linux); on Windows, see [Windows](#windows). Per-account data stores need WebKit's `WKWebsiteDataStore(forIdentifier:)`.
 - [Rust](https://rustup.rs/) (stable) with the `wasm32-unknown-unknown` target.
 - [Trunk](https://trunkrs.dev/) and the [Tauri CLI](https://v2.tauri.app/reference/cli/).
 
@@ -44,6 +44,44 @@ The AppImage is configured by `app/src-tauri/tauri.linux.conf.json` (Linux only;
 
 On immutable distributions, build inside a distrobox or toolbox container. `scripts/linux-check.sh` runs the Linux checks (formatting, clippy, tests) on a Linux host or in such a container, e.g. `distrobox enter atrium-dev -- scripts/linux-check.sh`. With `--appimage` it also builds the AppImage, checks its desktop entry, icon and binary, and starts it under `xvfb-run` for a few seconds if that is installed. Set `CARGO_TARGET_DIR` to keep the Linux build apart from a macOS `target/` folder on a shared checkout.
 
+### Windows
+
+Windows support is in progress: Atrium runs on Windows 10 and 11 (x86_64) when built from source. It needs:
+- the [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) (part of Windows 11 and of current Windows 10),
+- the [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) with *Desktop development with C++* and [Rust](https://rustup.rs/) with the MSVC toolchain,
+- [Git for Windows](https://gitforwindows.org/): the scripts run in its Git Bash,
+- the `wasm32-unknown-unknown` target, Trunk and the Tauri CLI as above.
+
+Then build or run, in Git Bash:
+
+```sh
+cd atrium/app/src-tauri
+cargo tauri build --debug --no-bundle    # only the binary: target/debug/atrium.exe
+cargo tauri dev                          # run with live-reloading UI
+```
+
+`scripts/check.sh` runs the checks in Git Bash as in CI. `.gitattributes` keeps every file at LF line ends in a Windows checkout too: the scripts and the tests need them.
+
+Where Atrium keeps its data on Windows:
+- **Config:** `%APPDATA%\org.fuchss.atrium\` (`accounts.json`, `services\`)
+- **Log:** `%LOCALAPPDATA%\org.fuchss.atrium\logs\atrium.log`
+- **Web data:** `%LOCALAPPDATA%\org.fuchss.atrium\`: the sidebar's in `EBWebView\`, each account's in `webdata\<account id>\EBWebView\`. Every account folder runs a WebView2 browser process of its own, which costs memory per account.
+
+Tauri finds these folders through Windows (`SHGetKnownFolderPath`), so changing `%APPDATA%` or `%LOCALAPPDATA%` does not move them. A development instance therefore needs its own identifier besides its own config folder (see [Debug options](#debug-options)); afterwards delete `%APPDATA%\org.fuchss.atrium.dev` and `%LOCALAPPDATA%\org.fuchss.atrium.dev`:
+
+```sh
+cd app/src-tauri
+cargo tauri build --debug --no-bundle --config '{"identifier":"org.fuchss.atrium.dev"}'
+ATRIUM_CONFIG_DIR="$TEMP/atrium-dev" ../../target/debug/atrium.exe
+```
+
+Known limitations on Windows:
+- There is no app menu; Settings and Quit are in the tray menu.
+- The taskbar button shows a red dot for unread messages, not their count; the tray icon shows no count.
+- Pages may open windows without a click (the window quota still applies); WebView2 has no popup blocker.
+- Hidden services keep running, but Chromium throttles their timers like those of a background tab (Tauri's background throttling setting does not apply to WebView2).
+- A debug build's notifications are shown under the name of PowerShell: Windows needs a Start menu entry to show Atrium's name.
+
 ## Architecture
 
 Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
@@ -56,7 +94,7 @@ Atrium follows a hexagonal design. A pure Rust core decides; adapters execute.
 | `crates/store-fs` | Adapter: atomic JSON store (`accounts.json`). |
 | `crates/fs-util` | File operations shared by the crates: atomic writes with a fixed mode. |
 | `crates/updater` | Self-update from GitHub Releases: check, verify, stage next to the app, swap after quitting; the macOS app bundle or the Linux AppImage, platform-specific code in `native/`. |
-| `crates/webview-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, with platform-neutral dialog types; on macOS added to the system webview's delegate at runtime, on Linux shown from WebKitGTK's `script-dialog` signal. The only crate built on `unsafe` code; elsewhere it is denied, except for one environment change at start-up on Linux in `host-tauri`. |
+| `crates/webview-dialogs` | Adapter: native `alert`/`confirm`/`prompt` panels for the service pages, with platform-neutral dialog types; on macOS added to the system webview's delegate at runtime, on Linux shown from WebKitGTK's `script-dialog` signal; on Windows the Win32 calls Tauri has no API for. The only crate built on `unsafe` code; elsewhere it is denied, except for one environment change at start-up on Linux in `host-tauri`. |
 | `app/src-tauri` | Composition root: window, actor thread, Tauri commands. |
 | `app/ui` | Sidebar and settings in [Leptos](https://leptos.dev/) (CSR, built with Trunk). |
 | `services/*.toml` | Built-in service definitions. |
@@ -91,7 +129,7 @@ Debug builds (`cargo tauri dev`, `cargo tauri build --debug`) read these environ
 
 | Variable | Effect |
 |---|---|
-| `ATRIUM_CONFIG_DIR=<dir>` | Config folder instead of the app's: `accounts.json`, `services/` and `atrium.log`. Such an instance never changes the login item, and on Linux it starts even while Atrium runs. |
+| `ATRIUM_CONFIG_DIR=<dir>` | Config folder instead of the app's: `accounts.json`, `services/` and `atrium.log`. Such an instance never changes the login item, and on Linux and Windows it starts even while Atrium runs. On Windows it also needs its own identifier, see [Windows](#windows). |
 | `ATRIUM_ALWAYS_ON_TOP=1` | Keeps the main window on top. macOS does not paint occluded windows, so `screencapture -l` would capture a blank window. |
 | `ATRIUM_WINDOW_POSITION=<x>,<y>` | Position of the main window in logical pixels (the main display starts at `0,0`), e.g. to open it on a Retina display. |
 | `ATRIUM_DEV_INIT_SCRIPT=<file>` | JavaScript appended to the init script of every service view (the screenshot script seeds a demo Element session with it). |

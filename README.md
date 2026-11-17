@@ -12,7 +12,7 @@
 
 Atrium is a lightweight messenger aggregator for macOS and Linux. It puts Element, Slack, Discord, WhatsApp, Teams and any other web app into one window with a compact sidebar. Every account runs in its own isolated web view, so you can stay signed in to several accounts of the same service side by side.
 
-It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's WebKit (WebKitGTK on Linux) instead of bundling Chromium. Release builds exist for macOS and Linux (x86_64 and aarch64 AppImages); see [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md for building from source.
+It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the system's WebKit (WebKitGTK on Linux) instead of bundling Chromium. Release builds exist for macOS and Linux (x86_64 and aarch64 AppImages); see [Linux](DEVELOPMENT.md#linux) in DEVELOPMENT.md for building from source. Windows support is in progress; see [Windows](DEVELOPMENT.md#windows) in DEVELOPMENT.md for building it from source.
 
 ## Features
 
@@ -170,6 +170,7 @@ title_regex = '^\((\d+)\)'          # capture group 1 = unread count
 - **Log (macOS):** `~/Library/Logs/org.fuchss.atrium/atrium.log` (readable by you only, rotated to `atrium.log.1` at 5 MB). URLs are logged without query and fragment, page titles not at all.
 - **Web data (macOS, per account):** `~/Library/WebKit/org.fuchss.atrium/`
 - Linux: see [Linux](#linux).
+- Windows: see [Windows](DEVELOPMENT.md#windows) in DEVELOPMENT.md.
 
 ## Development
 

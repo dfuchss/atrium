@@ -19,6 +19,12 @@
       "matchDatasources": ["crate"],
       "matchPackageNames": ["gtk", "webkit2gtk"],
       "enabled": false
+    },
+    {
+      "description": "The Windows bindings must match the version Tauri (wry) uses; they are updated with Tauri",
+      "matchDatasources": ["crate"],
+      "matchPackageNames": ["windows"],
+      "enabled": false
     }
   ]
 }

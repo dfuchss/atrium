@@ -30,7 +30,7 @@ jobs:
           # Links to the repository use the placeholder <<REPO>>.
           find wiki -name '*.md' -not -path 'wiki/.git/*' -exec sed -i "s|<<REPO>>|${GITHUB_REPOSITORY}|g" {} +
       - name: Push the wiki
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           repository: wiki
           commit_message: Update the wiki from ${{ github.sha }}

@@ -39,7 +39,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
   - Custom services can be created in the settings, optionally starting from a built-in one.
   - **Expert mode:** edit service definitions as TOML files in the services folder and reload them without restarting.
 - **Desktop integration.**
-  - Keyboard shortcuts: an app menu on macOS, window shortcuts on Linux.
+  - Keyboard shortcuts: an app menu on macOS, window shortcuts on Linux and Windows.
   - Launch at login, start hidden, keep running in the background.
   - After you wake your computer from sleep, reload only the services that stopped responding, or all of them, per account (on macOS not on Power Nap background wakes; on Linux after a resume from suspend).
 

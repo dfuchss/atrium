@@ -1,5 +1,5 @@
-//! The keyboard shortcuts of the main window where there is no app menu to carry them
-//! (Linux): the macOS menu's ([`ITEM_SHORTCUTS`], [`account_shortcut`]) with Ctrl for Cmd,
+//! The keyboard shortcuts of the main window where there is no app menu to carry them (Linux
+//! and Windows): the macOS menu's ([`ITEM_SHORTCUTS`], [`account_shortcut`]) with Ctrl for Cmd,
 //! routed to the same menu item ids, and Close. The platform maps them to its keys and runs
 //! them with [`ShortcutActions`].
 

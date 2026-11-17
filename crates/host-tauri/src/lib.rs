@@ -30,7 +30,7 @@ mod platform;
 mod quit;
 pub mod services;
 mod webviews;
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "macos"))]
 mod window_shortcuts;
 
 use std::path::PathBuf;

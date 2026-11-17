@@ -77,7 +77,7 @@ ATRIUM_CONFIG_DIR="$TEMP/atrium-dev" ../../target/debug/atrium.exe
 
 Known limitations on Windows:
 - A JavaScript dialog opens in a small window above the window that asks; it is not modal, the rest of Atrium stays usable while the page waits for the answer.
-- There is no app menu; Settings and Quit are in the tray menu.
+- There is no app menu; Settings and Quit are in the tray menu. The keyboard shortcuts work while a webview of the main window has the focus, not in popups or dialog windows, and count keys by their place on a US keyboard (Ctrl+[ and Ctrl+] are the two keys right of P).
 - The taskbar button shows a red dot for unread messages, not their count; the tray icon shows no count.
 - Pages may open windows without a click (the window quota still applies); WebView2 has no popup blocker.
 - Hidden services keep running, but Chromium throttles their timers like those of a background tab (Tauri's background throttling setting does not apply to WebView2).

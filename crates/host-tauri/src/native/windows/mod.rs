@@ -1,8 +1,8 @@
 //! Windows (`WebView2`): a `WebView2` user data folder per account (see `web_data`), child
 //! webviews that Tauri lays out like on macOS (see `child_views`), the unread dot on the
-//! taskbar button and Atrium's own JavaScript dialogs (`dialogs`). Keyboard shortcuts, the
-//! browser list and the resume and crash observers are still missing: those hooks do nothing
-//! yet.
+//! taskbar button, Atrium's own JavaScript dialogs (`dialogs`) and the keyboard shortcuts of
+//! the main window's webviews (`shortcuts`). The browser list and the resume and crash
+//! observers are still missing: those hooks do nothing yet.
 //!
 //! Environments: `WebView2` runs one browser process per user data folder and requires every
 //! webview of a folder to be created with the same environment options, so Atrium sets none
@@ -20,7 +20,7 @@
 //! uploads.
 
 use domain::ports::PortResult;
-use domain::{Bounds, DockBadge, MenuModel};
+use domain::{Bounds, DockBadge};
 use protocol::BrowserChoice;
 use tauri::image::Image;
 use tauri::webview::NewWindowFeatures;
@@ -31,8 +31,10 @@ use super::child_views::add_child_at;
 use crate::{Feed, Logger, port_err};
 
 mod dialogs;
+mod shortcuts;
 
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
+pub(crate) use shortcuts::Shortcuts;
 
 /// Sound name of an instant message (`ms-winsoundevent:Notification.IM`).
 pub(crate) const NOTIFICATION_SOUND: &str = "IM";
@@ -69,13 +71,16 @@ pub(crate) const POPUPS_RUN_OPENER_SCRIPTS: bool = false;
 /// The red dot on the taskbar button while anything is unread.
 const BADGE_DOT: &[u8] = include_bytes!("../../../assets/badge-dot.png");
 
-/// Adds `builder` as a child webview of `window` at `bounds`, with the pages' own drag and drop.
+/// Adds `builder` as a child webview of `window` at `bounds`, with the pages' own drag and drop
+/// and the window's keyboard shortcuts.
 pub(crate) fn add_child<R: Runtime>(
     window: &Window<R>,
     builder: WebviewBuilder<R>,
     bounds: Bounds,
 ) -> tauri::Result<Webview<R>> {
-    add_child_at(window, builder.disable_drag_drop_handler(), bounds)
+    let webview = add_child_at(window, builder.disable_drag_drop_handler(), bounds)?;
+    shortcuts::attach(&webview);
+    Ok(webview)
 }
 
 /// Adds a service view to `window`.
@@ -130,32 +135,6 @@ pub(crate) fn open_url_with<R: Runtime>(
 /// No list yet: the settings take the browser as text.
 pub(crate) fn installed_browsers() -> Option<Vec<BrowserChoice>> {
     None
-}
-
-/// The keyboard shortcuts of the window: none yet.
-pub(crate) struct Shortcuts;
-
-impl Shortcuts {
-    pub(crate) fn new() -> Shortcuts {
-        Shortcuts
-    }
-
-    #[expect(clippy::unused_self, reason = "same methods as on Linux")]
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "same signature as on Linux, where adding the shortcuts can fail"
-    )]
-    pub(crate) fn install<R: Runtime>(
-        &mut self,
-        _app: &AppHandle<R>,
-        _window_label: &str,
-        _feed: &Feed,
-    ) -> tauri::Result<()> {
-        Ok(())
-    }
-
-    #[expect(clippy::unused_self, reason = "same methods as on Linux")]
-    pub(crate) fn set_accounts(&self, _model: &MenuModel) {}
 }
 
 /// Nothing in the environment of a Windows launch overrides the settings.

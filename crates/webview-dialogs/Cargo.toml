@@ -59,7 +59,10 @@ url.workspace = true
 # The versions wry builds on, so each crate is built once.
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = [
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 # The workspace lints, except that `unsafe_code` is allowed: on macOS this crate talks to the
 # Objective-C runtime and AppKit, on Windows to Win32, which no safe binding covers. Keep it in

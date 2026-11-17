@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On Windows, `alert`, `confirm` and `prompt` of service pages and their sign-in popups show Atrium's own dialogs, in a small window in Atrium's style: named after the account and site, with suppression and a rate limit; before-unload prompts no longer ask
 - On Windows, *Force reload* reloads the service without its cache, as on macOS and Linux
 - On Windows, new accounts present Chrome's user agent instead of Safari's, as WebView2 is Chromium; it can still be changed per account
+- On Windows, the keyboard shortcuts of the macOS menu work with Ctrl, as on Linux: settings, reload, back and forward, zoom (also Ctrl++ and Ctrl with the numeric keypad's +, - and 0), open in browser, close, quit and switching accounts with Ctrl+1 to Ctrl+9; keys count by their place on a US keyboard, as in Chrome and Edge
 
 ## 0.3.0
 

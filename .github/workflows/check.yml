@@ -28,7 +28,7 @@ jobs:
   check-linux:
     name: Check Linux x86_64
     # The oldest Ubuntu LTS the release builds on, so that its packages are what the release is checked with.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - name: Install system packages

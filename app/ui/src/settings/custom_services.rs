@@ -7,6 +7,7 @@ use super::UiState;
 use super::account_form::user_agent_mode;
 use super::service_files::ServiceFiles;
 use crate::commands::send_command;
+use crate::platform_texts;
 use crate::widgets::{ConfirmButton, Row, no_autocorrect, non_empty};
 
 /// Color of a new custom service.
@@ -276,7 +277,7 @@ fn CustomServiceFields(draft: CustomServiceDraft) -> impl IntoView {
             <select prop:value=move || draft.user_agent_mode.get() on:change=move |event| draft.user_agent_mode.set(event_target_value(&event))>
                 <option value="webkit">"WebKit browser (default)"</option>
                 <option value="chrome">"Chrome"</option>
-                <option value="default">"System WebKit"</option>
+                <option value="default">{platform_texts::texts().system_user_agent}</option>
                 <option value="custom">"Custom\u{2026}"</option>
             </select>
         </Row>

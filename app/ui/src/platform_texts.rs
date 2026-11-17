@@ -14,6 +14,11 @@ pub(crate) struct Texts {
     pub(crate) after_wake_hint: &'static str,
     /// About: the state of `WebKit`'s web process sandbox where it is not the system's default.
     pub(crate) web_process_sandbox: Option<&'static str>,
+    /// The user agent option that leaves the system webview's own.
+    pub(crate) system_user_agent: &'static str,
+    /// Desktop integration: the menu Atrium can install itself in, as a label and in a sentence.
+    pub(crate) app_menu_label: &'static str,
+    pub(crate) app_menu: &'static str,
 }
 
 const MACOS: Texts = Texts {
@@ -24,6 +29,9 @@ const MACOS: Texts = Texts {
     account_badge_toggle: "Count in dock badge",
     after_wake_hint: "Check: reload only services that stop responding after your Mac wakes. Reload: reload every service. Background wakes (Power Nap) change nothing.",
     web_process_sandbox: None,
+    system_user_agent: "System WebKit",
+    app_menu_label: "Application menu",
+    app_menu: "application menu",
 };
 
 const LINUX: Texts = Texts {
@@ -34,6 +42,9 @@ const LINUX: Texts = Texts {
     account_badge_toggle: "Count in launcher badge",
     after_wake_hint: "Check: reload only services that stop responding after your computer wakes from sleep. Reload: reload every service.",
     web_process_sandbox: Some("not available on Linux builds"),
+    system_user_agent: "System WebKit",
+    app_menu_label: "Application menu",
+    app_menu: "application menu",
 };
 
 impl Texts {
@@ -74,6 +85,9 @@ mod tests {
             texts.badge_tab,
             texts.account_badge_toggle,
             texts.after_wake_hint,
+            texts.system_user_agent,
+            texts.app_menu_label,
+            texts.app_menu,
         ]
         .into_iter()
         .chain(texts.web_process_sandbox)

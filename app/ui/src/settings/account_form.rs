@@ -409,7 +409,7 @@ fn BehaviourRows(
                 <option value="">"Service default"</option>
                 <option value="webkit">"WebKit browser"</option>
                 <option value="chrome">"Chrome"</option>
-                <option value="default">"System WebKit"</option>
+                <option value="default">{platform_texts::texts().system_user_agent}</option>
                 <option value="custom">"Custom\u{2026}"</option>
             </select>
         </Row>

@@ -8,7 +8,7 @@ use protocol::{
 };
 
 use crate::widgets::Row;
-use crate::{query, tauri};
+use crate::{platform_texts, query, tauri};
 
 /// What the section shows: the state (`None` while unknown or when there is nothing to offer)
 /// and the message of the last failed request.
@@ -49,14 +49,13 @@ impl DesktopEntry {
     }
 }
 
-fn state_text(state: &DesktopEntryState) -> String {
+/// The state, for the `menu` Atrium installs itself in.
+fn state_text(state: &DesktopEntryState, menu: &str) -> String {
     match state {
-        DesktopEntryState::NotInstalled => {
-            "Atrium is not in your application menu yet.".to_string()
-        }
-        DesktopEntryState::Installed => "Atrium is in your application menu.".to_string(),
+        DesktopEntryState::NotInstalled => format!("Atrium is not in your {menu} yet."),
+        DesktopEntryState::Installed => format!("Atrium is in your {menu}."),
         DesktopEntryState::OtherPath { path } => {
-            format!("The entry in your application menu starts {path}, not this file.")
+            format!("The entry in your {menu} starts {path}, not this file.")
         }
     }
 }
@@ -69,6 +68,7 @@ pub(crate) fn DesktopIntegration() -> impl IntoView {
         error: RwSignal::new(None),
     };
     entry.load();
+    let texts = platform_texts::texts();
     let is_state = move |wanted: fn(&DesktopEntryState) -> bool| {
         entry.state.with(|state| state.as_ref().is_some_and(wanted))
     };
@@ -83,8 +83,8 @@ pub(crate) fn DesktopIntegration() -> impl IntoView {
         <Show when=move || entry.state.with(Option::is_some)>
             <h2 class="updates-title">"Desktop integration"</h2>
             <div class="form">
-                <Row label="Application menu">
-                    <span>{move || entry.state.with(|state| state.as_ref().map(state_text))}</span>
+                <Row label=texts.app_menu_label>
+                    <span>{move || entry.state.with(|state| state.as_ref().map(|state| state_text(state, texts.app_menu)))}</span>
                 </Row>
                 <Row label="">
                     <div class="update-actions">

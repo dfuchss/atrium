@@ -9,6 +9,8 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+## 0.4.0
+
 Atrium comes to Windows: an unsigned, self-updating executable for 64-bit Windows 10 and 11, with Atrium's own JavaScript dialogs, the keyboard shortcuts, wake and crash recovery, a browser choice and a Start menu entry. Element's unread count now includes the spaces when Home shows only some rooms.
 
 ### Added

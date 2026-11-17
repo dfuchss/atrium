@@ -116,8 +116,12 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>) -> PortResult {
 }
 
 /// Like the account's view: `window.open` only from a click (see `webview_dialogs`).
-pub(crate) fn prepare_popup(features: &NewWindowFeatures) {
+pub(crate) fn prepare_popup<'a, R: Runtime, M: Manager<R>>(
+    builder: WebviewWindowBuilder<'a, R, M>,
+    features: &NewWindowFeatures,
+) -> WebviewWindowBuilder<'a, R, M> {
     webview_dialogs::forbid_automatic_windows(&features.opener().target_configuration);
+    builder
 }
 
 /// Calls `on_resume` each time the displays wake, the sign that the user is back: a dark wake

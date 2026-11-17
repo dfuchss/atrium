@@ -287,7 +287,12 @@ fn requested_size(view: &webkit2gtk::WebView) -> Option<LogicalSize<f64>> {
 
 /// Nothing to prepare: `WebKitGTK`'s `javascript-can-open-windows-automatically` is off by
 /// default and wry leaves it, so pages open windows only from a user gesture.
-pub(crate) fn prepare_popup(_features: &NewWindowFeatures) {}
+pub(crate) fn prepare_popup<'a, R: Runtime, M: Manager<R>>(
+    builder: WebviewWindowBuilder<'a, R, M>,
+    _features: &NewWindowFeatures,
+) -> WebviewWindowBuilder<'a, R, M> {
+    builder
+}
 
 /// Shows the unread count on the launcher icon (Unity launcher API), or clears it; a dot
 /// badge shows nothing.

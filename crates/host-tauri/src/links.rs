@@ -406,9 +406,9 @@ impl<R: Runtime> LinkPolicy<R> {
         let title_on_change = Arc::new(PopupTitle::new(self.clone()));
         let title_on_load = title_on_change.clone();
         let blank = Url::parse("about:blank").expect("valid URL");
+        let builder = WebviewWindowBuilder::new(&self.app, label, WebviewUrl::External(blank));
         // Like the account's view: `window.open` only from a click.
-        native::prepare_popup(&features);
-        let builder = WebviewWindowBuilder::new(&self.app, label, WebviewUrl::External(blank))
+        let builder = native::prepare_popup(builder, &features)
             // Requested size/position and, on macOS, the opener's WKWebViewConfiguration, which
             // WebKit requires for the returned view (it also carries the opener's data store);
             // on Linux the opener as related view.

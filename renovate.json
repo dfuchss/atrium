@@ -7,6 +7,18 @@
       "description": "Automerge non-major updates",
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": true
+    },
+    {
+      "description": "The Linux runners stay on the oldest supported Ubuntu LTS: the AppImage needs at least the build machine's glibc",
+      "matchDatasources": ["github-runners"],
+      "matchDepNames": ["ubuntu"],
+      "enabled": false
+    },
+    {
+      "description": "The GTK and WebKitGTK bindings must match the versions Tauri (tao, wry) uses; they are updated with Tauri",
+      "matchDatasources": ["crate"],
+      "matchPackageNames": ["gtk", "webkit2gtk"],
+      "enabled": false
     }
   ]
 }

@@ -25,6 +25,13 @@
       "matchDatasources": ["crate"],
       "matchPackageNames": ["windows", "webview2-com"],
       "enabled": false
+    },
+    {
+      "description": "zbus 6 dropped the blocking API that the Linux resume and icon code uses; stay on 5.x",
+      "matchDatasources": ["crate"],
+      "matchPackageNames": ["zbus"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ]
 }

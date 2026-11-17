@@ -30,7 +30,7 @@ zbus = "5"
 tauri-plugin-single-instance = "2.5"
 
 [target.'cfg(windows)'.dependencies]
-windows-registry = "0.6"
+windows-registry = "0.100"
 
 [dev-dependencies]
 tempfile.workspace = true

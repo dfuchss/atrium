@@ -100,6 +100,9 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
                 .and_then(|url| open_checked(&url, browser.as_deref(), ports)),
         ),
         Effect::UpdateMenus(model) => ("UpdateMenus", ports.platform.set_menus(&model)),
+        Effect::ShowAccountMenu(menu) => {
+            ("ShowAccountMenu", ports.platform.show_account_menu(&menu))
+        }
         Effect::Poll { account, script } => ("Poll", ports.host.poll(account, &script)),
         Effect::Eval { account, script } => ("Eval", ports.host.eval(account, &script)),
         Effect::Notify(request) => ("Notify", ports.notifier.notify(&request)),
@@ -147,7 +150,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::core::{Bounds, DockBadge, MenuModel, NotificationReq, ViewPolicy, ViewSpec};
+    use crate::core::{
+        AccountMenu, Bounds, DockBadge, MenuModel, NotificationReq, ViewPolicy, ViewSpec,
+    };
     use crate::model::Persisted;
     use crate::ports::{Notifier, Platform, Store, UiSink, WebviewHost};
 
@@ -245,6 +250,9 @@ mod tests {
             Ok(())
         }
         fn set_menus(&self, _: &MenuModel) -> PortResult {
+            Ok(())
+        }
+        fn show_account_menu(&self, _: &AccountMenu) -> PortResult {
             Ok(())
         }
         fn log(&self, message: &str) {

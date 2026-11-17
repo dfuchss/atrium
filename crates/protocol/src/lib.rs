@@ -136,6 +136,11 @@ pub enum UiCommand {
     Hibernate {
         account: Uuid,
     },
+    /// Right-click on the account's sidebar icon: show its native menu (sleep or wake up,
+    /// settings, reload).
+    ShowAccountMenu {
+        account: Uuid,
+    },
     /// Fetch the site's favicon again.
     RefreshIcon {
         account: Uuid,
@@ -187,6 +192,9 @@ pub struct Snapshot {
     /// The user-defined services (also contained in `services`, with `custom: true`).
     pub custom_services: Vec<CustomService>,
     pub dialog_open: bool,
+    /// The account whose settings the dialog opens with (account menu "Settings…"); set only
+    /// in the snapshot that asks for it.
+    pub edit_account: Option<Uuid>,
     pub settings: AppSettings,
     pub app: AppInfo,
     /// Problems of the last load of `<config>/services/*.toml` (startup or reload).

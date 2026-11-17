@@ -379,6 +379,10 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
                     send_command(UiCommand::Select { account: id });
                 }
             }
+            on:contextmenu=move |event| {
+                event.prevent_default();
+                send_command(UiCommand::ShowAccountMenu { account: id });
+            }
         >
             {move || account.get().map(|account| {
                 let show_badge = account.settings.show_badge;

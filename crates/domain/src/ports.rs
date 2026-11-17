@@ -5,7 +5,9 @@
 use protocol::{AppSettings, Snapshot, Theme};
 use uuid::Uuid;
 
-use crate::core::{Bounds, DockBadge, MenuModel, NotificationReq, ViewPolicy, ViewSpec};
+use crate::core::{
+    AccountMenu, Bounds, DockBadge, MenuModel, NotificationReq, ViewPolicy, ViewSpec,
+};
 use crate::model::Persisted;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,6 +79,8 @@ pub trait Platform: Send + Sync {
     fn fetch_simple_icon(&self, account: Uuid, slug: &str) -> PortResult;
     /// Updates the app menu and the tray (menu bar) icon; must cope with unchanged parts.
     fn set_menus(&self, model: &MenuModel) -> PortResult;
+    /// Pops up `menu` at the mouse pointer; a click is fed back as `Input::AccountMenu`.
+    fn show_account_menu(&self, menu: &AccountMenu) -> PortResult;
     fn log(&self, message: &str);
 }
 

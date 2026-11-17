@@ -28,6 +28,12 @@ pub(super) fn AccountsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     });
     ui.edit_index.set(None);
     let editing: RwSignal<Option<Uuid>> = RwSignal::new(initial_edit);
+    Effect::new(move || {
+        if let Some(id) = ui.edit_account.get() {
+            editing.set(Some(id));
+            ui.edit_account.set(None);
+        }
+    });
     let ids = Memo::new(move |_| {
         snapshot.with(|snapshot| {
             snapshot

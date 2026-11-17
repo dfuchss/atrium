@@ -34,6 +34,7 @@ impl Core {
                 })
                 .collect(),
             dialog_open: self.dialog_open,
+            edit_account: self.edit_account,
             settings: self.settings().clone(),
             app: self.app_info.clone(),
             service_errors: self.service_errors.clone(),

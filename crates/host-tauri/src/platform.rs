@@ -4,14 +4,14 @@ use std::sync::PoisonError;
 
 use domain::core::SimpleIconResult;
 use domain::ports::{Platform, PortError, PortResult};
-use domain::{DockBadge, MenuModel, redact_url};
+use domain::{AccountMenu, DockBadge, MenuModel, redact_url};
 use protocol::{AppSettings, Theme};
 use tauri::{Manager, Runtime};
 use tauri_plugin_autostart::AutoLaunchManager;
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
-use crate::{Input, TauriHost, bring_to_front, icons, native, port_err, services};
+use crate::{Input, TauriHost, bring_to_front, icons, menus, native, port_err, services};
 
 /// Runs `job` on a new named thread.
 fn spawn_named(name: &str, job: impl FnOnce() + Send + 'static) -> PortResult {
@@ -153,6 +153,19 @@ impl<R: Runtime> Platform for TauriHost<R> {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .apply(&self.app, &self.window_label, &self.feed, model)
+            .map_err(port_err)
+    }
+
+    /// On the main thread without waiting: the popup blocks until it closes (macOS).
+    fn show_account_menu(&self, menu: &AccountMenu) -> PortResult {
+        let window = self.window()?;
+        let (app, logger, menu) = (self.app.clone(), self.logger.clone(), menu.clone());
+        self.app
+            .run_on_main_thread(move || {
+                if let Err(error) = menus::popup_account_menu(&app, &window, &menu) {
+                    logger.log(&format!("[{}] account menu failed: {error}", menu.account));
+                }
+            })
             .map_err(port_err)
     }
 

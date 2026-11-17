@@ -367,7 +367,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
     }
 
     fn force_reload(&self, account: Uuid) -> PortResult {
-        native::force_reload(&self.webview(account)?)
+        native::force_reload(&self.webview(account)?, &self.logger)
     }
 
     fn eval(&self, account: Uuid, script: &str) -> PortResult {

@@ -238,7 +238,7 @@ pub(crate) fn set_visible<R: Runtime>(webview: &Webview<R>, visible: bool) -> Po
 }
 
 /// Reloads `webview` bypassing the cache: every resource is revalidated with the server.
-pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>) -> PortResult {
+pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, _logger: &Logger) -> PortResult {
     webview
         .with_webview(|platform| platform.inner().reload_bypass_cache())
         .map_err(port_err)

@@ -109,7 +109,7 @@ pub(crate) fn build_service_view<R: Runtime>(
 }
 
 /// Reloads `webview` from its origin, bypassing the cache.
-pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>) -> PortResult {
+pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, _logger: &Logger) -> PortResult {
     webview
         .with_webview(|platform| webview_dialogs::reload_from_origin(&platform))
         .map_err(port_err)

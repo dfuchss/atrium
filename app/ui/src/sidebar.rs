@@ -357,6 +357,8 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
         })
     });
     let active = move || snapshot.with(|snapshot| snapshot.active == Some(id));
+    let badge_when_muted =
+        Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_when_muted));
     view! {
         <button
             class="acct"
@@ -385,7 +387,7 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
             }
         >
             {move || account.get().map(|account| {
-                let show_badge = account.settings.show_badge;
+                let show_badge = account.settings.shows_badge(badge_when_muted.get());
                 let muted = account.settings.muted;
                 let hibernated = account.settings.enabled && account.hibernated;
                 view! {

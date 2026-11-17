@@ -12,6 +12,7 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 ### Added
 
 - Right-clicking a service in the sidebar opens its menu: *Sleep* or *Wake Up*, *Settings…* (opens the service's settings) and *Reload*; the shown service cannot be put to sleep, and waking one up loads it in the background
+- Settings > Notifications > *Badge when muted* decides if an account with notifications off keeps its unread badge on the sidebar icon (on by default)
 
 ### Fixed
 

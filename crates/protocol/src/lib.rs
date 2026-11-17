@@ -222,6 +222,9 @@ pub struct AppSettings {
     /// Show the message text in notifications; otherwise only "New message".
     pub notification_preview: bool,
     pub notification_sound: bool,
+    /// Keep the sidebar unread badge of muted accounts (their unread never counts in the dock
+    /// badge).
+    pub badge_when_muted: bool,
     pub dock_badge: DockBadgeMode,
     pub launch_at_login: bool,
     /// Start with the window hidden (useful together with `launch_at_login`).
@@ -255,6 +258,7 @@ impl Default for AppSettings {
             dnd: false,
             notification_preview: true,
             notification_sound: true,
+            badge_when_muted: true,
             dock_badge: DockBadgeMode::All,
             launch_at_login: false,
             start_hidden: false,
@@ -379,6 +383,14 @@ pub struct AccountSettings {
     /// whatever the link target. Normalised by the core on update.
     #[serde(default)]
     pub app_hosts: Vec<String>,
+}
+
+impl AccountSettings {
+    /// The sidebar icon shows the unread badge (`AppSettings::badge_when_muted` for muted accounts).
+    #[must_use]
+    pub fn shows_badge(&self, badge_when_muted: bool) -> bool {
+        self.show_badge && (!self.muted || badge_when_muted)
+    }
 }
 
 fn yes() -> bool {

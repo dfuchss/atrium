@@ -75,6 +75,7 @@ pub(super) fn NotificationsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView 
             {app_toggle(snapshot, "Do not disturb", "Suppress all notifications.", |settings| settings.dnd, |settings, enabled| settings.dnd = enabled)}
             {app_toggle(snapshot, "Message preview", "Otherwise only \u{201C}New message\u{201D} is shown.", |settings| settings.notification_preview, |settings, enabled| settings.notification_preview = enabled)}
             {app_toggle(snapshot, "Play sound", "", |settings| settings.notification_sound, |settings, enabled| settings.notification_sound = enabled)}
+            {app_toggle(snapshot, "Badge when muted", "Keep the unread badge on the sidebar icon of accounts whose notifications are off.", |settings| settings.badge_when_muted, |settings, enabled| settings.badge_when_muted = enabled)}
         </div>
     }
 }

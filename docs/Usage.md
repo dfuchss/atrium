@@ -58,7 +58,7 @@ Below them, *Service definition files* lists the TOML files of the services fold
 
 ### Notifications
 
-*Do not disturb* suppresses all notifications. *Message preview* shows the message text (otherwise only "New message"), *Play sound* plays the notification sound.
+*Do not disturb* suppresses all notifications. *Message preview* shows the message text (otherwise only "New message"), *Play sound* plays the notification sound. *Badge when muted* keeps or hides the sidebar badge of accounts with notifications off.
 
 ### Dock badge
 

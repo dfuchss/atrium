@@ -48,7 +48,7 @@ fn connect(set_snapshot: WriteSignal<Snapshot>, open_dialog: bool) {
 }
 
 /// `?dialog=<tab>&edit=<index>&addcustom=1&editservice=<file>` open the settings dialog in a given state, in the
-/// demo and in the app alike (screenshots without clicks, see README "Development").
+/// demo and in the app alike (screenshots without clicks, see "Debug options" in the wiki).
 fn initial_ui_state() -> (UiState, bool) {
     let dialog = query_param("dialog");
     let tab = dialog

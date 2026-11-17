@@ -3,7 +3,7 @@
 # --appimage also builds the AppImage and checks its desktop entry, icon and binary.
 #
 # Needs the system packages, Rust (with the wasm32-unknown-unknown target), Trunk and the Tauri CLI
-# from DEVELOPMENT.md ("Linux"). The AppImage check also needs the GStreamer plugins and tools
+# from "Building" in the wiki (Linux). The AppImage check also needs the GStreamer plugins and tools
 # named there and, for the start-up check, xvfb-run.
 # Usage: scripts/linux-check.sh [--appimage]
 set -euo pipefail
@@ -37,7 +37,7 @@ if [ "${build_appimage}" = true ]; then
   step "build the AppImage"
   # patchelf and file are run by the GStreamer bundling of linuxdeploy, jq and xxd by the checks below.
   for tool in patchelf file xxd jq; do
-    command -v "${tool}" > /dev/null || { echo "${tool} not found (see Linux in DEVELOPMENT.md)" >&2; exit 1; }
+    command -v "${tool}" > /dev/null || { echo "${tool} not found (see https://github.com/dfuchss/atrium/wiki/Building#linux)" >&2; exit 1; }
   done
   # The GStreamer bundling of linuxdeploy only guesses the Debian layout; point it at Fedora's.
   if [ -z "${GSTREAMER_PLUGINS_DIR:-}" ] && [ -d /usr/lib64/gstreamer-1.0 ]; then

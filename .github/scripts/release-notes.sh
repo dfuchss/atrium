@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Prints the release notes for a tag: the matching CHANGELOG.md section followed by the install instructions.
+# Prints the release notes for a tag: the matching CHANGELOG.md section, then the install template
+# (download overview and install steps).
 # Usage: release-notes.sh <tag> [changelog] [install-template]
 set -euo pipefail
 

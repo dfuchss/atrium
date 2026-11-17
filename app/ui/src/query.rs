@@ -1,4 +1,4 @@
-//! The page's query string: demo mode and the screenshot aids (README "Development").
+//! The page's query string: demo mode and the screenshot aids ("Debug options" in the wiki).
 
 use crate::tauri;
 

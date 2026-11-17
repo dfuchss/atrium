@@ -153,13 +153,16 @@ fn AddAccountForm(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                         prop:value=move || instance.get() on:input=move |event| instance.set(event_target_value(&event)) use:no_autocorrect />
                 </Row>
             })}
-            <Row label="">
-                // Beside the button: below it, the note would grow the row while it shows.
-                <div class="actions">
+            // The note takes the empty label column beside the button, which is always there and
+            // as wide as the labels: showing it never resizes or moves anything.
+            <div class="frow">
+                <span class="flabel added-note" title=move || added.get().map(|added_label| format!("Added {added_label}"))>
+                    {move || added.get().map(|added_label| format!("Added {added_label}"))}
+                </span>
+                <div class="fctl">
                     <button class="btn primary" type="submit" disabled=move || current().is_none()>"Add"</button>
-                    {move || added.get().map(|added_label| view! { <span class="added-note">{format!("Added {added_label}")}</span> })}
                 </div>
-            </Row>
+            </div>
         </form>
     }
 }

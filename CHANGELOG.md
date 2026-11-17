@@ -35,6 +35,12 @@ Atrium comes to Windows: an unsigned, self-updating executable for 64-bit Window
 
 - Element's unread count adds the badges of the top-level spaces when Home shows only some rooms (*Show all rooms in Home* off), and is at least the number of unread rooms in the title
 
+### Fixed
+
+#### All platforms
+
+- The *Add* button in Settings > Accounts no longer moves when the *Added* note appears: the note shows in the empty label column beside the button, and the add form's rows span its full width like those of the other settings
+
 ## 0.3.0
 
 Atrium runs on Linux: AppImages for x86_64 and aarch64 that update themselves, with Atrium's own JavaScript dialogs, the keyboard shortcuts with Ctrl, desktop integration, wake and crash recovery and a browser choice. Atrium also has a new app icon.

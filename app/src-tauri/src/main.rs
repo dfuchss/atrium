@@ -33,8 +33,8 @@ mod service_files;
 
 const MAIN_WINDOW: &str = "main";
 
-/// Development hooks, read from environment variables in debug builds only (README
-/// "Development"). Used to run a second, isolated instance with demo data, e.g. for screenshots.
+/// Development hooks, read from environment variables in debug builds only ("Debug
+/// options" in the wiki). Used to run a second, isolated instance with demo data, e.g. for screenshots.
 #[derive(Default)]
 struct DevHooks {
     /// `ATRIUM_CONFIG_DIR`: config folder (store, services folder, log) instead of the app's.

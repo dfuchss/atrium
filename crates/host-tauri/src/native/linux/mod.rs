@@ -16,10 +16,6 @@
 //! (`no_show_all`) and [`set_visible`] shows and hides them itself, since wry shows with
 //! `show_all` too.
 
-use std::fs::{DirBuilder, Permissions};
-use std::io;
-use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use domain::ports::PortResult;
@@ -30,7 +26,6 @@ use tauri::{
     AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Webview, WebviewBuilder,
     WebviewWindowBuilder, Window,
 };
-use uuid::Uuid;
 use webkit2gtk::{WebProcessTerminationReason, WebViewExt};
 
 use crate::webviews::view_account;
@@ -105,103 +100,6 @@ pub(crate) const TRAY_MENU_REPLACEABLE: bool = false;
 pub(crate) const USES_APP_MENU: bool = false;
 /// A popup (a related view of its opener) runs its opener's user scripts, not its own.
 pub(crate) const POPUPS_RUN_OPENER_SCRIPTS: bool = true;
-
-/// Folder of the per-account web data folders, `<app data>/webdata`. A development config
-/// folder (`ATRIUM_CONFIG_DIR`) does not move it, just as the data stores of macOS belong to
-/// the app: the startup sweep's guards keep protecting the real data.
-fn web_data_root<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<PathBuf> {
-    Ok(app.path().app_data_dir()?.join("webdata"))
-}
-
-/// Web data folder of the store `store_id` (an account id) in `root`.
-fn store_dir(root: &Path, store_id: [u8; 16]) -> PathBuf {
-    root.join(Uuid::from_bytes(store_id).hyphenated().to_string())
-}
-
-/// Mode of the web data folders: only the user may enter them.
-const PRIVATE_DIR_MODE: u32 = 0o700;
-
-/// Web data folder of `store_id` in `root`, made private (`0700`, like `root`) before
-/// `WebKitGTK` writes to it: it keeps the account's cookies in a plain text file. Folders of
-/// earlier runs are tightened too.
-fn private_store_dir(root: &Path, store_id: [u8; 16]) -> io::Result<PathBuf> {
-    let dir = store_dir(root, store_id);
-    for folder in [root, dir.as_path()] {
-        DirBuilder::new()
-            .recursive(true)
-            .mode(PRIVATE_DIR_MODE)
-            .create(folder)?;
-        std::fs::set_permissions(folder, Permissions::from_mode(PRIVATE_DIR_MODE))?;
-    }
-    Ok(dir)
-}
-
-/// The stores in `root`: its folders named by a hyphenated UUID; anything else is ignored. A
-/// missing `root` holds none.
-pub(crate) fn list_store_dirs(root: &Path) -> io::Result<Vec<[u8; 16]>> {
-    let entries = match std::fs::read_dir(root) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error),
-    };
-    let mut ids = Vec::new();
-    for entry in entries {
-        let entry = entry?;
-        if !entry.file_type()?.is_dir() {
-            continue;
-        }
-        let name = entry.file_name();
-        let Some(id) = name.to_str().and_then(|name| Uuid::try_parse(name).ok()) else {
-            continue;
-        };
-        if store_dir(root, id.into_bytes()) == entry.path() {
-            ids.push(id.into_bytes());
-        }
-    }
-    Ok(ids)
-}
-
-/// Deletes the web data folder of `store_id` in `root`; one that is already gone counts as
-/// deleted.
-pub(crate) fn remove_store_dir(root: &Path, store_id: [u8; 16]) -> io::Result<()> {
-    match std::fs::remove_dir_all(store_dir(root, store_id)) {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        result => result,
-    }
-}
-
-/// Keeps the view's web data in the account's own folder (a `WebContext` of its own).
-pub(crate) fn isolate_view<R: Runtime>(
-    builder: WebviewBuilder<R>,
-    app: &AppHandle<R>,
-    store_id: [u8; 16],
-) -> tauri::Result<WebviewBuilder<R>> {
-    Ok(builder.data_directory(private_store_dir(&web_data_root(app)?, store_id)?))
-}
-
-/// Keeps the window's web data in the account's folder, the same `WebContext` as its view.
-pub(crate) fn isolate_window<'a, R: Runtime, M: Manager<R>>(
-    builder: WebviewWindowBuilder<'a, R, M>,
-    app: &AppHandle<R>,
-    store_id: [u8; 16],
-) -> tauri::Result<WebviewWindowBuilder<'a, R, M>> {
-    Ok(builder.data_directory(private_store_dir(&web_data_root(app)?, store_id)?))
-}
-
-/// The accounts that have a web data folder.
-pub(crate) fn data_store_ids<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Vec<[u8; 16]>> {
-    Ok(list_store_dirs(&web_data_root(app)?)?)
-}
-
-/// Deletes the web data folder of `store_id`. Tauri keeps a `WebContext` alive until the app
-/// exits (tauri#14626), so `WebKit` may still write into the folder of a just-closed account;
-/// what it leaves is removed again at the next start.
-pub(crate) fn remove_data_store<R: Runtime>(
-    app: &AppHandle<R>,
-    store_id: [u8; 16],
-) -> tauri::Result<()> {
-    Ok(remove_store_dir(&web_data_root(app)?, store_id)?)
-}
 
 /// Logical pixels as GTK takes them.
 #[expect(
@@ -436,49 +334,5 @@ mod tests {
             WebProcessTerminationReason::ExceededMemoryLimit
         ));
         assert!(!reload_after(WebProcessTerminationReason::TerminatedByApi));
-    }
-
-    #[test]
-    fn stores_are_the_uuid_folders() {
-        let root = tempfile::tempdir().unwrap();
-        let (kept, removed) = (Uuid::from_u128(1), Uuid::from_u128(2));
-        for id in [kept, removed] {
-            std::fs::create_dir(store_dir(root.path(), id.into_bytes())).unwrap();
-        }
-        std::fs::create_dir(root.path().join(kept.simple().to_string())).unwrap();
-        std::fs::create_dir(root.path().join("not-a-store")).unwrap();
-        std::fs::write(root.path().join(Uuid::from_u128(3).to_string()), "x").unwrap();
-        let mut listed = list_store_dirs(root.path()).unwrap();
-        listed.sort_unstable();
-        assert_eq!(listed, vec![kept.into_bytes(), removed.into_bytes()]);
-
-        remove_store_dir(root.path(), removed.into_bytes()).unwrap();
-        remove_store_dir(root.path(), removed.into_bytes()).unwrap();
-        assert_eq!(
-            list_store_dirs(root.path()).unwrap(),
-            vec![kept.into_bytes()]
-        );
-        assert!(
-            list_store_dirs(&root.path().join("missing"))
-                .unwrap()
-                .is_empty()
-        );
-    }
-
-    #[test]
-    fn store_folders_are_private() {
-        let base = tempfile::tempdir().unwrap();
-        let root = base.path().join("webdata");
-        let (fresh, earlier) = (Uuid::from_u128(1), Uuid::from_u128(2));
-        std::fs::create_dir_all(store_dir(&root, earlier.into_bytes())).unwrap();
-        std::fs::set_permissions(&root, Permissions::from_mode(0o755)).unwrap();
-        for id in [fresh, earlier] {
-            let dir = private_store_dir(&root, id.into_bytes()).unwrap();
-            assert_eq!(dir, store_dir(&root, id.into_bytes()));
-            for folder in [&root, &dir] {
-                let mode = std::fs::metadata(folder).unwrap().permissions().mode();
-                assert_eq!(mode & 0o777, 0o700, "{}", folder.display());
-            }
-        }
     }
 }

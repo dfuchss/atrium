@@ -111,13 +111,15 @@ impl AccountDraft {
             badge_style: RwSignal::new(
                 settings
                     .badge_style
-                    .map_or_default(|style| style.name().to_string()),
+                    .map(|style| style.name().to_string())
+                    .unwrap_or_default(),
             ),
             in_dock_badge: RwSignal::new(settings.in_dock_badge),
             dock_badge: RwSignal::new(
                 settings
                     .dock_badge
-                    .map_or_default(|mode| mode.name().to_string()),
+                    .map(|mode| mode.name().to_string())
+                    .unwrap_or_default(),
             ),
             enabled: RwSignal::new(settings.enabled),
             start_asleep: RwSignal::new(settings.start_asleep),
@@ -140,12 +142,14 @@ impl AccountDraft {
             hibernate_after: RwSignal::new(
                 settings
                     .hibernate_after_min
-                    .map_or_default(|minutes| minutes.to_string()),
+                    .map(|minutes| minutes.to_string())
+                    .unwrap_or_default(),
             ),
             after_wake: RwSignal::new(
                 settings
                     .after_wake
-                    .map_or_default(|mode| mode.name().to_string()),
+                    .map(|mode| mode.name().to_string())
+                    .unwrap_or_default(),
             ),
             custom_css: RwSignal::new(settings.custom_css.clone().unwrap_or_default()),
             app_hosts: RwSignal::new(settings.app_hosts.join("\n")),
@@ -279,7 +283,11 @@ pub(super) fn EditForm(
 }
 
 /// Button of a segmented control bound to a draft field; `value` "" is the global setting.
-fn draft_segment(field: RwSignal<String>, value: &'static str, label: &'static str) -> impl IntoView {
+fn draft_segment(
+    field: RwSignal<String>,
+    value: &'static str,
+    label: &'static str,
+) -> impl IntoView {
     view! {
         <button type="button" class="btn" class:on=move || field.get() == value on:click=move |_| field.set(value.to_string())>{label}</button>
     }

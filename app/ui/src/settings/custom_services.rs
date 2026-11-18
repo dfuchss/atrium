@@ -79,7 +79,8 @@ fn CustomServiceRow(
         .name
         .chars()
         .next()
-        .map_or_default(|first| first.to_uppercase().to_string());
+        .map(|first| first.to_uppercase().to_string())
+        .unwrap_or_default();
     view! {
         <div class="row">
             {icon_view(IconFace::Initials(initial), &service.color, true)}

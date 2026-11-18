@@ -252,7 +252,8 @@ fn app_info(
         services_dir: services_dir.display().to_string(),
         log_file: host
             .log_file()
-            .map_or_default(|path| path.display().to_string()),
+            .map(|path| path.display().to_string())
+            .unwrap_or_default(),
     }
 }
 

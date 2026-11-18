@@ -64,7 +64,6 @@ fn initial_ui_state() -> (UiState, bool) {
         add_custom: RwSignal::new(query_param("addcustom").is_some_and(|value| value != "0")),
         edit_service: RwSignal::new(query_param("editservice").filter(|name| !name.is_empty())),
         edit_account: RwSignal::new(None),
-        edit_seen: RwSignal::new(None),
     };
     (state, dialog.is_some())
 }

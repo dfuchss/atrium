@@ -283,6 +283,17 @@ fn account_menu_sleep_and_wake_up() {
 }
 
 #[test]
+fn selecting_an_account_drops_the_edit_request() {
+    let (mut core, _) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
+    core.handle(Input::AccountMenu {
+        account: id(2),
+        action: AccountMenuAction::Settings,
+    });
+    let effects = core.handle(Input::Ui(UiCommand::Select { account: id(1) }));
+    assert_eq!(last_snapshot(&effects).edit_request, None);
+}
+
+#[test]
 fn account_menu_settings_and_reload() {
     let (mut core, _) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
     let effects = core.handle(Input::AccountMenu {

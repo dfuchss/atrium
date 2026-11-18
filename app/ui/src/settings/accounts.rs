@@ -24,20 +24,9 @@ const ADDED_NOTE_DURATION: Duration = Duration::from_secs(3);
 pub(super) fn AccountsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     let ui = expect_context::<UiState>();
     // Which account is being edited; its draft lives inside `EditForm`.
-    let initial_edit = ui
-        .edit_index
-        .get_untracked()
-        .and_then(|index| {
-            snapshot
-                .with_untracked(|snapshot| snapshot.accounts.get(index).map(|account| account.id))
-        })
-        .or_else(|| {
-            let request = snapshot.with_untracked(|snapshot| snapshot.edit_request)?;
-            (ui.edit_seen.get_untracked() != Some(request.seq)).then(|| {
-                ui.edit_seen.set(Some(request.seq));
-                request.account
-            })
-        });
+    let initial_edit = ui.edit_index.get_untracked().and_then(|index| {
+        snapshot.with_untracked(|snapshot| snapshot.accounts.get(index).map(|account| account.id))
+    });
     ui.edit_index.set(None);
     if let Some(id) = initial_edit {
         scroll_to_id(account_dom_id(id));

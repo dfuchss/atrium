@@ -22,6 +22,21 @@ fn title_unread_and_dock_badge() {
 }
 
 #[test]
+fn slack_title_counts_new_items() {
+    let (mut core, _) = started(vec![account(1, "slack", "Slack")]);
+    let mut unread = |title: &str| {
+        let effects = core.handle(Input::TitleChanged {
+            account: id(1),
+            title: title.into(),
+        });
+        last_snapshot(&effects).accounts[0].unread
+    };
+    assert_eq!(unread("dev (Channel) - Team - 1 new item - Slack"), 1);
+    assert_eq!(unread("dev (Channel) - Team - 12 new items - Slack"), 12);
+    assert_eq!(unread("dev (Channel) - Team - Slack"), 0);
+}
+
+#[test]
 fn muted_not_in_badge() {
     let mut a = account(1, "discord", "Discord");
     a.settings.muted = true;
@@ -202,7 +217,7 @@ fn a_broken_expression_stays_out_of_the_drain_script() {
 
 #[test]
 fn tick_script_exact_and_unknown_account() {
-    let (mut core, _) = started(vec![account(1, "slack", "Slack")]);
+    let (mut core, _) = started(vec![account(1, "discord", "Discord")]);
     let effects = core.handle(Input::Tick { now_ms: 1000 });
     assert_eq!(
         effects,

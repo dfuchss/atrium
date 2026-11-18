@@ -15,6 +15,7 @@
 //! (`no_show_all`) and [`set_visible`] shows and hides them itself, since wry shows with
 //! `show_all` too.
 
+use std::convert::Infallible;
 use std::time::Duration;
 
 use domain::ports::PortResult;
@@ -27,7 +28,8 @@ use tauri::{
 };
 use webkit2gtk::{WebProcessTerminationReason, WebViewExt};
 
-use crate::webviews::view_account;
+use super::with_platform_webview;
+use crate::labels::view_account;
 use crate::{Feed, Input, Logger, port_err};
 
 mod browsers;
@@ -39,7 +41,7 @@ mod theme;
 pub(crate) use browsers::{installed_browsers, open_url_with};
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
 pub(crate) use resume::observe_resume;
-pub(crate) use shortcuts::Shortcuts;
+pub(crate) use shortcuts::install_shortcuts;
 pub(crate) use theme::clean_launch_environment;
 
 /// How long a D-Bus method call may take; a desktop without the service answers at once, a
@@ -188,23 +190,24 @@ pub(crate) fn observe_web_process_termination<R: Runtime>(
 ) {
     let label = webview.label().to_string();
     let (feed, signal_logger) = (feed.clone(), logger.clone());
-    let connected = webview.with_webview(move |platform| {
-        platform
-            .inner()
-            .connect_web_process_terminated(move |_, reason| {
-                let Some(account) = view_account(&label).filter(|_| reload_after(reason)) else {
-                    return;
-                };
-                signal_logger.log(&format!("[{account}] web process ended: {reason:?}"));
-                feed(Input::WebProcessTerminated { account });
-            });
-    });
-    if let Err(error) = connected {
-        logger.log(&format!(
-            "[{}] cannot watch the web process: {error}",
-            webview.label()
-        ));
-    }
+    with_platform_webview(
+        webview,
+        logger,
+        "cannot watch the web process",
+        |platform| {
+            platform
+                .inner()
+                .connect_web_process_terminated(move |_, reason| {
+                    let Some(account) = view_account(&label).filter(|_| reload_after(reason))
+                    else {
+                        return;
+                    };
+                    signal_logger.log(&format!("[{account}] web process ended: {reason:?}"));
+                    feed(Input::WebProcessTerminated { account });
+                });
+            Ok::<(), Infallible>(())
+        },
+    );
 }
 
 /// Adds a service view to `window` (called on the main thread).

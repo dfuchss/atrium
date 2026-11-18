@@ -1,45 +1,27 @@
 //! Service views: one child webview per account in the main window, with its native hooks.
 
-use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::sync::{Arc, PoisonError, mpsc};
 use std::time::Duration;
 
 use domain::ports::{PortError, PortResult, WebviewHost};
-use domain::{Account, Bounds, ViewPolicy, ViewSpec, redact_url, unused_store_ids};
-use protocol::{Snapshot, UI_WEBVIEW};
+use domain::{Bounds, ViewPolicy, ViewSpec, redact_url};
+use protocol::UI_WEBVIEW;
 use tauri::utils::config::BackgroundThrottlingPolicy;
-use tauri::webview::{DownloadEvent, PageLoadEvent};
-use tauri::{AppHandle, Manager, Runtime, Url, Webview, WebviewBuilder, WebviewUrl, Window};
+use tauri::webview::PageLoadEvent;
+use tauri::{AppHandle, Manager, Runtime, Webview, WebviewBuilder, WebviewUrl, Window};
 use uuid::Uuid;
 
-use crate::dialogs::Dialogs;
-use crate::links::{CLOSE_HOOK, LinkPolicy, navigation_hook, permission_hook, popup_label_prefix};
+use crate::data_stores::delete_data_store;
+use crate::downloads::download_hook;
+use crate::labels::{popup_label_prefix, view_label};
+use crate::links::{CLOSE_HOOK, LinkPolicy};
 use crate::logger::spawn_logged;
 use crate::native;
-use crate::{Feed, Input, Logger, TauriHost, port_err};
+use crate::page_hooks::{navigation_hook, permission_hook};
+use crate::{Input, TauriHost, port_err};
 
 /// Time `WebKit` gets to delete the browsing data before the view reloads.
 const CLEAR_DATA_RELOAD_DELAY: Duration = Duration::from_millis(800);
-
-/// Pauses before retrying a failed data store deletion: right after its view closed, `WebKit`
-/// may still hold the store.
-const REMOVE_STORE_RETRY_DELAYS: [Duration; 3] = [
-    Duration::from_secs(1),
-    Duration::from_secs(5),
-    Duration::from_secs(30),
-];
-
-/// Longest wait for the views and windows of a removed account to disappear before its data
-/// store is deleted anyway (the retries below may still cover a slow close).
-const ACCOUNT_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
-const ACCOUNT_CLOSE_POLL: Duration = Duration::from_millis(100);
-
-/// True if `label` is the service view or an in-app window of `account`.
-fn belongs_to_account(label: &str, account: Uuid) -> bool {
-    label == view_label(account) || label.starts_with(&popup_label_prefix(account))
-}
 
 /// A service view's init script: the service's, then the development script, if any, and, if
 /// `popups_run_its_scripts`, the popups' [`CLOSE_HOOK`], which they run only that way.
@@ -59,149 +41,6 @@ pub(crate) fn popup_labels<R: Runtime>(app: &AppHandle<R>, account: Uuid) -> Vec
         .into_keys()
         .filter(|label| label.starts_with(&prefix))
         .collect()
-}
-
-/// Blocks until no view or window of `account` remains, for at most [`ACCOUNT_CLOSE_TIMEOUT`]:
-/// `WebKit` refuses to delete a data store that a live page still uses.
-fn wait_until_account_closed<R: Runtime>(app: &AppHandle<R>, account: Uuid, logger: &Logger) {
-    let mut waited = Duration::ZERO;
-    while app
-        .webviews()
-        .keys()
-        .any(|label| belongs_to_account(label, account))
-    {
-        if waited >= ACCOUNT_CLOSE_TIMEOUT {
-            logger.log(&format!(
-                "[{account}] views or windows still open after {} s, deleting data anyway",
-                waited.as_secs()
-            ));
-            return;
-        }
-        std::thread::sleep(ACCOUNT_CLOSE_POLL);
-        waited += ACCOUNT_CLOSE_POLL;
-    }
-}
-
-/// Deletes the data store `store_id`, retrying after [`REMOVE_STORE_RETRY_DELAYS`]. Blocks, so
-/// it runs on a thread of its own, never on the actor or the main thread.
-fn remove_data_store_with_retries<R: Runtime>(
-    app: &AppHandle<R>,
-    store_id: [u8; 16],
-    logger: &Logger,
-) {
-    let store = Uuid::from_bytes(store_id);
-    let mut result = native::remove_data_store(app, store_id);
-    for delay in REMOVE_STORE_RETRY_DELAYS {
-        let Err(error) = &result else {
-            break;
-        };
-        logger.log(&format!(
-            "cannot delete data store {store}: {error}; retrying in {} s",
-            delay.as_secs()
-        ));
-        std::thread::sleep(delay);
-        result = native::remove_data_store(app, store_id);
-    }
-    match result {
-        Ok(()) => logger.log(&format!("deleted data store {store}")),
-        Err(error) => logger.log(&format!(
-            "giving up deleting data store {store}: {error} (removed again at the next start)"
-        )),
-    }
-}
-
-/// Start of the labels of service webviews.
-const VIEW_LABEL_PREFIX: &str = "svc-";
-
-/// Label of the service webview of `account`.
-pub(crate) fn view_label(account: Uuid) -> String {
-    format!("{VIEW_LABEL_PREFIX}{}", account.simple())
-}
-
-/// The account whose service webview has `label`; None for any other webview (for the crash
-/// hooks).
-pub(crate) fn view_account(label: &str) -> Option<Uuid> {
-    let id = label.strip_prefix(VIEW_LABEL_PREFIX)?;
-    Uuid::try_parse(id).ok()
-}
-
-/// `dir/name`, or `dir/stem (n).ext` for the first `n` that does not exist yet, so a download
-/// never replaces an existing file.
-fn unused_path(dir: &Path, name: &OsStr) -> PathBuf {
-    let candidate = dir.join(name);
-    if !candidate.exists() {
-        return candidate;
-    }
-    let original = Path::new(name);
-    let stem = original.file_stem().unwrap_or(name).to_string_lossy();
-    let extension = original.extension().map_or_else(String::new, |extension| {
-        format!(".{}", extension.to_string_lossy())
-    });
-    (1..u32::MAX)
-        .map(|n| dir.join(format!("{stem} ({n}){extension}")))
-        .find(|path| !path.exists())
-        .unwrap_or(candidate)
-}
-
-/// Name a download is saved under: the file name the page suggested, or None for hidden
-/// (dot) files, which would land unseen in Downloads (e.g. `.zshrc`, `.htaccess`).
-fn download_file_name(suggested: &Path) -> Option<String> {
-    let name = suggested.file_name().map_or_else(
-        || "download".into(),
-        |name| name.to_string_lossy().into_owned(),
-    );
-    (!name.starts_with('.')).then_some(name)
-}
-
-/// Download handler: saves into the user's Downloads folder (quarantined by macOS, see
-/// `LSFileQuarantineEnabled` in Info.plist), refuses hidden files and reports finished
-/// downloads as [`Input::DownloadFinished`]. On macOS `Finished` carries no path, so the name
-/// is remembered per URL from `Requested`.
-fn download_hook<R: Runtime>(
-    app: AppHandle<R>,
-    account: Uuid,
-    logger: Logger,
-    feed: Feed,
-) -> impl Fn(Webview<R>, DownloadEvent<'_>) -> bool + Send + Sync + 'static {
-    let pending: Mutex<HashMap<Url, String>> = Mutex::default();
-    move |_, event| match event {
-        DownloadEvent::Requested { url, destination } => {
-            let shown_url = redact_url(url.as_str());
-            let Some(name) = download_file_name(destination) else {
-                logger.log(&format!(
-                    "[{account}] download {shown_url} refused: hidden file name"
-                ));
-                return false;
-            };
-            if let Ok(dir) = app.path().download_dir() {
-                *destination = unused_path(&dir, OsStr::new(&name));
-            }
-            logger.log(&format!(
-                "[{account}] download {shown_url} -> {}",
-                destination.display()
-            ));
-            pending
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(url, name);
-            true
-        }
-        DownloadEvent::Finished { url, success, .. } => {
-            logger.log(&format!(
-                "[{account}] download finished {} ok={success}",
-                redact_url(url.as_str())
-            ));
-            let name = pending
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&url);
-            if let (true, Some(file_name)) = (success, name) {
-                feed(Input::DownloadFinished { account, file_name });
-            }
-            true
-        }
-        _ => true,
-    }
 }
 
 /// Builds the service view on the main thread (also when called from elsewhere; waits for it),
@@ -318,7 +157,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         }
         let builder = self.hook(spec, builder);
         let webview = add_service_view(&self.window()?, builder, spec.store_id, bounds)?;
-        Dialogs::attach(&webview, &self.logger);
+        native::attach_dialogs(&webview, &self.logger);
         native::observe_web_process_termination(&webview, &self.feed, &self.logger);
         if !visible {
             native::set_visible(&webview, false)?;
@@ -399,7 +238,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         webview.clear_all_browsing_data().map_err(port_err)?;
         // The deletion is asynchronous; reload once it has most likely finished.
         let logger = self.logger.clone();
-        std::thread::spawn(move || {
+        spawn_logged("clear-data", &self.logger, move || {
             std::thread::sleep(CLEAR_DATA_RELOAD_DELAY);
             let result = webview.reload();
             logger.log(&format!(
@@ -434,72 +273,8 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
     }
 
     fn delete_profile(&self, store_id: [u8; 16]) -> PortResult {
-        let (app, logger) = (self.app.clone(), self.logger.clone());
-        // A data store id is its account's id.
-        let account = Uuid::from_bytes(store_id);
-        spawn_logged("remove-store", &self.logger, move || {
-            wait_until_account_closed(&app, account, &logger);
-            remove_data_store_with_retries(&app, store_id, &logger);
-        });
+        delete_data_store(&self.app, &self.logger, store_id);
         Ok(())
-    }
-}
-
-/// Whether the data store of `account` is in use now: the account is one of `current` (the
-/// accounts of the live snapshot) or one of its views or windows is open (`labels`). The sweep lists the stores while the
-/// app already runs, so an account added meanwhile has a store that the startup list lacks; its
-/// view is open before the snapshot shows the account.
-fn store_in_use<'a>(
-    account: Uuid,
-    current: &[Uuid],
-    mut labels: impl Iterator<Item = &'a str>,
-) -> bool {
-    current.contains(&account) || labels.any(|label| belongs_to_account(label, account))
-}
-
-/// The ids of the accounts in `snapshot`.
-fn account_ids(snapshot: &Mutex<Snapshot>) -> Vec<Uuid> {
-    let snapshot = snapshot.lock().unwrap_or_else(PoisonError::into_inner);
-    snapshot.accounts.iter().map(|view| view.id).collect()
-}
-
-impl<R: Runtime> TauriHost<R> {
-    /// Deletes, in the background, the data stores of this app that belong to none of
-    /// `accounts` and are not in use when they are deleted (see [`store_in_use`]; `current` is
-    /// the live snapshot). Call it only with the complete account list (see
-    /// `FsStore::lists_all_accounts`).
-    pub fn remove_unused_data_stores(&self, accounts: Vec<Account>, current: Arc<Mutex<Snapshot>>) {
-        let (app, logger) = (self.app.clone(), self.logger.clone());
-        spawn_logged("unused-stores", &self.logger, move || {
-            let existing = match native::data_store_ids(&app) {
-                Ok(existing) => existing,
-                Err(error) => {
-                    logger.log(&format!("cannot list data stores: {error}"));
-                    return;
-                }
-            };
-            let unused = unused_store_ids(&existing, &accounts);
-            logger.log(&format!(
-                "{} data stores, {} without account",
-                existing.len(),
-                unused.len()
-            ));
-            for store_id in unused {
-                let account = Uuid::from_bytes(store_id);
-                let in_use = store_in_use(
-                    account,
-                    &account_ids(&current),
-                    app.webviews().keys().map(String::as_str),
-                );
-                if in_use {
-                    logger.log(&format!(
-                        "keeping data store {account}: its account was added"
-                    ));
-                } else {
-                    remove_data_store_with_retries(&app, store_id, &logger);
-                }
-            }
-        });
     }
 }
 
@@ -519,80 +294,5 @@ mod tests {
             service_view_script("s", None, true),
             format!("s\n{CLOSE_HOOK}")
         );
-    }
-
-    #[test]
-    fn stores_of_current_accounts_or_open_views_are_in_use() {
-        let (listed, viewed, orphan) = (Uuid::from_u128(1), Uuid::from_u128(2), Uuid::from_u128(3));
-        let current = [listed];
-        let labels = [view_label(viewed), UI_WEBVIEW.to_string()];
-        let open = || labels.iter().map(String::as_str);
-        assert!(store_in_use(listed, &current, open()));
-        assert!(store_in_use(viewed, &current, open()));
-        assert!(!store_in_use(orphan, &current, open()));
-        let popup = [crate::links::popup_label(orphan, 4)];
-        assert!(store_in_use(
-            orphan,
-            &current,
-            popup.iter().map(String::as_str)
-        ));
-    }
-
-    #[test]
-    fn hidden_downloads_are_refused() {
-        assert_eq!(
-            download_file_name(Path::new("/tmp/report.pdf")).as_deref(),
-            Some("report.pdf")
-        );
-        assert_eq!(
-            download_file_name(Path::new("/")).as_deref(),
-            Some("download")
-        );
-        assert_eq!(download_file_name(Path::new("/tmp/.zshrc")), None);
-        assert_eq!(download_file_name(Path::new(".hidden")), None);
-    }
-
-    #[test]
-    fn account_labels_do_not_match_other_accounts() {
-        let (first, second) = (Uuid::from_u128(1), Uuid::from_u128(2));
-        assert!(belongs_to_account(&view_label(first), first));
-        assert!(belongs_to_account(
-            &crate::links::popup_label(first, 7),
-            first
-        ));
-        assert!(!belongs_to_account(&view_label(second), first));
-        assert!(!belongs_to_account(
-            &crate::links::popup_label(second, 7),
-            first
-        ));
-        assert!(!belongs_to_account("ui", first));
-    }
-
-    #[test]
-    fn view_account_reads_service_view_labels_only() {
-        let account = Uuid::from_u128(0x2a);
-        assert_eq!(view_account(&view_label(account)), Some(account));
-        assert_eq!(view_account(UI_WEBVIEW), None);
-        assert_eq!(view_account(&crate::links::popup_label(account, 1)), None);
-        assert_eq!(view_account("svc-nonsense"), None);
-    }
-
-    #[test]
-    fn view_label_uses_simple_uuid() {
-        let id = Uuid::from_u128(0x0123_4567_89ab_cdef_0123_4567_89ab_cdef);
-        assert_eq!(view_label(id), "svc-0123456789abcdef0123456789abcdef");
-    }
-
-    #[test]
-    fn downloads_never_replace_existing_files() {
-        let dir = std::env::temp_dir().join(format!("atrium-dl-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let name = OsStr::new("report.pdf");
-        assert_eq!(unused_path(&dir, name), dir.join("report.pdf"));
-        std::fs::write(dir.join("report.pdf"), "x").unwrap();
-        assert_eq!(unused_path(&dir, name), dir.join("report (1).pdf"));
-        std::fs::write(dir.join("report (1).pdf"), "x").unwrap();
-        assert_eq!(unused_path(&dir, name), dir.join("report (2).pdf"));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

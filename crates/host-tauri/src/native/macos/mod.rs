@@ -1,6 +1,7 @@
 //! macOS: `WebKit` data stores per account, native JavaScript dialogs and a menu bar template
 //! icon, through `webview_dialogs` where Tauri has no API.
 
+use std::convert::Infallible;
 use std::sync::Arc;
 
 use domain::ports::{PortError, PortResult};
@@ -14,7 +15,8 @@ use tauri_plugin_opener::OpenerExt;
 use webview_dialogs::{DialogHandler, MainThreadMarker};
 
 pub(crate) use super::child_views::add_child_at as add_child;
-use crate::webviews::view_account;
+use super::with_platform_webview;
+use crate::labels::view_account;
 use crate::{Feed, Input, Logger, port_err};
 
 /// Sound name that makes `NSUserNotification` play the user's default notification sound
@@ -223,18 +225,15 @@ pub(crate) fn install_dialogs<R: Runtime>(
         return;
     };
     let install_logger = logger.clone();
-    let scheduled =
-        sidebar.with_webview(
-            move |platform| match webview_dialogs::install(&platform, handler) {
-                Ok(()) => install_logger.log("JavaScript dialogs installed"),
-                Err(error) => {
-                    install_logger.log(&format!("JavaScript dialogs unavailable: {error}"));
-                }
-            },
-        );
-    if let Err(error) = scheduled {
-        logger.log(&format!("JavaScript dialogs unavailable: {error}"));
-    }
+    with_platform_webview(
+        &sidebar,
+        logger,
+        "JavaScript dialogs unavailable",
+        move |platform| {
+            webview_dialogs::install(&platform, handler)
+                .map(|()| install_logger.log("JavaScript dialogs installed"))
+        },
+    );
 }
 
 /// Replaces Tauri's default for a terminated web content process, which reloads the webview
@@ -265,15 +264,16 @@ pub(crate) fn observe_web_process_termination<R: Runtime>(
 ) {
 }
 
-/// Makes the dialogs of `webview` carry its label (see `dialogs::account_of_label`).
+/// Makes the dialogs of `webview` carry its label (see `labels::account_of_label`).
 pub(crate) fn attach_dialogs<R: Runtime>(webview: &Webview<R>, logger: &Logger) {
     let label = webview.label().to_string();
-    let tagged =
-        webview.with_webview(move |platform| webview_dialogs::tag_webview(&platform, &label));
-    if let Err(error) = tagged {
-        logger.log(&format!(
-            "[{}] cannot tag webview for dialogs: {error}",
-            webview.label()
-        ));
-    }
+    with_platform_webview(
+        webview,
+        logger,
+        "cannot tag webview for dialogs",
+        move |platform| {
+            webview_dialogs::tag_webview(&platform, &label);
+            Ok::<(), Infallible>(())
+        },
+    );
 }

@@ -8,11 +8,11 @@ use std::sync::{Arc, Mutex, PoisonError};
 use domain::MenuModel;
 use tauri::{AppHandle, Manager, Runtime};
 
-use crate::Feed;
 use crate::menus::{
     ACCOUNT_SHORTCUTS, ID_ZOOM_IN, ITEM_SHORTCUTS, Shortcut, account_item_id, account_shortcut,
     handle_menu_event,
 };
+use crate::{Feed, native};
 
 /// What a shortcut does.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -100,6 +100,40 @@ impl<R: Runtime> ShortcutActions<R> {
 
     fn item(&self, id: &str) {
         handle_menu_event(&self.app, &self.label, id, &self.feed);
+    }
+}
+
+/// The keyboard shortcuts of the main window; the platform maps them to its keys
+/// (`native::install_shortcuts`).
+pub(crate) struct Shortcuts {
+    accounts: ShortcutAccounts,
+}
+
+impl Shortcuts {
+    pub(crate) fn new() -> Shortcuts {
+        Shortcuts {
+            accounts: ShortcutAccounts::default(),
+        }
+    }
+
+    /// Makes the shortcuts of the window `window_label` work; they feed their inputs to `feed`.
+    pub(crate) fn install<R: Runtime>(
+        &mut self,
+        app: &AppHandle<R>,
+        window_label: &str,
+        feed: &Feed,
+    ) -> tauri::Result<()> {
+        native::install_shortcuts(ShortcutActions {
+            app: app.clone(),
+            label: window_label.to_string(),
+            feed: feed.clone(),
+            accounts: self.accounts.clone(),
+        })
+    }
+
+    /// Takes the accounts for the account shortcuts from `model`.
+    pub(crate) fn set_accounts(&self, model: &MenuModel) {
+        self.accounts.set(model);
     }
 }
 

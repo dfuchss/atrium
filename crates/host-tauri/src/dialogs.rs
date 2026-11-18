@@ -19,12 +19,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use domain::RateLimiter;
 use protocol::Snapshot;
-use tauri::{AppHandle, Runtime, Webview};
+use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
 use webview_dialogs::{
     DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
 };
 
+use crate::labels::account_of_label;
 use crate::logger::{Logger, now_ms};
 use crate::native;
 
@@ -38,14 +39,6 @@ const OFFER_SUPPRESSION_FROM: u32 = 2;
 /// Shared policy state: written by the actor (snapshots, page loads) and the main thread
 /// (dialogs), held only briefly.
 type SharedDialogPolicy = Arc<Mutex<DialogPolicy>>;
-
-/// Account id in a service view label (`svc-<id>`) or a popup window label (`popup-<id>-<n>`).
-pub(crate) fn account_of_label(label: &str) -> Option<Uuid> {
-    let id = label
-        .strip_prefix("svc-")
-        .or_else(|| label.strip_prefix("popup-")?.split('-').next())?;
-    Uuid::try_parse(id).ok()
-}
 
 /// `host`, `host:port` for a non-default port, or None for pages without a host.
 pub(crate) fn origin_label(origin: &PageOrigin) -> Option<String> {
@@ -275,12 +268,6 @@ impl Dialogs {
         native::install_dialogs(app, handler, logger);
     }
 
-    /// Makes the dialogs of `webview` (a service view or a popup window) follow the policy, as
-    /// dialogs of the account in its label (see [`account_of_label`]).
-    pub(crate) fn attach<R: Runtime>(webview: &Webview<R>, logger: &Logger) {
-        native::attach_dialogs(webview, logger);
-    }
-
     /// The view of `account` loaded a page: earlier dialogs and a suppression no longer count.
     pub(crate) fn page_loaded(&self, account: Uuid) {
         self.policy
@@ -312,18 +299,6 @@ mod tests {
             },
             webview_tag: None,
         }
-    }
-
-    #[test]
-    fn account_is_read_from_view_and_popup_labels() {
-        let id = Uuid::from_u128(0xab);
-        assert_eq!(account_of_label(&format!("svc-{}", id.simple())), Some(id));
-        assert_eq!(
-            account_of_label(&format!("popup-{}-3", id.simple())),
-            Some(id)
-        );
-        assert_eq!(account_of_label("ui"), None);
-        assert_eq!(account_of_label("svc-nonsense"), None);
     }
 
     #[test]

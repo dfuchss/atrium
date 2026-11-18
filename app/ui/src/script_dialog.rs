@@ -5,15 +5,14 @@
 
 use leptos::prelude::*;
 use protocol::{
-    CMD_SCRIPT_DIALOG_ANSWER, CMD_SCRIPT_DIALOG_GET, CMD_SCRIPT_DIALOG_SHOW, ScriptDialog,
-    ScriptDialogAnswer, ScriptDialogKind,
+    CMD_SCRIPT_DIALOG_ANSWER, CMD_SCRIPT_DIALOG_GET, CMD_SCRIPT_DIALOG_SHOW, SUPPRESSION_TITLE,
+    ScriptDialog, ScriptDialogAnswer, ScriptDialogKind,
 };
 use serde::Serialize;
 use wasm_bindgen::{JsCast, JsValue};
 
 use crate::tauri;
 
-const SUPPRESSION_TITLE: &str = "Prevent this page from creating additional dialogs";
 const PANEL_ID: &str = "script-dialog";
 const TEXT_ID: &str = "script-dialog-text";
 const OK_ID: &str = "script-dialog-ok";

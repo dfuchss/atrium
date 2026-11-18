@@ -21,11 +21,22 @@
 //!   accounts.
 //! - OS integration: [`set_app_id`], [`set_badge`], [`show_warning`], [`observe_resume`],
 //!   [`guard_single_instance`], [`NOTIFICATION_SOUND`], the tray icon and whether an app menu
-//!   is shown; [`Shortcuts`] where there is no app menu to carry them; [`announce_new_icons`]
+//!   is shown; [`install_shortcuts`] maps the window shortcuts to the keys where there is no
+//!   app menu to carry them (macOS has an empty [`Shortcuts`] instead); [`announce_new_icons`]
 //!   after the desktop entry's icons changed.
 //! - Settings: [`open_url_with`] opens links in the chosen browser, [`installed_browsers`]
 //!   lists the browsers to choose from; [`clean_launch_environment`] removes what the launcher
 //!   set that would override the theme.
+//!
+//! [`with_platform_webview`] runs a job on the engine's own webview, for the calls Tauri has no
+//! API for.
+
+use std::fmt::Display;
+
+use tauri::webview::PlatformWebview;
+use tauri::{Runtime, Webview};
+
+use crate::Logger;
 
 #[cfg(not(target_os = "linux"))]
 mod child_views;
@@ -55,3 +66,22 @@ pub(crate) use windows::*;
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 compile_error!("Atrium runs on macOS, Linux and Windows only");
+
+/// Runs `job` with the engine's webview of `webview` on the main thread; a failure of the job,
+/// or to schedule it, is logged as `[<label>] <failure>: <error>`.
+pub(crate) fn with_platform_webview<R: Runtime, E: Display>(
+    webview: &Webview<R>,
+    logger: &Logger,
+    failure: &'static str,
+    job: impl FnOnce(PlatformWebview) -> Result<(), E> + Send + 'static,
+) {
+    let (label, job_logger) = (webview.label().to_string(), logger.clone());
+    let scheduled = webview.with_webview(move |platform| {
+        if let Err(error) = job(platform) {
+            job_logger.log(&format!("[{label}] {failure}: {error}"));
+        }
+    });
+    if let Err(error) = scheduled {
+        logger.log(&format!("[{}] {failure}: {error}", webview.label()));
+    }
+}

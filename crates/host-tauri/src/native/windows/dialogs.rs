@@ -25,6 +25,7 @@ use webview_dialogs::{DialogAnswer, DialogHandler, DialogKind, ShownDialog};
 
 use crate::Logger;
 use crate::logger::spawn_logged;
+use crate::native::with_platform_webview;
 
 /// Name of the plugin the dialog windows answer through (see `protocol::script_dialog`).
 const PLUGIN: &str = "script-dialog";
@@ -73,20 +74,12 @@ pub(crate) fn install_dialogs<R: Runtime>(
 }
 
 /// Shows the dialogs of `webview` through the installed handler; they carry its label (see
-/// `dialogs::account_of_label`).
+/// `labels::account_of_label`).
 pub(crate) fn attach_dialogs<R: Runtime>(webview: &Webview<R>, logger: &Logger) {
-    let (label, attach_logger) = (webview.label().to_string(), logger.clone());
-    let scheduled = webview.with_webview(move |platform| {
-        if let Err(error) = webview_dialogs::attach(&platform.controller(), &label) {
-            attach_logger.log(&format!("[{label}] cannot attach dialogs: {error}"));
-        }
+    let label = webview.label().to_string();
+    with_platform_webview(webview, logger, "cannot attach dialogs", move |platform| {
+        webview_dialogs::attach(&platform.controller(), &label)
     });
-    if let Err(error) = scheduled {
-        logger.log(&format!(
-            "[{}] cannot attach dialogs: {error}",
-            webview.label()
-        ));
-    }
 }
 
 /// The commands of the dialog windows. They run on Tauri's thread pool (`async`): run on the
@@ -170,11 +163,8 @@ fn script_dialog(shown: &ShownDialog) -> ScriptDialog {
 
 /// The dialog answer for the user's `answer` to a dialog of `kind`.
 fn dialog_answer(kind: &ScriptDialogKind, answer: ScriptDialogAnswer) -> DialogAnswer {
-    match (answer.confirmed, kind) {
-        (false, _) => DialogAnswer::Cancelled,
-        (true, ScriptDialogKind::Prompt { .. }) => DialogAnswer::Text(answer.text),
-        (true, _) => DialogAnswer::Confirmed,
-    }
+    let entered = matches!(kind, ScriptDialogKind::Prompt { .. }).then_some(answer.text);
+    DialogAnswer::from_ok(answer.confirmed, entered)
 }
 
 /// Ends dialog `id` with `answer` unless it has ended already: forgets its window and resumes

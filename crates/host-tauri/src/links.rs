@@ -9,9 +9,8 @@
 //! - Anything else follows the account's [`LinkTarget`]: the system browser
 //!   (`Deny` + [`Input::ExternalLink`]) or an in-app window of 1100x800.
 //!
-//! Popup/app windows get the same navigation allow-list ([`domain::nav_allowed`]), media
-//! permission ([`domain::ViewPolicy::allow_media`], scoped to the service's own hosts by
-//! [`ViewSpec::media_allowed_at`]) and JavaScript dialogs (`dialogs`) as the account's view.
+//! Popup/app windows get the same navigation and permission hooks (`page_hooks`) and
+//! JavaScript dialogs (`dialogs`) as the account's view.
 //!
 //! Never `NewWindowResponse::Allow`: wry would create a bare native window without any of
 //! our handlers (seen with Rainbow opening its own site).
@@ -26,18 +25,15 @@ use domain::{
     redact_url, window_title,
 };
 use protocol::LinkTarget;
-use tauri::webview::{
-    NewWindowFeatures, NewWindowResponse, PageLoadEvent, PageLoadPayload, PermissionKind,
-    PermissionResponse,
-};
+use tauri::webview::{NewWindowFeatures, NewWindowResponse, PageLoadEvent, PageLoadPayload};
 use tauri::{AppHandle, Manager, Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
 
-use crate::dialogs::Dialogs;
+use crate::labels::popup_label;
 use crate::logger::now_ms;
-#[cfg(target_os = "linux")]
 use crate::logger::spawn_logged;
 use crate::native;
+use crate::page_hooks::{navigation_hook, permission_hook};
 use crate::webviews::popup_labels;
 use crate::{Feed, Logger};
 
@@ -105,88 +101,6 @@ pub(crate) fn new_popup_quota() -> PopupQuota {
     )))
 }
 
-/// Label of an in-app window opened by `account`'s view.
-pub(crate) fn popup_label(account: Uuid, number: u64) -> String {
-    format!("{}{number}", popup_label_prefix(account))
-}
-
-/// Start of the labels of all in-app windows of `account` (the trailing dash keeps it from
-/// matching another account).
-pub(crate) fn popup_label_prefix(account: Uuid) -> String {
-    format!("popup-{}-", account.simple())
-}
-
-/// Camera, microphone and screen capture are granted only with `media_allowed`, else denied;
-/// everything else gets the engine's default handling.
-pub(crate) fn permission_response(kind: PermissionKind, media_allowed: bool) -> PermissionResponse {
-    match kind {
-        PermissionKind::Camera | PermissionKind::Microphone | PermissionKind::DisplayCapture => {
-            if media_allowed {
-                PermissionResponse::Allow
-            } else {
-                PermissionResponse::Deny
-            }
-        }
-        _ => PermissionResponse::Default,
-    }
-}
-
-/// Navigation hook of service views and their windows: [`nav_allowed`], denials are logged.
-/// `mailto:` is never loaded in the view but handed to the core as an external link (mail app).
-pub(crate) fn navigation_hook(
-    account: Uuid,
-    logger: Logger,
-    feed: Feed,
-) -> impl Fn(&Url) -> bool + Send + 'static {
-    move |url| {
-        let allowed = nav_allowed(url);
-        if allowed {
-            logger.log_navigation(
-                account,
-                &format!("[{account}] navigation {}", redact_url(url.as_str())),
-            );
-        } else if url.scheme() == "mailto" {
-            logger.log(&format!("[{account}] mailto link -> mail app if allowed"));
-            feed(Input::ExternalLink {
-                account,
-                url: url.to_string(),
-            });
-        } else {
-            logger.log_navigation(
-                account,
-                &format!(
-                    "[{account}] navigation DENIED (scheme) {}",
-                    redact_url(url.as_str())
-                ),
-            );
-        }
-        allowed
-    }
-}
-
-/// Permission hook of service views and their windows (reads the current policy). wry drops
-/// the requesting origin, so media is scoped by the page currently shown in the main frame.
-pub(crate) fn permission_hook<R: Runtime>(
-    spec: Arc<ViewSpec>,
-    policies: ViewPolicies,
-    logger: Logger,
-    what: &'static str,
-) -> impl Fn(tauri::Webview<R>, PermissionKind) -> PermissionResponse + Send + Sync + 'static {
-    move |webview, kind| {
-        let account = spec.account;
-        let page = webview.url().ok();
-        let host = page.as_ref().and_then(Url::host_str).unwrap_or("-");
-        let media_allowed =
-            spec.media_allowed_at(policy_of(&policies, account).allow_media, page.as_ref());
-        let response = permission_response(kind, media_allowed);
-        logger.log(&format!(
-            "[{account}] {what} permission {kind} at {host} -> {response:?}"
-        ));
-        response
-    }
-}
-
-/// New-window decisions of one account's view and of the windows it opens.
 /// What a new-window request may become before the account's link policy decides.
 #[derive(Debug, PartialEq, Eq)]
 enum NewWindowGate {
@@ -207,6 +121,39 @@ fn new_window_gate(url: &Url) -> NewWindowGate {
     }
 }
 
+/// Where a new-window request that passed the [`NewWindowGate`] goes.
+#[derive(Debug, PartialEq, Eq)]
+enum NewWindowRoute<S> {
+    /// An in-app window of the requested size `S`.
+    SignInPopup(S),
+    /// An in-app window, as the URL's host is one of the account's app hosts.
+    AppHost,
+    /// An in-app window, as the account's links open in one ([`LinkTarget::AppWindow`]).
+    AppWindow,
+    /// The system browser ([`LinkTarget::SystemBrowser`]); on Linux it may still turn out to be
+    /// a sign-in popup (see `LinkPolicy::system_browser`).
+    SystemBrowser,
+}
+
+/// The route of a request for `url`, with the `size` the page asked for, under `policy`: a
+/// requested size makes a sign-in popup, an app host an app window, anything else follows the
+/// account's link target.
+fn new_window_route<S>(url: &Url, size: Option<S>, policy: &ViewPolicy) -> NewWindowRoute<S> {
+    if let Some(size) = size {
+        return NewWindowRoute::SignInPopup(size);
+    }
+    if url.host_str().is_some_and(|host| policy.is_app_host(host)) {
+        return NewWindowRoute::AppHost;
+    }
+    match policy.link_target {
+        LinkTarget::SystemBrowser => NewWindowRoute::SystemBrowser,
+        LinkTarget::AppWindow => NewWindowRoute::AppWindow,
+    }
+}
+
+/// The new-window decisions of one account's view and of the windows it opens (shared by all
+/// of them), with what it takes to open the in-app windows: the account's spec and current
+/// policy, the window counter and quota, and the core's feed.
 pub(crate) struct LinkPolicy<R: Runtime> {
     pub(crate) app: AppHandle<R>,
     pub(crate) spec: Arc<ViewSpec>,
@@ -258,28 +205,28 @@ impl<R: Runtime> LinkPolicy<R> {
             NewWindowGate::Open => {}
         }
         let kind = self.kind_of(url);
-        if let Some(size) = features.size() {
-            self.logger.log(&format!(
-                "[{account}] new window {shown_url} ({kind}, {}x{}) -> sign-in popup",
-                size.width, size.height
-            ));
-            return self.open_window(url, features, Opening::Requested);
-        }
         let policy = policy_of(&self.policies, account);
-        if url.host_str().is_some_and(|host| policy.is_app_host(host)) {
-            self.logger.log(&format!(
-                "[{account}] new window {shown_url} ({kind}) -> app window (app host)"
-            ));
-            return self.open_window(url, features, Opening::AppWindow);
-        }
-        match policy.link_target {
-            LinkTarget::SystemBrowser => self.system_browser(url, features),
-            LinkTarget::AppWindow => {
+        match new_window_route(url, features.size(), &policy) {
+            NewWindowRoute::SignInPopup(size) => {
+                self.logger.log(&format!(
+                    "[{account}] new window {shown_url} ({kind}, {}x{}) -> sign-in popup",
+                    size.width, size.height
+                ));
+                self.open_window(url, features, Opening::Requested)
+            }
+            NewWindowRoute::AppHost => {
+                self.logger.log(&format!(
+                    "[{account}] new window {shown_url} ({kind}) -> app window (app host)"
+                ));
+                self.open_window(url, features, Opening::AppWindow)
+            }
+            NewWindowRoute::AppWindow => {
                 self.logger.log(&format!(
                     "[{account}] new window {shown_url} ({kind}) -> app window"
                 ));
                 self.open_window(url, features, Opening::AppWindow)
             }
+            NewWindowRoute::SystemBrowser => self.system_browser(url, features),
         }
     }
 
@@ -520,7 +467,7 @@ impl<R: Runtime> LinkPolicy<R> {
                 self.logger.log(&format!(
                     "[{account}] opened window {label} for {shown_url}"
                 ));
-                Dialogs::attach(window.as_ref(), &self.logger);
+                native::attach_dialogs(window.as_ref(), &self.logger);
                 watch_close(self.app.clone(), label, &self.logger);
                 Some(window)
             }
@@ -575,25 +522,20 @@ impl<R: Runtime> PopupTitle<R> {
 /// Closes the window `label` once its page called `window.close()` (see [`CLOSE_HOOK`]);
 /// ends when the window is gone.
 fn watch_close<R: Runtime>(app: AppHandle<R>, label: String, logger: &Logger) {
-    let spawned = std::thread::Builder::new()
-        .name(format!("watch-{label}"))
-        .spawn(move || {
-            loop {
-                std::thread::sleep(Duration::from_millis(500));
-                let Some(window) = app.get_webview_window(&label) else {
-                    break;
-                };
-                let target = window.clone();
-                let _ = window.eval_with_callback("!!window.__msgrClosed", move |raw| {
-                    if raw == "true" {
-                        let _ = target.close();
-                    }
-                });
-            }
-        });
-    if let Err(error) = spawned {
-        logger.log(&format!("cannot watch window for window.close(): {error}"));
-    }
+    spawn_logged(&format!("watch-{label}"), logger, move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(500));
+            let Some(window) = app.get_webview_window(&label) else {
+                break;
+            };
+            let target = window.clone();
+            let _ = window.eval_with_callback("!!window.__msgrClosed", move |raw| {
+                if raw == "true" {
+                    let _ = target.close();
+                }
+            });
+        }
+    });
 }
 
 #[cfg(test)]
@@ -619,30 +561,35 @@ mod tests {
     }
 
     #[test]
-    fn labels_and_permissions() {
-        let id = Uuid::from_u128(0xab);
-        assert_eq!(
-            popup_label(id, 3),
-            "popup-000000000000000000000000000000ab-3"
-        );
-        for kind in [
-            PermissionKind::Camera,
-            PermissionKind::Microphone,
-            PermissionKind::DisplayCapture,
-        ] {
-            assert!(matches!(
-                permission_response(kind, true),
-                PermissionResponse::Allow
-            ));
-            assert!(matches!(
-                permission_response(kind, false),
-                PermissionResponse::Deny
-            ));
+    fn new_windows_go_by_size_then_app_host_then_link_target() {
+        let policy = |link_target| ViewPolicy {
+            link_target,
+            allow_media: false,
+            app_hosts: vec!["*.sso.example".into()],
+        };
+        let route = |url: &str, size: Option<(u32, u32)>, link_target| {
+            new_window_route(&Url::parse(url).unwrap(), size, &policy(link_target))
+        };
+        let (link, app_host) = ("https://example.org/", "https://login.sso.example/");
+        for link_target in [LinkTarget::SystemBrowser, LinkTarget::AppWindow] {
+            assert_eq!(
+                route(link, Some((500, 600)), link_target),
+                NewWindowRoute::SignInPopup((500, 600))
+            );
+            assert_eq!(route(app_host, None, link_target), NewWindowRoute::AppHost);
         }
-        assert!(matches!(
-            permission_response(PermissionKind::Geolocation, true),
-            PermissionResponse::Default
-        ));
+        assert_eq!(
+            route(link, None, LinkTarget::SystemBrowser),
+            NewWindowRoute::SystemBrowser
+        );
+        assert_eq!(
+            route(link, None, LinkTarget::AppWindow),
+            NewWindowRoute::AppWindow
+        );
+        assert_eq!(
+            route("about:blank", None, LinkTarget::SystemBrowser),
+            NewWindowRoute::SystemBrowser
+        );
     }
 
     #[test]

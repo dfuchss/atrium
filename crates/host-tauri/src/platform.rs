@@ -10,16 +10,8 @@ use tauri_plugin_autostart::AutoLaunchManager;
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
+use crate::logger::spawn_logged;
 use crate::{Input, TauriHost, bring_to_front, icons, menus, native, port_err, services};
-
-/// Runs `job` on a new named thread.
-fn spawn_named(name: &str, job: impl FnOnce() + Send + 'static) -> PortResult {
-    std::thread::Builder::new()
-        .name(name.into())
-        .spawn(job)
-        .map(drop)
-        .map_err(port_err)
-}
 
 fn describe_simple_icon(result: &SimpleIconResult) -> String {
     match result {
@@ -109,7 +101,7 @@ impl<R: Runtime> Platform for TauriHost<R> {
 
     fn fetch_icon(&self, account: Uuid, url: &str) -> PortResult {
         let (feed, logger, url) = (self.feed.clone(), self.logger.clone(), url.to_string());
-        spawn_named("icon", move || {
+        spawn_logged("icon", &self.logger, move || {
             let data_url = match icons::download_icon(&url) {
                 Ok(data_url) => {
                     logger.log(&format!(
@@ -128,12 +120,13 @@ impl<R: Runtime> Platform for TauriHost<R> {
                 }
             };
             feed(Input::IconFetched { account, data_url });
-        })
+        });
+        Ok(())
     }
 
     fn fetch_simple_icon(&self, account: Uuid, slug: &str) -> PortResult {
         let (feed, logger, slug) = (self.feed.clone(), self.logger.clone(), slug.to_string());
-        spawn_named("simple-icon", move || {
+        spawn_logged("simple-icon", &self.logger, move || {
             let result = icons::download_simple_icon(&slug);
             logger.log(&format!(
                 "[{account}] simple icon {slug}: {}",
@@ -144,7 +137,8 @@ impl<R: Runtime> Platform for TauriHost<R> {
                 slug,
                 result,
             });
-        })
+        });
+        Ok(())
     }
 
     fn set_menus(&self, model: &MenuModel) -> PortResult {

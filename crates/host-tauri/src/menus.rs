@@ -14,6 +14,10 @@ use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{AppHandle, Manager, Runtime, Window};
 use uuid::Uuid;
 
+#[cfg(target_os = "macos")]
+use crate::native::Shortcuts;
+#[cfg(not(target_os = "macos"))]
+use crate::window_shortcuts::Shortcuts;
 use crate::{Feed, bring_to_front, graceful_quit, native};
 
 const ID_SHOW: &str = "show";
@@ -449,7 +453,7 @@ pub(crate) struct MenuState<R: Runtime> {
     tray: Option<TrayIcon<R>>,
     /// The menu the tray was built with.
     tray_menu: Option<Menu<R>>,
-    shortcuts: native::Shortcuts,
+    shortcuts: Shortcuts,
 }
 
 impl<R: Runtime> Default for MenuState<R> {
@@ -458,7 +462,7 @@ impl<R: Runtime> Default for MenuState<R> {
             last: None,
             tray: None,
             tray_menu: None,
-            shortcuts: native::Shortcuts::new(),
+            shortcuts: Shortcuts::new(),
         }
     }
 }

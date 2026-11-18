@@ -32,7 +32,8 @@ use tauri::{AppHandle, Manager, Runtime, Webview, WebviewBuilder, WebviewWindowB
 use webview_dialogs::ProcessFailure;
 
 use super::child_views::add_child_at;
-use crate::webviews::view_account;
+use super::with_platform_webview;
+use crate::labels::view_account;
 use crate::{Feed, Input, Logger, port_err};
 
 mod browsers;
@@ -41,7 +42,7 @@ mod shortcuts;
 
 pub(crate) use browsers::{installed_browsers, open_url_with};
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
-pub(crate) use shortcuts::Shortcuts;
+pub(crate) use shortcuts::install_shortcuts;
 
 /// Sound name of an instant message (`ms-winsoundevent:Notification.IM`), as
 /// `tauri-winrt-notification` names it.
@@ -201,18 +202,12 @@ pub(crate) fn observe_web_process_termination<R: Runtime>(
             feed(Input::WebProcessTerminated { account });
         }
     };
-    let (label, watch_logger) = (webview.label().to_string(), logger.clone());
-    let scheduled = webview.with_webview(move |platform| {
-        if let Err(error) = webview_dialogs::on_process_failed(&platform.controller(), report) {
-            watch_logger.log(&format!("[{label}] cannot watch the web process: {error}"));
-        }
-    });
-    if let Err(error) = scheduled {
-        logger.log(&format!(
-            "[{}] cannot watch the web process: {error}",
-            webview.label()
-        ));
-    }
+    with_platform_webview(
+        webview,
+        logger,
+        "cannot watch the web process",
+        |platform| webview_dialogs::on_process_failed(&platform.controller(), report),
+    );
 }
 
 /// Whether a failed process is worth a reload: the page's render process ended.

@@ -19,13 +19,17 @@
 //! [`Notifier`]: domain::ports::Notifier
 //! [`Platform`]: domain::ports::Platform
 
+mod data_stores;
 mod dialogs;
+mod downloads;
 mod icons;
+mod labels;
 mod links;
 mod logger;
 mod menus;
 mod native;
 mod notifications;
+mod page_hooks;
 mod platform;
 mod quit;
 pub mod services;

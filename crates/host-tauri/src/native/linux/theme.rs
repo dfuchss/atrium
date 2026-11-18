@@ -11,20 +11,30 @@
 
 use std::env;
 
+use super::browsers::{GIO_LAUNCH_DESKTOP, host_launch_helper};
+
 pub(super) const GTK_THEME: &str = "GTK_THEME";
 
 /// Removes the `GTK_THEME` that the GTK hook of the `AppImage` set, so the theme setting
 /// applies; the web processes, started later, inherit the environment without it. A `GTK_THEME`
-/// outside an `AppImage` is the user's and stays. Call it on the first line of `main`, before
-/// any thread starts.
+/// outside an `AppImage` is the user's and stays. In an `AppImage` it also names the host's
+/// `gio-launch-desktop` (see [`host_launch_helper`]), without which links open in no browser.
+/// Call it on the first line of `main`, before any thread starts.
 #[expect(
     unsafe_code,
-    reason = "std::env::remove_var; nothing else can change GTK's theme source"
+    reason = "std::env::remove_var and set_var; nothing else can change GTK's theme source \
+              or GIO's launch helper"
 )]
 pub(crate) fn clean_launch_environment() {
     if env::var_os("APPIMAGE").is_some() {
+        let helper = host_launch_helper();
         // SAFETY: called on the first line of `main`, before any thread starts, so no other
         // thread reads or writes the environment meanwhile.
-        unsafe { env::remove_var(GTK_THEME) };
+        unsafe {
+            env::remove_var(GTK_THEME);
+            if let Some(helper) = helper {
+                env::set_var(GIO_LAUNCH_DESKTOP, helper);
+            }
+        }
     }
 }

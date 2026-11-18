@@ -66,7 +66,8 @@ pub fn window_background(theme: Theme) -> Color {
 }
 
 /// Removes what the launcher put into the environment that would override the settings (the
-/// `GTK_THEME` of an `AppImage` on Linux). Call it first in `main`, before any thread starts.
+/// `GTK_THEME` of an `AppImage` on Linux) and names the host's helper for launching apps that
+/// the `AppImage`'s GIO does not find. Call it first in `main`, before any thread starts.
 pub fn clean_launch_environment() {
     native::clean_launch_environment();
 }

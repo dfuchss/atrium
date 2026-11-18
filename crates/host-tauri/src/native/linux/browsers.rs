@@ -46,6 +46,28 @@ const APPIMAGE_VARIABLES: [&str; 6] = [
     "GST_REGISTRY_REUSE_PLUGIN_SCANNER",
 ];
 
+/// `GLib`'s variable naming its `gio-launch-desktop` helper, which starts every launched app.
+pub(super) const GIO_LAUNCH_DESKTOP: &str = "GIO_LAUNCH_DESKTOP";
+
+/// Where distributions put `gio-launch-desktop`: Fedora, Arch.
+const LAUNCH_HELPERS: [&str; 2] = [
+    "/usr/libexec/gio-launch-desktop",
+    "/usr/lib/gio-launch-desktop",
+];
+
+/// The host's `gio-launch-desktop` for the GIO bundled in the `AppImage`, which looks for it at
+/// the path of the build system (Ubuntu's `/usr/lib/<arch>/glib-2.0`), else in `PATH`, and
+/// launches no app without it. None if the user named one or the host keeps it elsewhere
+/// (Debian and Ubuntu, at the bundled GIO's own path).
+pub(super) fn host_launch_helper() -> Option<&'static str> {
+    if env::var_os(GIO_LAUNCH_DESKTOP).is_some() {
+        return None;
+    }
+    LAUNCH_HELPERS
+        .into_iter()
+        .find(|helper| Path::new(helper).is_file())
+}
+
 /// Opens `url` with the installed browser `browser` (a desktop entry id), or with the default
 /// app for its scheme: always for `mailto:`, and when the browser is not installed (logged).
 pub(crate) fn open_url_with<R: Runtime>(

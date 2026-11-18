@@ -1,5 +1,5 @@
 //! JavaScript dialogs: Atrium's own, decided by the shared policy of `dialogs` (see
-//! `webview_dialogs::windows`), for the service views and the windows they open.
+//! `platform_ffi::windows`), for the service views and the windows they open.
 //!
 //! Each shown dialog gets a small window of Atrium's UI (`script-dialog-<id>`, see
 //! `protocol::script_dialog`): owned by the asking webview's window, so it stays above it,
@@ -15,13 +15,13 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use platform_ffi::{DialogAnswer, DialogHandler, DialogKind, ShownDialog};
 use protocol::{SCRIPT_DIALOG_QUERY, ScriptDialog, ScriptDialogAnswer, ScriptDialogKind};
 use tauri::plugin::TauriPlugin;
 use tauri::{
     AppHandle, LogicalSize, Manager, PhysicalPosition, Runtime, State, Webview, WebviewUrl,
     WebviewWindowBuilder, Window, WindowEvent,
 };
-use webview_dialogs::{DialogAnswer, DialogHandler, DialogKind, ShownDialog};
 
 use crate::Logger;
 use crate::logger::spawn_logged;
@@ -67,7 +67,7 @@ pub(crate) fn install_dialogs<R: Runtime>(
     }
     let (show_app, show_logger) = (app.clone(), logger.clone());
     let show = Box::new(move |shown: ShownDialog| open_later(&show_app, shown, &show_logger));
-    match webview_dialogs::install(handler, show) {
+    match platform_ffi::install(handler, show) {
         Ok(()) => logger.log("JavaScript dialogs: Atrium's own"),
         Err(error) => logger.log(&format!("JavaScript dialogs unavailable: {error}")),
     }
@@ -78,7 +78,7 @@ pub(crate) fn install_dialogs<R: Runtime>(
 pub(crate) fn attach_dialogs<R: Runtime>(webview: &Webview<R>, logger: &Logger) {
     let label = webview.label().to_string();
     with_platform_webview(webview, logger, "cannot attach dialogs", move |platform| {
-        webview_dialogs::attach(&platform.controller(), &label)
+        platform_ffi::attach(&platform.controller(), &label)
     });
 }
 
@@ -176,7 +176,7 @@ fn finish<R: Runtime>(app: &AppHandle<R>, id: u64, answer: DialogAnswer, suppres
     if open.is_some() {
         // Fails only once the event loop has ended, and the page with it.
         let _ = app.run_on_main_thread(move || {
-            webview_dialogs::answer(id, &answer, suppress_further);
+            platform_ffi::answer(id, &answer, suppress_further);
         });
     }
 }
@@ -273,7 +273,7 @@ fn present<R: Runtime>(
         window.show()?;
         window.set_focus()?;
     } else {
-        webview_dialogs::show_without_activating(window.hwnd()?);
+        platform_ffi::show_without_activating(window.hwnd()?);
     }
     Ok(())
 }

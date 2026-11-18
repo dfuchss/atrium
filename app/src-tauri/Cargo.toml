@@ -21,7 +21,7 @@ tauri-plugin-opener.workspace = true
 tauri-plugin-autostart = "2.7.0"
 
 [target.'cfg(windows)'.dependencies]
-webview-dialogs.workspace = true
+platform-ffi.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

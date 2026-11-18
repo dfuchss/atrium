@@ -6,8 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
+use platform_ffi::{read_shortcut, write_shortcut};
 use protocol::DesktopEntryState;
-use webview_dialogs::{read_shortcut, write_shortcut};
 
 const SHORTCUT_FILE: &str = "Atrium.lnk";
 /// The Start menu programs folder of the user, below the roaming app data folder.

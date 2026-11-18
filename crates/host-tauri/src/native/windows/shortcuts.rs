@@ -11,11 +11,11 @@
 
 use std::sync::{LazyLock, OnceLock};
 
-use tauri::{Manager, Runtime, Webview};
-use webview_dialogs::{
+use platform_ffi::{
     KeyPress, VIRTUAL_KEY, VK_ADD, VK_NUMPAD0, VK_OEM_4, VK_OEM_6, VK_OEM_COMMA, VK_OEM_MINUS,
     VK_OEM_PLUS, VK_SUBTRACT,
 };
+use tauri::{Manager, Runtime, Webview};
 
 use crate::Logger;
 use crate::menus::{ID_ZOOM_IN, ID_ZOOM_OUT, ID_ZOOM_RESET, Shortcut};
@@ -83,7 +83,7 @@ fn target_of(press: KeyPress) -> Option<Target> {
 pub(crate) fn attach<R: Runtime>(webview: &Webview<R>) {
     let logger = Logger::new(webview.app_handle());
     with_platform_webview(webview, &logger, "no keyboard shortcuts", |platform| {
-        webview_dialogs::on_key_down(&platform.controller(), take_shortcut)
+        platform_ffi::on_key_down(&platform.controller(), take_shortcut)
     });
 }
 

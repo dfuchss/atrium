@@ -1,18 +1,18 @@
 //! macOS: `WebKit` data stores per account, native JavaScript dialogs and a menu bar template
-//! icon, through `webview_dialogs` where Tauri has no API.
+//! icon, through `platform_ffi` where Tauri has no API.
 
 use std::convert::Infallible;
 use std::sync::Arc;
 
 use domain::ports::{PortError, PortResult};
 use domain::{Bounds, DockBadge, MenuModel};
+use platform_ffi::{DialogHandler, MainThreadMarker};
 use protocol::{BrowserChoice, UI_WEBVIEW};
 use tauri::webview::NewWindowFeatures;
 use tauri::{
     AppHandle, Builder, Manager, Runtime, Webview, WebviewBuilder, WebviewWindowBuilder, Window,
 };
 use tauri_plugin_opener::OpenerExt;
-use webview_dialogs::{DialogHandler, MainThreadMarker};
 
 pub(crate) use super::child_views::add_child_at as add_child;
 use super::with_platform_webview;
@@ -92,7 +92,7 @@ pub(crate) fn remove_data_store<R: Runtime>(
 }
 
 /// Adds a service view to `window`, on the main thread, with the `WebKit` configuration of
-/// [`webview_dialogs::service_configuration`]: it can only be created there and must be in place
+/// [`platform_ffi::service_configuration`]: it can only be created there and must be in place
 /// before the page starts.
 pub(crate) fn build_service_view<R: Runtime>(
     window: &Window<R>,
@@ -103,7 +103,7 @@ pub(crate) fn build_service_view<R: Runtime>(
     MainThreadMarker::new()
         .ok_or_else(|| PortError("not on the main thread".into()))
         .and_then(|main_thread| {
-            let configuration = webview_dialogs::service_configuration(main_thread, store_id);
+            let configuration = platform_ffi::service_configuration(main_thread, store_id);
             add_child(
                 window,
                 builder.with_webview_configuration(configuration),
@@ -116,23 +116,23 @@ pub(crate) fn build_service_view<R: Runtime>(
 /// Reloads `webview` from its origin, bypassing the cache.
 pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, _logger: &Logger) -> PortResult {
     webview
-        .with_webview(|platform| webview_dialogs::reload_from_origin(&platform))
+        .with_webview(|platform| platform_ffi::reload_from_origin(&platform))
         .map_err(port_err)
 }
 
-/// Like the account's view: `window.open` only from a click (see `webview_dialogs`).
+/// Like the account's view: `window.open` only from a click (see `platform_ffi`).
 pub(crate) fn prepare_popup<'a, R: Runtime, M: Manager<R>>(
     builder: WebviewWindowBuilder<'a, R, M>,
     features: &NewWindowFeatures,
 ) -> WebviewWindowBuilder<'a, R, M> {
-    webview_dialogs::forbid_automatic_windows(&features.opener().target_configuration);
+    platform_ffi::forbid_automatic_windows(&features.opener().target_configuration);
     builder
 }
 
 /// Calls `on_resume` each time the displays wake, the sign that the user is back: a dark wake
 /// (Power Nap) leaves them off. Nothing to log: the observer cannot fail.
 pub(crate) fn observe_resume(_logger: &Logger, on_resume: impl Fn() + Send + Sync + 'static) {
-    webview_dialogs::observe_screens_wake(on_resume);
+    platform_ffi::observe_screens_wake(on_resume);
 }
 
 /// Leaves `builder` as it is: started again, macOS activates the running app itself (Launch
@@ -207,14 +207,14 @@ pub(crate) fn show_warning<R: Runtime>(
     let (title, text) = (title.to_string(), text.to_string());
     app.run_on_main_thread(move || {
         if let Some(main_thread) = MainThreadMarker::new() {
-            webview_dialogs::show_warning(main_thread, &title, &text);
+            platform_ffi::show_warning(main_thread, &title, &text);
         }
     })
 }
 
 /// Makes `alert`, `confirm` and `prompt` of the service views show native panels decided by
 /// `handler`. Needs the sidebar webview and must run before the first service view is created
-/// (see `webview_dialogs::install`).
+/// (see `platform_ffi::install`).
 pub(crate) fn install_dialogs<R: Runtime>(
     app: &AppHandle<R>,
     handler: Arc<dyn DialogHandler>,
@@ -230,7 +230,7 @@ pub(crate) fn install_dialogs<R: Runtime>(
         logger,
         "JavaScript dialogs unavailable",
         move |platform| {
-            webview_dialogs::install(&platform, handler)
+            platform_ffi::install(&platform, handler)
                 .map(|()| install_logger.log("JavaScript dialogs installed"))
         },
     );
@@ -272,7 +272,7 @@ pub(crate) fn attach_dialogs<R: Runtime>(webview: &Webview<R>, logger: &Logger) 
         logger,
         "cannot tag webview for dialogs",
         move |platform| {
-            webview_dialogs::tag_webview(&platform, &label);
+            platform_ffi::tag_webview(&platform, &label);
             Ok::<(), Infallible>(())
         },
     );

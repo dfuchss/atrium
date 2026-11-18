@@ -3,7 +3,7 @@
 //! taskbar button, Atrium's own JavaScript dialogs (`dialogs`), the browser list (`browsers`)
 //! and the keyboard shortcuts of the main window's webviews (`shortcuts`). Resumes from sleep
 //! come from the power notifications of Windows, crashed pages from each service view's
-//! `ProcessFailed` event (see `webview_dialogs::windows`).
+//! `ProcessFailed` event (see `platform_ffi::windows`).
 //!
 //! Environments: `WebView2` runs one browser process per user data folder and requires every
 //! webview of a folder to be created with the same environment options, so Atrium sets none
@@ -26,10 +26,10 @@
 
 use domain::ports::PortResult;
 use domain::{Bounds, DockBadge};
+use platform_ffi::ProcessFailure;
 use tauri::image::Image;
 use tauri::webview::NewWindowFeatures;
 use tauri::{AppHandle, Manager, Runtime, Webview, WebviewBuilder, WebviewWindowBuilder, Window};
-use webview_dialogs::ProcessFailure;
 
 use super::child_views::add_child_at;
 use super::with_platform_webview;
@@ -54,7 +54,7 @@ pub(crate) const NOTIFICATION_SOUND: &str = "IM";
 /// build in `target\debug` or `target\release`, whose notifications it shows as `PowerShell`'s.
 pub(crate) fn set_app_id(identifier: &str) {
     // Fails only for an id longer than 128 characters, which a bundle identifier is not.
-    let _ = webview_dialogs::set_app_user_model_id(identifier);
+    let _ = platform_ffi::set_app_user_model_id(identifier);
 }
 
 /// Nothing to announce: Atrium installs no icons on Windows.
@@ -117,8 +117,7 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, logger: &Logger) ->
     webview
         .with_webview(move |platform| {
             let controller = platform.controller();
-            if let Err(error) = webview_dialogs::reload_ignoring_cache(&controller, report.clone())
-            {
+            if let Err(error) = platform_ffi::reload_ignoring_cache(&controller, report.clone()) {
                 report(error.to_string());
             }
         })
@@ -139,7 +138,7 @@ pub(crate) fn prepare_popup<'a, R: Runtime, M: Manager<R>>(
 /// notifications it logs why and never calls.
 pub(crate) fn observe_resume(logger: &Logger, on_resume: impl Fn() + Send + Sync + 'static) {
     let resume_logger = logger.clone();
-    let registered = webview_dialogs::on_resume(move || {
+    let registered = platform_ffi::on_resume(move || {
         resume_logger.log("resumed from sleep");
         on_resume();
     });
@@ -171,7 +170,7 @@ pub(crate) fn show_warning<R: Runtime>(
     text: &str,
 ) -> tauri::Result<()> {
     let (title, text) = (title.to_string(), text.to_string());
-    app.run_on_main_thread(move || webview_dialogs::show_warning(&title, &text))
+    app.run_on_main_thread(move || platform_ffi::show_warning(&title, &text))
 }
 
 /// Nothing to register for the whole app: Tauri's hook for terminated web processes does not
@@ -206,7 +205,7 @@ pub(crate) fn observe_web_process_termination<R: Runtime>(
         webview,
         logger,
         "cannot watch the web process",
-        |platform| webview_dialogs::on_process_failed(&platform.controller(), report),
+        |platform| platform_ffi::on_process_failed(&platform.controller(), report),
     );
 }
 

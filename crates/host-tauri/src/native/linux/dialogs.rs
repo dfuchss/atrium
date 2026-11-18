@@ -1,10 +1,10 @@
 //! JavaScript dialogs: Atrium's own, decided by the shared policy of `dialogs` (see
-//! `webview_dialogs::linux`), for the service views and the windows they open.
+//! `platform_ffi::linux`), for the service views and the windows they open.
 
 use std::sync::Arc;
 
+use platform_ffi::DialogHandler;
 use tauri::{AppHandle, Runtime, Webview};
-use webview_dialogs::DialogHandler;
 
 use crate::Logger;
 use crate::native::with_platform_webview;
@@ -16,7 +16,7 @@ pub(crate) fn install_dialogs<R: Runtime>(
     handler: Arc<dyn DialogHandler>,
     logger: &Logger,
 ) {
-    match webview_dialogs::install(handler) {
+    match platform_ffi::install(handler) {
         Ok(()) => logger.log("JavaScript dialogs: Atrium's own"),
         Err(error) => logger.log(&format!("JavaScript dialogs unavailable: {error}")),
     }
@@ -27,6 +27,6 @@ pub(crate) fn install_dialogs<R: Runtime>(
 pub(crate) fn attach_dialogs<R: Runtime>(webview: &Webview<R>, logger: &Logger) {
     let label = webview.label().to_string();
     with_platform_webview(webview, logger, "cannot attach dialogs", move |platform| {
-        webview_dialogs::attach(&platform.inner(), &label)
+        platform_ffi::attach(&platform.inner(), &label)
     });
 }

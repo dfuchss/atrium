@@ -18,12 +18,12 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
 use domain::RateLimiter;
+use platform_ffi::{
+    DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
+};
 use protocol::Snapshot;
 use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
-use webview_dialogs::{
-    DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
-};
 
 use crate::labels::account_of_label;
 use crate::logger::{Logger, now_ms};

@@ -1,5 +1,5 @@
 [package]
-name = "webview-dialogs"
+name = "platform-ffi"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

@@ -13,7 +13,7 @@ fs-util.workspace = true
 protocol.workspace = true
 uuid.workspace = true
 url.workspace = true
-webview-dialogs.workspace = true
+platform-ffi.workspace = true
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }
 tauri-plugin-notification.workspace = true
 tauri-plugin-opener.workspace = true

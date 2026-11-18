@@ -40,7 +40,7 @@ use uuid::Uuid;
 use crate::{Feed, Logger};
 pub(crate) use close_hook::CLOSE_HOOK;
 use popups::Opening;
-pub(crate) use popups::{PopupQuota, new_popup_quota};
+pub(crate) use popups::PopupQuota;
 
 /// Effective view policy per account, written by the actor (`set_view_policy`), read in the
 /// new-window and permission callbacks. Missing entry = system browser, no media.

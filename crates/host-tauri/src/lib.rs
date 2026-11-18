@@ -46,7 +46,7 @@ use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
 use tauri::window::Color;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Theme, WebviewBuilder, WebviewUrl, Window};
 
-use crate::links::{PopupQuota, ViewPolicies, new_popup_quota};
+use crate::links::{PopupQuota, ViewPolicies};
 use crate::logger::Logger;
 use crate::menus::MenuState;
 use crate::notifications::NotificationTargets;
@@ -204,7 +204,7 @@ impl<R: Runtime> TauriHost<R> {
             policies: Arc::default(),
             dialogs: dialogs::Dialogs::new(),
             popup_counter: Arc::default(),
-            popup_quota: new_popup_quota(),
+            popup_quota: Arc::default(),
             menus: Mutex::default(),
             config_dir: None,
             extra_init_script: None,
@@ -246,6 +246,12 @@ impl<R: Runtime> TauriHost<R> {
         self.dialogs.install(&self.app, &self.logger);
     }
 
+    /// Takes the account names for the titles of the pages' dialogs from `snapshot`; call it
+    /// with each snapshot the core emits.
+    pub fn set_dialog_names(&self, snapshot: &Snapshot) {
+        self.dialogs.set_names(snapshot);
+    }
+
     /// File the host logger appends to (`<app_log_dir>/atrium.log`), if available.
     pub fn log_file(&self) -> Option<PathBuf> {
         self.logger.file()
@@ -275,7 +281,6 @@ impl<R: Runtime> TauriHost<R> {
 
 impl<R: Runtime> UiSink for TauriHost<R> {
     fn emit_snapshot(&self, snapshot: &Snapshot) -> PortResult {
-        self.dialogs.set_names(snapshot);
         self.app
             .emit_to(UI_WEBVIEW, EVENT_SNAPSHOT, snapshot)
             .map_err(port_err)

@@ -107,12 +107,20 @@ fn remove_unused_data_stores(
     }
 }
 
-/// Owns the core; never returns while the channel is open.
-fn run_actor(mut core: Core, inputs: Receiver<Input>, ports: &Ports<'_>, cache: &SnapshotCache) {
+/// Owns the core; never returns while the channel is open. Each snapshot also goes to the
+/// snapshot cache and names the accounts in the dialog titles of `host`.
+fn run_actor(
+    mut core: Core,
+    inputs: Receiver<Input>,
+    ports: &Ports<'_>,
+    host: &TauriHost<Wry>,
+    cache: &SnapshotCache,
+) {
     for input in inputs {
         for effect in core.handle(input) {
             if let Effect::EmitSnapshot(snapshot) = &effect {
                 cache.set(snapshot.clone());
+                host.set_dialog_names(snapshot);
             }
             apply(effect, ports);
         }
@@ -194,7 +202,7 @@ fn spawn_actor(core: Core, inputs: Receiver<Input>, env: ActorEnv) -> std::io::R
                 store: &env.store,
                 read_only: env.read_only,
             };
-            run_actor(core, inputs, &ports, &env.cache);
+            run_actor(core, inputs, &ports, &env.host, &env.cache);
         })?;
     Ok(())
 }

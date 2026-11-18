@@ -1,26 +1,24 @@
 //! JavaScript dialogs (`alert`, `confirm`, `prompt`) of the service views and the windows they
-//! open: what the native panel says and when a page gets none. [`Dialogs`] hands the policy to
-//! the native dialog hooks (`native::install_dialogs`, `native::attach_dialogs`), whose panels
-//! call [`DialogHandler`] on the main thread; the decisions are the [`DialogPolicy`]'s
-//! (`policy`).
+//! open: what the native panel says and when a page gets none. [`Dialogs`] hands the domain's
+//! [`DialogPolicy`] to the native dialog hooks (`native::install_dialogs`,
+//! `native::attach_dialogs`), whose panels call [`DialogHandler`] on the main thread.
 //!
-//! - The title names the account (its sidebar label) and the host of the asking frame, taken
-//!   from `WebKit`'s security origin so a page cannot pose as another.
-//! - From a page's second dialog on, the panel offers "Prevent this page from creating
-//!   additional dialogs"; ticked, the account's further dialogs get the default answer until
-//!   its view loads a page again (also by reload).
-//! - At most [`MAX_DIALOGS_PER_MINUTE`](policy::MAX_DIALOGS_PER_MINUTE) per account are shown;
-//!   beyond that the default answer is given and logged.
+//! - The host in the title is taken from `WebKit`'s security origin, so a page cannot pose as
+//!   another.
+//! - The panel offers the suppression as "Prevent this page from creating additional dialogs";
+//!   a reload also counts as a page load that ends it.
+//! - Withheld dialogs get the default answer and are logged.
 //! - Dialogs of hidden accounts are shown right away, named: a sheet on Atrium's own window
 //!   never covers other apps, while queueing would freeze the page's JavaScript (its messages
 //!   and notifications) until the account is opened, without the user knowing why.
 
-mod policy;
-
 use std::sync::{Arc, Mutex};
 
+use domain::{DialogPolicy, dialog_origin_label};
 use fs_util::lock_ignoring_poison;
-use platform_ffi::{DialogAnswer, DialogHandler, DialogKind, DialogRequest, Presentation};
+use platform_ffi::{
+    DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
+};
 use protocol::Snapshot;
 use tauri::{AppHandle, Runtime};
 use uuid::Uuid;
@@ -28,7 +26,6 @@ use uuid::Uuid;
 use crate::labels::account_of_label;
 use crate::logger::{Logger, now_ms};
 use crate::native;
-use policy::{DialogPolicy, account_names, origin_label};
 
 /// Shared policy state: written by the actor (snapshots, page loads) and the main thread
 /// (dialogs), held only briefly.
@@ -40,6 +37,10 @@ fn kind_name(kind: &DialogKind) -> &'static str {
         DialogKind::Confirm => "confirm",
         DialogKind::Prompt { .. } => "prompt",
     }
+}
+
+fn origin_label(origin: &PageOrigin) -> Option<String> {
+    dialog_origin_label(&origin.host, origin.port)
 }
 
 /// Answer for the log: never the entered text itself.
@@ -73,12 +74,21 @@ impl TauriDialogHandler {
 impl DialogHandler for TauriDialogHandler {
     fn present(&self, request: &DialogRequest) -> Presentation {
         let account = request.webview_tag.as_deref().and_then(account_of_label);
-        let decision = lock_ignoring_poison(&self.policy).present(account, request, now_ms());
+        let decision = lock_ignoring_poison(&self.policy).present(
+            account,
+            origin_label(&request.origin).as_deref(),
+            &request.message,
+            now_ms(),
+        );
         let described = TauriDialogHandler::describe(request);
         match decision {
             Ok(text) => {
                 self.logger.log(&format!("{described} -> shown"));
-                Presentation::Show(text)
+                Presentation::Show(DialogText {
+                    title: text.title,
+                    message: text.message,
+                    offer_suppression: text.offer_suppression,
+                })
             }
             Err(reason) => {
                 self.logger
@@ -114,7 +124,7 @@ pub(crate) struct Dialogs {
 impl Dialogs {
     pub(crate) fn new() -> Dialogs {
         Dialogs {
-            policy: Arc::new(Mutex::new(DialogPolicy::new())),
+            policy: Arc::default(),
         }
     }
 
@@ -135,6 +145,6 @@ impl Dialogs {
 
     /// Takes the account names for the dialog titles from `snapshot`.
     pub(crate) fn set_names(&self, snapshot: &Snapshot) {
-        lock_ignoring_poison(&self.policy).set_names(account_names(snapshot));
+        lock_ignoring_poison(&self.policy).set_names(snapshot);
     }
 }

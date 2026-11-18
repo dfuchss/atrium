@@ -31,6 +31,7 @@ use crate::catalog::Catalog;
 use crate::model::{Account, Persisted};
 use crate::throttle::RateLimiter;
 
+pub(crate) use accounts::account_label;
 pub use icons::simple_icon_url;
 pub use messages::{
     AccountMenu, AccountMenuAction, AccountMenuItem, Bounds, DockBadge, Effect, Input, MenuAccount,
@@ -90,7 +91,7 @@ pub struct Core {
     crash_reloads_stopped: HashSet<Uuid>,
 }
 
-const MS_PER_MINUTE: u64 = 60_000;
+pub(crate) const MS_PER_MINUTE: u64 = 60_000;
 
 /// One external open per account within this time (tick clock).
 const EXTERNAL_LINK_INTERVAL_MS: u64 = 2_000;

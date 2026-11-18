@@ -34,23 +34,8 @@ pub(super) enum Opening {
     Undecided,
 }
 
-/// Most in-app windows an account may have open at once.
-const MAX_OPEN_WINDOWS: usize = 5;
-/// Most in-app windows an account may open within [`OPEN_WINDOWS_PERIOD_MS`].
-const MAX_WINDOWS_PER_PERIOD: usize = 3;
-const OPEN_WINDOWS_PERIOD_MS: u64 = 10_000;
-
 /// Window admission shared by all accounts' views.
 pub(crate) type PopupQuota = Arc<Mutex<WindowQuota<Uuid>>>;
-
-/// A quota with the limits above.
-pub(crate) fn new_popup_quota() -> PopupQuota {
-    Arc::new(Mutex::new(WindowQuota::new(
-        MAX_OPEN_WINDOWS,
-        MAX_WINDOWS_PER_PERIOD,
-        OPEN_WINDOWS_PERIOD_MS,
-    )))
-}
 
 impl<R: Runtime> LinkPolicy<R> {
     /// Window title for `page` (see [`window_title`]): the account's internal and app hosts

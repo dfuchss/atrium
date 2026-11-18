@@ -50,15 +50,32 @@ pub enum WindowRefusal {
 }
 
 /// Admission of in-app windows per key (account): a cap on windows open at once and a rate
-/// limit on opening, so a page cannot flood the screen with `window.open`.
+/// limit on opening, so a page cannot flood the screen with `window.open`. The default has
+/// Atrium's limits.
 #[derive(Debug)]
 pub struct WindowQuota<K> {
     max_open: usize,
     opening: RateLimiter<K>,
 }
 
+/// Most in-app windows an account may have open at once.
+const MAX_OPEN_WINDOWS: usize = 5;
+/// Most in-app windows an account may open within [`OPEN_WINDOWS_PERIOD_MS`].
+const MAX_WINDOWS_PER_PERIOD: usize = 3;
+const OPEN_WINDOWS_PERIOD_MS: u64 = 10_000;
+
+impl<K: Hash + Eq> Default for WindowQuota<K> {
+    fn default() -> WindowQuota<K> {
+        WindowQuota::new(
+            MAX_OPEN_WINDOWS,
+            MAX_WINDOWS_PER_PERIOD,
+            OPEN_WINDOWS_PERIOD_MS,
+        )
+    }
+}
+
 impl<K: Hash + Eq> WindowQuota<K> {
-    pub fn new(max_open: usize, max_per_window: usize, window_ms: u64) -> WindowQuota<K> {
+    fn new(max_open: usize, max_per_window: usize, window_ms: u64) -> WindowQuota<K> {
         WindowQuota {
             max_open,
             opening: RateLimiter::new(max_per_window, window_ms),
@@ -127,5 +144,19 @@ mod tests {
         assert_eq!(quota.admit(1, 0, 300), Err(WindowRefusal::TooFast));
         assert_eq!(quota.admit(2, 0, 300), Ok(()), "accounts are independent");
         assert_eq!(quota.admit(1, 0, 10_000), Ok(()));
+    }
+
+    #[test]
+    fn default_window_quota_has_the_in_app_window_limits() {
+        let mut quota = WindowQuota::default();
+        assert_eq!(
+            quota.admit('a', MAX_OPEN_WINDOWS, 0),
+            Err(WindowRefusal::TooManyOpen)
+        );
+        for _ in 0..MAX_WINDOWS_PER_PERIOD {
+            assert_eq!(quota.admit('a', 0, 0), Ok(()));
+        }
+        assert_eq!(quota.admit('a', 0, 1), Err(WindowRefusal::TooFast));
+        assert_eq!(quota.admit('a', 0, OPEN_WINDOWS_PERIOD_MS), Ok(()));
     }
 }

@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::layout::WindowSize;
 use super::{Core, Effect, log_effects};
-use crate::catalog::{ServiceDef, normalized_instance};
+use crate::catalog::normalized_instance;
 use crate::model::Account;
 
 impl Core {
@@ -94,7 +94,7 @@ impl Core {
         if let Err(error) = service.resolve_url(instance.as_deref()) {
             return self.rejected(format!("add account: {error}"));
         }
-        let label = account_label(label, service);
+        let label = account_label(label, &service.name);
         let mut account = Account::new((self.new_account_id)(), service_id, label, instance);
         if service.user_agent.as_deref() == Some("webkit") {
             account
@@ -231,10 +231,10 @@ impl Core {
 }
 
 /// The trimmed label, or the service name if it is empty.
-pub(super) fn account_label(label: &str, service: &ServiceDef) -> String {
+pub(crate) fn account_label(label: &str, service_name: &str) -> String {
     let label = label.trim();
     if label.is_empty() {
-        service.name.clone()
+        service_name.to_string()
     } else {
         label.to_string()
     }

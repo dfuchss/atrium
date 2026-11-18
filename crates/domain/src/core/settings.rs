@@ -3,7 +3,7 @@
 use protocol::{AccountSettings, AppSettings};
 use uuid::Uuid;
 
-use super::accounts::account_label;
+use super::account_label;
 use super::icons::normalize_slug;
 use super::{Core, Effect};
 use crate::catalog::normalized_instance;
@@ -134,7 +134,7 @@ impl Core {
             .resolve_url(settings.instance.as_deref())
             .map_err(|error| error.to_string())?;
         let mut problems = vec![];
-        settings.label = account_label(&settings.label, service);
+        settings.label = account_label(&settings.label, &service.name);
         settings.user_agent = trimmed(settings.user_agent.as_deref());
         settings.custom_css = settings.custom_css.filter(|css| !css.trim().is_empty());
         settings.custom_icon = trimmed(settings.custom_icon.as_deref());

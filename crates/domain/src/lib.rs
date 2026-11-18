@@ -6,6 +6,7 @@
 
 mod catalog;
 mod core;
+mod dialogs;
 mod model;
 pub mod ports;
 pub mod runtime;
@@ -18,6 +19,7 @@ pub use crate::core::{
     MenuAccount, MenuAction, MenuModel, NotificationReq, SimpleIconResult, ViewPolicy, ViewSpec,
     simple_icon_url,
 };
+pub use crate::dialogs::{DialogPolicy, DialogText, Withheld, dialog_origin_label};
 pub use crate::model::{Account, Persisted, Settings, unused_store_ids};
 pub use crate::security::{
     NewWindowGate, NewWindowRoute, nav_allowed, new_window_gate, new_window_route, redact_url,

@@ -92,14 +92,13 @@ fn on_script_dialog(
     let Some(kind) = kind_of(dialog_type, || {
         dialog
             .prompt_get_default_text()
-            .map(String::from)
-            .unwrap_or_default()
+            .map_or_else(String::new, String::from)
     }) else {
         return false;
     };
     let request = DialogRequest {
         kind,
-        message: dialog.message().map(String::from).unwrap_or_default(),
+        message: dialog.message().map_or_else(String::new, String::from),
         origin: origin.clone(),
         webview_tag: Some(tag.to_string()),
     };

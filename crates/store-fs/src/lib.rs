@@ -113,7 +113,6 @@ mod tests {
         let id = uuid_like();
         let mut account = Account::new(id, "slack", "KIT", Some("x".into()));
         account.settings.muted = true;
-        account.settings.in_dock_badge = false;
         account.settings.user_agent = Some("chrome".into());
         Persisted {
             accounts: vec![account],

@@ -115,7 +115,6 @@ impl AccountDraft {
             dock_badge: RwSignal::new(
                 settings
                     .dock_badge
-                    .or_else(|| (!settings.in_dock_badge).then_some(DockBadgeMode::Off))
                     .map_or_else(String::new, |mode| mode.name().to_string()),
             ),
             enabled: RwSignal::new(settings.enabled),
@@ -167,7 +166,6 @@ impl AccountDraft {
             muted: !self.notifications.get_untracked(),
             show_badge: self.show_badge.get_untracked(),
             badge_style: BadgeStyle::from_name(&self.badge_style.get_untracked()),
-            in_dock_badge: true,
             dock_badge: DockBadgeMode::from_name(&self.dock_badge.get_untracked()),
             user_agent: self.user_agent.value(UNSET_USER_AGENT),
             enabled: self.enabled.get_untracked(),

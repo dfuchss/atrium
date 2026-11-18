@@ -302,26 +302,6 @@ fn dock_badge_account_mode_overrides_global() {
 }
 
 #[test]
-fn legacy_in_dock_badge_false_reads_as_off() {
-    let mut a = account(1, "discord", "A");
-    a.settings.in_dock_badge = false;
-    let (mut core, _) = started(vec![a, account(2, "discord", "B")]);
-    let effects = core.handle(Input::TitleChanged {
-        account: id(1),
-        title: "(3) A".into(),
-    });
-    assert!(badges(&effects).is_empty());
-    assert_eq!(last_snapshot(&effects).accounts[0].unread, 3);
-    let effects = update_account(&mut core, 1, |settings| {
-        settings.in_dock_badge = true;
-        settings.dock_badge = Some(DockBadgeMode::CountOnly);
-    });
-    assert_eq!(badges(&effects), vec![DockBadge::Count(3)]);
-    let effects = update_account(&mut core, 1, |settings| settings.muted = true);
-    assert_eq!(badges(&effects), vec![DockBadge::None]);
-}
-
-#[test]
 fn show_badge_is_ui_only() {
     let (mut core, _) = started(vec![account(1, "discord", "A")]);
     let effects = update_account(&mut core, 1, |settings| settings.show_badge = false);

@@ -106,7 +106,6 @@ fn demo_account(
             muted: false,
             show_badge: true,
             badge_style: None,
-            in_dock_badge: true,
             dock_badge: None,
             user_agent: None,
             enabled: true,

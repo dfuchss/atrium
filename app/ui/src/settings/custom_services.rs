@@ -156,7 +156,7 @@ impl CustomServiceDraft {
             name: self.name.get_untracked().trim().to_string(),
             color: self.color.get_untracked(),
             instance_label: non_empty(&self.instance_label.get_untracked())
-                .filter(|_| url.contains("{instance}")),
+                .filter(|_| url.contains(protocol::INSTANCE_PLACEHOLDER)),
             url,
             title_regex: non_empty(&self.title_regex.get_untracked()),
             user_agent: self.user_agent.value(UNSET_USER_AGENT),
@@ -252,7 +252,7 @@ fn CustomServiceFields(draft: CustomServiceDraft) -> impl IntoView {
         <Row label="Color">
             <input type="color" prop:value=move || draft.color.get() on:input=move |event| draft.color.set(event_target_value(&event)) />
         </Row>
-        {move || draft.url.with(|url| url.contains("{instance}")).then(|| view! {
+        {move || draft.url.with(|url| url.contains(protocol::INSTANCE_PLACEHOLDER)).then(|| view! {
             <Row label="Instance field label" hint="Optional, e.g. Instance.">
                 <TextField value=draft.instance_label placeholder="e.g. Instance" />
             </Row>

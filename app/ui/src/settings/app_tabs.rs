@@ -21,6 +21,10 @@ const THEME: Setting<Theme> = (
     |settings| settings.theme,
     |settings, value| settings.theme = value,
 );
+const BADGE_STYLE: Setting<BadgeStyle> = (
+    |settings| settings.badge_style,
+    |settings, value| settings.badge_style = value,
+);
 const DOCK_BADGE: Setting<DockBadgeMode> = (
     |settings| settings.dock_badge,
     |settings, value| settings.dock_badge = value,
@@ -82,11 +86,8 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
 
 #[component]
 fn BadgeRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    let badge = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_style));
     let badge_button = move |value: BadgeStyle, label: &'static str| {
-        view! {
-            <button class="btn" class:on=move || badge.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.badge_style = value)>{label}</button>
-        }
+        setting_segment(snapshot, BADGE_STYLE, value, label)
     };
     view! {
         <Row label="Sidebar badges" hint="Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">

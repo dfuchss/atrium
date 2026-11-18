@@ -34,22 +34,14 @@ const ID_QUIT: &str = "quit";
 const ID_ACCOUNT: &str = "account:";
 /// Prefix of the account menu items, followed by `<action>:<account id>`.
 const ID_ACCOUNT_MENU: &str = "account-menu:";
-/// Id part and text of each account menu item.
-const ACCOUNT_MENU_ITEMS: [(AccountMenuAction, &str, &str); 6] = [
-    (AccountMenuAction::Sleep, "sleep", "Sleep"),
-    (AccountMenuAction::WakeUp, "wake-up", "Wake Up"),
-    (AccountMenuAction::Settings, "settings", "Settings…"),
-    (
-        AccountMenuAction::EnableNotifications,
-        "enable-notifications",
-        "Enable Notifications",
-    ),
-    (
-        AccountMenuAction::DisableNotifications,
-        "disable-notifications",
-        "Disable Notifications",
-    ),
-    (AccountMenuAction::Reload, "reload", "Reload"),
+/// The account menu actions, to find the one an item id names.
+const ACCOUNT_MENU_ACTIONS: [AccountMenuAction; 6] = [
+    AccountMenuAction::Sleep,
+    AccountMenuAction::WakeUp,
+    AccountMenuAction::Settings,
+    AccountMenuAction::EnableNotifications,
+    AccountMenuAction::DisableNotifications,
+    AccountMenuAction::Reload,
 ];
 const TRAY_ID: &str = "atrium-tray";
 /// Accounts 1 to 9 get the shortcuts Cmd+1 to Cmd+9 (Ctrl elsewhere).
@@ -151,9 +143,9 @@ fn menu_command(id: &str) -> Option<MenuCommand> {
 
 fn account_menu_input(id: &str) -> Option<Input> {
     let (key, account) = id.strip_prefix(ID_ACCOUNT_MENU)?.split_once(':')?;
-    let &(action, _, _) = ACCOUNT_MENU_ITEMS
-        .iter()
-        .find(|(_, item, _)| *item == key)?;
+    let action = ACCOUNT_MENU_ACTIONS
+        .into_iter()
+        .find(|&action| account_menu_key(action) == key)?;
     Some(Input::AccountMenu {
         account: Uuid::parse_str(account).ok()?,
         action,
@@ -161,18 +153,30 @@ fn account_menu_input(id: &str) -> Option<Input> {
 }
 
 fn account_menu_item_id(account: Uuid, action: AccountMenuAction) -> String {
-    let key = ACCOUNT_MENU_ITEMS
-        .iter()
-        .find(|(item, _, _)| *item == action)
-        .map_or("", |&(_, key, _)| key);
-    format!("{ID_ACCOUNT_MENU}{key}:{account}")
+    format!("{ID_ACCOUNT_MENU}{}:{account}", account_menu_key(action))
+}
+
+/// Id part of an account menu item.
+fn account_menu_key(action: AccountMenuAction) -> &'static str {
+    match action {
+        AccountMenuAction::Sleep => "sleep",
+        AccountMenuAction::WakeUp => "wake-up",
+        AccountMenuAction::Settings => "settings",
+        AccountMenuAction::EnableNotifications => "enable-notifications",
+        AccountMenuAction::DisableNotifications => "disable-notifications",
+        AccountMenuAction::Reload => "reload",
+    }
 }
 
 fn account_menu_text(action: AccountMenuAction) -> &'static str {
-    ACCOUNT_MENU_ITEMS
-        .iter()
-        .find(|(item, _, _)| *item == action)
-        .map_or("", |&(_, _, text)| text)
+    match action {
+        AccountMenuAction::Sleep => "Sleep",
+        AccountMenuAction::WakeUp => "Wake Up",
+        AccountMenuAction::Settings => "Settings…",
+        AccountMenuAction::EnableNotifications => "Enable Notifications",
+        AccountMenuAction::DisableNotifications => "Disable Notifications",
+        AccountMenuAction::Reload => "Reload",
+    }
 }
 
 /// Pops up `menu` at the mouse pointer over `window` (main thread).
@@ -621,7 +625,7 @@ mod tests {
     #[test]
     fn account_menu_ids_map_to_inputs() {
         let account = Uuid::from_u128(7);
-        for (action, _, text) in ACCOUNT_MENU_ITEMS {
+        for action in ACCOUNT_MENU_ACTIONS {
             assert_eq!(
                 menu_command(&account_menu_item_id(account, action)),
                 Some(MenuCommand {
@@ -629,8 +633,8 @@ mod tests {
                     input: Some(Input::AccountMenu { account, action })
                 })
             );
-            assert_eq!(account_menu_text(action), text);
         }
+        assert_eq!(account_menu_text(AccountMenuAction::Settings), "Settings…");
         assert_eq!(
             account_menu_item_id(account, AccountMenuAction::WakeUp),
             format!("account-menu:wake-up:{account}")

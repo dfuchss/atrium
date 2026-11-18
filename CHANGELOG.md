@@ -20,7 +20,10 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ### Fixed
 
+#### All platforms
+
 - An account with notifications off no longer notifies you of finished downloads
+- Opening a service definition file from the service list for editing now shows the error when the file cannot be read, instead of doing nothing
 
 ## 0.4.0
 

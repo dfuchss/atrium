@@ -11,7 +11,8 @@ use super::{Tab, UiState};
 use crate::commands::send_command;
 use crate::glyphs::{ICON_BACK, ICON_DOWN, ICON_FORWARD, ICON_RELOAD, ICON_UP};
 use crate::widgets::{
-    ConfirmButton, Icon, Row, account_icon, focus_by_id, instance_field_label, no_autocorrect,
+    ConfirmButton, Icon, Row, TextField, account_by_id, account_icon, focus_by_id,
+    instance_field_label,
 };
 
 /// Value of the service option that jumps to the custom services tab.
@@ -144,19 +145,11 @@ fn AddAccountForm(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                 </select>
             </Row>
             <Row label="Label">
-                <input
-                    id="add-label"
-                    type="text"
-                    spellcheck="false"
-                    placeholder=move || current().map_or_default(|service| service.name)
-                    prop:value=move || label.get()
-                    on:input=move |event| label.set(event_target_value(&event))
-                />
+                <TextField id="add-label" value=label plain=true placeholder=Signal::derive(move || Some(current().map_or_default(|service| service.name))) />
             </Row>
             {move || current().and_then(|service| service.instance_label).map(|instance_label| view! {
                 <Row label=instance_field_label(instance_label)>
-                    <input type="text" autocapitalize="off" spellcheck="false" autocomplete="off"
-                        prop:value=move || instance.get() on:input=move |event| instance.set(event_target_value(&event)) use:no_autocorrect />
+                    <TextField value=instance />
                 </Row>
             })}
             // The note takes the empty label column beside the button, which is always there and
@@ -204,15 +197,7 @@ fn AccountRow(
     id: Uuid,
     editing: RwSignal<Option<Uuid>>,
 ) -> impl IntoView {
-    let account = Memo::new(move |_| {
-        snapshot.with(|snapshot| {
-            snapshot
-                .accounts
-                .iter()
-                .find(|account| account.id == id)
-                .cloned()
-        })
-    });
+    let account = account_by_id(snapshot, id);
     view! {
         {move || account.get().map(|account| {
             let is_editing = move || editing.get() == Some(id);

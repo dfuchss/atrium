@@ -441,7 +441,7 @@ fn one() -> f64 {
 }
 
 /// A user-defined service. Same meaning as the fields of the TOML service definitions.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CustomService {
     /// Empty when adding; the backend assigns `custom-<slug>`.
     pub id: String,

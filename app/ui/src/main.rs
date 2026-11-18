@@ -20,7 +20,9 @@ mod update;
 mod widgets;
 
 use leptos::prelude::*;
-use protocol::{OperatingSystem, SCRIPT_DIALOG_QUERY, Snapshot, UiCommand};
+use protocol::{
+    CMD_UI_COMMAND, EVENT_SNAPSHOT, OperatingSystem, SCRIPT_DIALOG_QUERY, Snapshot, UiCommand,
+};
 
 use crate::commands::{Dispatch, send_command};
 use crate::query::query_param;
@@ -31,12 +33,12 @@ use crate::sidebar::Sidebar;
 /// Loads the snapshot (from Rust, or the demo data) and keeps it current.
 fn connect(set_snapshot: WriteSignal<Snapshot>, open_dialog: bool) {
     if query::use_tauri() {
-        tauri::listen_snapshots(move |snapshot| set_snapshot.set(snapshot));
+        tauri::listen(EVENT_SNAPSHOT, move |snapshot| set_snapshot.set(snapshot));
         leptos::task::spawn_local(async move {
             if let Some(snapshot) = tauri::get_snapshot().await {
                 set_snapshot.set(snapshot);
                 if open_dialog {
-                    tauri::send(UiCommand::SetDialog { open: true }).await;
+                    tauri::send(CMD_UI_COMMAND, UiCommand::SetDialog { open: true }).await;
                 }
             }
         });
@@ -107,6 +109,7 @@ fn App() -> impl IntoView {
 
     // Only notifies when the dialog flag actually flips, not on every snapshot.
     let dialog_open = Memo::new(move |_| snapshot.with(|snapshot| snapshot.dialog_open));
+    let root = Memo::new(move |_| snapshot.with(root_class));
     let variables = Memo::new(move |_| snapshot.with(layout_variables));
     Effect::new(move || {
         if let Some(id) = snapshot.with(|snapshot| snapshot.edit_account) {
@@ -115,7 +118,7 @@ fn App() -> impl IntoView {
         }
     });
     view! {
-        <div class=move || root_class(&snapshot.get()) style=move || variables.get()>
+        <div class=move || root.get() style=move || variables.get()>
             <Sidebar snapshot=snapshot />
             <Show when=move || dialog_open.get()>
                 <SettingsDialog snapshot=snapshot />

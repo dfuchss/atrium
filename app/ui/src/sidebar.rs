@@ -11,7 +11,7 @@ use crate::commands::send_command;
 use crate::glyphs::{ICON_BELL, ICON_BELL_OFF, ICON_GEAR, ICON_PLUS};
 use crate::settings::{Tab, open_dialog};
 use crate::update::UpdateStatusSignal;
-use crate::widgets::{Icon, account_icon};
+use crate::widgets::{Icon, account_by_id, account_icon};
 
 /// Pointer movement (px) before a press on an icon becomes a drag.
 const DRAG_THRESHOLD: f64 = 4.0;
@@ -347,15 +347,7 @@ pub(crate) fn Sidebar(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
 
 #[component]
 fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> impl IntoView {
-    let account = Memo::new(move |_| {
-        snapshot.with(|snapshot| {
-            snapshot
-                .accounts
-                .iter()
-                .find(|account| account.id == id)
-                .cloned()
-        })
-    });
+    let account = account_by_id(snapshot, id);
     let active = move || snapshot.with(|snapshot| snapshot.active == Some(id));
     let badge_when_muted =
         Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_when_muted));

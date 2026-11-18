@@ -18,10 +18,6 @@ const PANEL_ID: &str = "script-dialog";
 const TEXT_ID: &str = "script-dialog-text";
 const OK_ID: &str = "script-dialog-ok";
 
-fn log_error(message: &str) {
-    web_sys::console::error_1(&JsValue::from_str(message));
-}
-
 /// The dialog of this window, once loaded from the host.
 #[component]
 pub(crate) fn ScriptDialogWindow() -> impl IntoView {
@@ -29,7 +25,7 @@ pub(crate) fn ScriptDialogWindow() -> impl IntoView {
     leptos::task::spawn_local(async move {
         match tauri::call::<ScriptDialog>(CMD_SCRIPT_DIALOG_GET, ()).await {
             Ok(loaded) => dialog.set(Some(loaded)),
-            Err(error) => log_error(&error),
+            Err(error) => tauri::log_error("get script dialog failed", &JsValue::from_str(&error)),
         }
     });
     move || {
@@ -117,7 +113,7 @@ fn request_show(height: f64) {
     }
     leptos::task::spawn_local(async move {
         if let Err(error) = tauri::call::<()>(CMD_SCRIPT_DIALOG_SHOW, Args { height }).await {
-            log_error(&error);
+            tauri::log_error("script dialog request failed", &JsValue::from_str(&error));
         }
     });
 }
@@ -145,7 +141,7 @@ fn send_answer(answer: ScriptDialogAnswer) {
     }
     leptos::task::spawn_local(async move {
         if let Err(error) = tauri::call::<()>(CMD_SCRIPT_DIALOG_ANSWER, Args { answer }).await {
-            log_error(&error);
+            tauri::log_error("script dialog request failed", &JsValue::from_str(&error));
         }
     });
 }

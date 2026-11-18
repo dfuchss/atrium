@@ -4,14 +4,15 @@ use leptos::prelude::*;
 use protocol::{CustomService, ServiceInfo, Snapshot, UiCommand};
 
 use super::UiState;
-use super::account_form::user_agent_mode;
 use super::service_files::ServiceFiles;
+use super::user_agent::{UserAgentDraft, UserAgentRows};
 use crate::commands::send_command;
-use crate::platform_texts;
-use crate::widgets::{ConfirmButton, Row, no_autocorrect, non_empty};
+use crate::widgets::{ConfirmButton, FormActions, IconFace, Row, TextField, icon_view, non_empty};
 
 /// Color of a new custom service.
 const DEFAULT_COLOR: &str = "#6366f1";
+/// User agent mode of a custom service without a user agent: the browser default.
+const UNSET_USER_AGENT: &str = "webkit";
 /// Shown instead of a color the color input cannot display.
 const FALLBACK_COLOR: &str = "#888888";
 
@@ -44,7 +45,7 @@ pub(super) fn CustomServicesTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView
             <section class="list">
                 <For
                     each=move || services.get()
-                    key=|service| (service.id.clone(), service.name.clone(), service.url.clone(), service.color.clone(), service.instance_label.clone(), service.title_regex.clone(), service.user_agent.clone())
+                    key=|service| service.clone()
                     children=move |service| view! { <CustomServiceRow snapshot=snapshot service=service form=form /> }
                 />
             </section>
@@ -81,7 +82,7 @@ fn CustomServiceRow(
         .map_or_default(|first| first.to_uppercase().to_string());
     view! {
         <div class="row">
-            <span class="icon small" style=format!("background:{}", service.color)>{initial}</span>
+            {icon_view(IconFace::Initials(initial), &service.color, true)}
             <span class="names"><strong>{service.name.clone()}</strong><span class="sub">{service.url.clone()}</span></span>
             <button class="btn" on:click=move |_| form.set(Some(Some(edited.clone())))>"Edit"</button>
             <ConfirmButton
@@ -106,21 +107,18 @@ struct CustomServiceDraft {
     color: RwSignal<String>,
     instance_label: RwSignal<String>,
     title_regex: RwSignal<String>,
-    user_agent_mode: RwSignal<String>,
-    user_agent_custom: RwSignal<String>,
+    user_agent: UserAgentDraft,
 }
 
 impl CustomServiceDraft {
     fn new(service: &CustomService) -> CustomServiceDraft {
-        let (mode, custom) = user_agent_mode(service.user_agent.as_deref(), "webkit");
         CustomServiceDraft {
             name: RwSignal::new(service.name.clone()),
             url: RwSignal::new(service.url.clone()),
             color: RwSignal::new(displayable_color(service.color.clone())),
             instance_label: RwSignal::new(service.instance_label.clone().unwrap_or_default()),
             title_regex: RwSignal::new(service.title_regex.clone().unwrap_or_default()),
-            user_agent_mode: RwSignal::new(mode),
-            user_agent_custom: RwSignal::new(custom),
+            user_agent: UserAgentDraft::new(service.user_agent.as_deref(), UNSET_USER_AGENT),
         }
     }
 
@@ -135,7 +133,6 @@ impl CustomServiceDraft {
         } else {
             format!("{} (custom)", template.name)
         };
-        let (mode, custom) = user_agent_mode(template.user_agent.as_deref(), "webkit");
         self.name.set(name);
         self.url.set(template.url);
         self.color.set(displayable_color(template.color));
@@ -143,8 +140,8 @@ impl CustomServiceDraft {
             .set(template.instance_label.unwrap_or_default());
         self.title_regex
             .set(template.title_regex.unwrap_or_default());
-        self.user_agent_mode.set(mode);
-        self.user_agent_custom.set(custom);
+        self.user_agent
+            .set(template.user_agent.as_deref(), UNSET_USER_AGENT);
     }
 
     fn is_valid(self) -> bool {
@@ -162,11 +159,7 @@ impl CustomServiceDraft {
                 .filter(|_| url.contains("{instance}")),
             url,
             title_regex: non_empty(&self.title_regex.get_untracked()),
-            user_agent: match self.user_agent_mode.get_untracked().as_str() {
-                "webkit" => None,
-                "custom" => non_empty(&self.user_agent_custom.get_untracked()),
-                preset => Some(preset.to_string()),
-            },
+            user_agent: self.user_agent.value(UNSET_USER_AGENT),
         }
     }
 }
@@ -207,12 +200,11 @@ fn CustomServiceForm(
             <h3>{if editing { "Edit custom service" } else { "Add custom service" }}</h3>
             {(!editing).then(|| view! { <TemplateRow snapshot=snapshot draft=draft /> })}
             <CustomServiceFields draft=draft />
-            <Row label="">
-                <div class="actions">
-                    <button class="btn primary" type="submit" disabled=move || !draft.is_valid()>{if editing { "Save" } else { "Add" }}</button>
-                    <button class="btn" type="button" on:click=move |_| form.set(None)>"Cancel"</button>
-                </div>
-            </Row>
+            <FormActions
+                submit_label=if editing { "Save" } else { "Add" }
+                disabled=Signal::derive(move || !draft.is_valid())
+                on_cancel=move |()| form.set(None)
+            />
         </form>
     }
 }
@@ -252,40 +244,22 @@ fn TemplateRow(snapshot: ReadSignal<Snapshot>, draft: CustomServiceDraft) -> imp
 fn CustomServiceFields(draft: CustomServiceDraft) -> impl IntoView {
     view! {
         <Row label="Name">
-            <input type="text" spellcheck="false" prop:value=move || draft.name.get() on:input=move |event| draft.name.set(event_target_value(&event)) />
+            <TextField value=draft.name plain=true />
         </Row>
         <Row label="URL" hint="Use {instance} for the part that differs per account, e.g. the server host of a self-hosted service (https://{instance}/) or a workspace subdomain. Each account then asks for it.">
-            <input type="url" class="wide" placeholder="https://example.com/"
-                autocapitalize="off" spellcheck="false" autocomplete="off"
-                prop:value=move || draft.url.get() on:input=move |event| draft.url.set(event_target_value(&event)) use:no_autocorrect />
+            <TextField value=draft.url kind="url" class="wide" placeholder="https://example.com/" />
         </Row>
         <Row label="Color">
             <input type="color" prop:value=move || draft.color.get() on:input=move |event| draft.color.set(event_target_value(&event)) />
         </Row>
         {move || draft.url.with(|url| url.contains("{instance}")).then(|| view! {
             <Row label="Instance field label" hint="Optional, e.g. Instance.">
-                <input type="text" placeholder="e.g. Instance" autocapitalize="off" spellcheck="false" autocomplete="off"
-                    prop:value=move || draft.instance_label.get() on:input=move |event| draft.instance_label.set(event_target_value(&event)) use:no_autocorrect />
+                <TextField value=draft.instance_label placeholder="e.g. Instance" />
             </Row>
         })}
         <Row label="Unread title pattern" hint="Optional regular expression on the page title; capture group 1 is the unread count.">
-            <input type="text" class="wide mono" placeholder="^\\((\\d+)\\)"
-                autocapitalize="off" spellcheck="false" autocomplete="off"
-                prop:value=move || draft.title_regex.get() on:input=move |event| draft.title_regex.set(event_target_value(&event)) use:no_autocorrect />
+            <TextField value=draft.title_regex class="wide mono" placeholder="^\\((\\d+)\\)" />
         </Row>
-        <Row label="User agent">
-            <select prop:value=move || draft.user_agent_mode.get() on:change=move |event| draft.user_agent_mode.set(event_target_value(&event))>
-                <option value="webkit">"WebKit browser (default)"</option>
-                <option value="chrome">"Chrome"</option>
-                <option value="default">{platform_texts::texts().system_user_agent}</option>
-                <option value="custom">"Custom\u{2026}"</option>
-            </select>
-        </Row>
-        {move || (draft.user_agent_mode.get() == "custom").then(|| view! {
-            <Row label="Custom user agent">
-                <input type="text" class="wide" autocapitalize="off" spellcheck="false" autocomplete="off"
-                    prop:value=move || draft.user_agent_custom.get() on:input=move |event| draft.user_agent_custom.set(event_target_value(&event)) use:no_autocorrect />
-            </Row>
-        })}
+        <UserAgentRows draft=draft.user_agent unset_mode=UNSET_USER_AGENT />
     }
 }

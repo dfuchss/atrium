@@ -6,11 +6,13 @@ use uuid::Uuid;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
 
+use super::user_agent::{UserAgentDraft, UserAgentRows};
 use crate::commands::send_command;
 use crate::platform_texts;
 use crate::widgets::{
-    HIBERNATE_MINUTES, Row, Toggle, after_wake_label, after_wake_options, hibernate_label,
-    instance_field_label, minutes_label, no_autocorrect, non_empty, number_options,
+    ErrorNote, FormActions, HIBERNATE_MINUTES, IconFace, Row, TextField, Toggle, after_wake_label,
+    after_wake_options, hibernate_label, icon_view, instance_field_label, minutes_label,
+    no_autocorrect, non_empty, number_options,
 };
 
 /// Uploaded icons larger than this are rejected (they are stored in `accounts.json`).
@@ -18,17 +20,8 @@ const MAX_ICON_BYTES: f64 = 256.0 * 1024.0;
 /// Zoom levels offered, in percent.
 const ZOOM_PERCENTS: [u32; 10] = [50, 67, 80, 90, 100, 110, 125, 150, 175, 200];
 
-/// Splits a stored user agent into (select mode, custom text).
-pub(super) fn user_agent_mode(
-    user_agent: Option<&str>,
-    unset_mode: &'static str,
-) -> (String, String) {
-    match user_agent {
-        None => (unset_mode.to_string(), String::new()),
-        Some(preset @ ("webkit" | "chrome" | "default")) => (preset.to_string(), String::new()),
-        Some(literal) => ("custom".to_string(), literal.to_string()),
-    }
-}
+/// User agent mode of an account that uses its service's user agent.
+const UNSET_USER_AGENT: &str = "";
 
 /// Zoom factor as whole percent, at least 1.
 #[expect(
@@ -44,17 +37,17 @@ fn zoom_percent(zoom: f64) -> u32 {
 fn read_image(
     input: &web_sys::HtmlInputElement,
     icon: RwSignal<Option<String>>,
-    error: RwSignal<String>,
+    error: RwSignal<Option<String>>,
 ) {
-    error.set(String::new());
+    error.set(None);
     let Some(file) = input.files().and_then(|files| files.get(0)) else {
         return;
     };
     if file.size() > MAX_ICON_BYTES {
-        error.set(format!(
+        error.set(Some(format!(
             "Image is too large ({} KB); the limit is 256 KB.",
             (file.size() / 1024.0).ceil()
-        ));
+        )));
         input.set_value("");
         return;
     }
@@ -71,7 +64,7 @@ fn read_image(
     });
     reader.set_onload(Some(on_load.unchecked_ref()));
     if reader.read_as_data_url(&file).is_err() {
-        error.set("Could not read the image.".into());
+        error.set(Some("Could not read the image.".into()));
     }
     input.set_value("");
 }
@@ -90,7 +83,7 @@ struct AccountDraft {
     link_target: RwSignal<&'static str>,
     custom_icon: RwSignal<Option<String>>,
     icon_url: RwSignal<String>,
-    icon_error: RwSignal<String>,
+    icon_error: RwSignal<Option<String>>,
     simple_icon: RwSignal<String>,
     zoom_percent: RwSignal<String>,
     hibernate_after: RwSignal<String>,
@@ -100,13 +93,11 @@ struct AccountDraft {
     app_hosts: RwSignal<String>,
     /// "" (service default), "allow" or "block".
     allow_media: RwSignal<&'static str>,
-    user_agent_mode: RwSignal<String>,
-    user_agent_custom: RwSignal<String>,
+    user_agent: UserAgentDraft,
 }
 
 impl AccountDraft {
     fn new(settings: &AccountSettings) -> AccountDraft {
-        let (mode, custom) = user_agent_mode(settings.user_agent.as_deref(), "");
         AccountDraft {
             label: RwSignal::new(settings.label.clone()),
             instance: RwSignal::new(settings.instance.clone().unwrap_or_default()),
@@ -128,7 +119,7 @@ impl AccountDraft {
                     .filter(|icon| !icon.starts_with("data:"))
                     .unwrap_or_default(),
             ),
-            icon_error: RwSignal::new(String::new()),
+            icon_error: RwSignal::new(None),
             simple_icon: RwSignal::new(settings.simple_icon.clone().unwrap_or_default()),
             zoom_percent: RwSignal::new(zoom_percent(settings.zoom).to_string()),
             hibernate_after: RwSignal::new(
@@ -148,16 +139,7 @@ impl AccountDraft {
                 Some(true) => "allow",
                 Some(false) => "block",
             }),
-            user_agent_mode: RwSignal::new(mode),
-            user_agent_custom: RwSignal::new(custom),
-        }
-    }
-
-    fn user_agent(self) -> Option<String> {
-        match self.user_agent_mode.get_untracked().as_str() {
-            "" => None,
-            "custom" => non_empty(&self.user_agent_custom.get_untracked()),
-            preset => Some(preset.to_string()),
+            user_agent: UserAgentDraft::new(settings.user_agent.as_deref(), UNSET_USER_AGENT),
         }
     }
 
@@ -171,7 +153,7 @@ impl AccountDraft {
             muted: !self.notifications.get_untracked(),
             show_badge: self.show_badge.get_untracked(),
             in_dock_badge: self.in_dock_badge.get_untracked(),
-            user_agent: self.user_agent(),
+            user_agent: self.user_agent.value(UNSET_USER_AGENT),
             enabled: self.enabled.get_untracked(),
             link_target: match self.link_target.get_untracked() {
                 "system" => Some(LinkTarget::SystemBrowser),
@@ -234,12 +216,11 @@ pub(super) fn EditForm(
     view! {
         <form class="edit form" novalidate on:submit=save>
             <Row label="Label">
-                <input type="text" spellcheck="false" prop:value=move || draft.label.get() on:input=move |event| draft.label.set(event_target_value(&event)) />
+                <TextField value=draft.label plain=true />
             </Row>
             {instance_label.map(|instance_label| view! {
                 <Row label=instance_field_label(instance_label) hint="Changing the instance reloads the account.">
-                    <input type="text" autocapitalize="off" spellcheck="false" autocomplete="off"
-                        prop:value=move || draft.instance.get() on:input=move |event| draft.instance.set(event_target_value(&event)) use:no_autocorrect />
+                    <TextField value=draft.instance />
                 </Row>
             })}
             <Toggle label="Enabled" hint="Disabled accounts keep their login but are not loaded." checked=draft.enabled on_change=move |enabled| draft.enabled.set(enabled) />
@@ -259,12 +240,7 @@ pub(super) fn EditForm(
             </Row>
             <IconRows account=account draft=draft />
             <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake account=id loaded=loaded />
-            <Row label="">
-                <div class="actions">
-                    <button class="btn primary" type="submit">"Save"</button>
-                    <button class="btn" type="button" on:click=move |_| editing.set(None)>"Cancel"</button>
-                </div>
-            </Row>
+            <FormActions disabled=false on_cancel=move |()| editing.set(None) />
         </form>
     }
 }
@@ -283,14 +259,16 @@ fn icon_preview(account: &AccountView, draft: &AccountDraft) -> impl Fn() -> Any
         .filter(|_| !uses_custom && account.icon_glyph);
     let (color, initials) = (account.color.clone(), account.initials.clone());
     move || {
-        match draft.custom_icon.get() {
-        Some(source) => view! { <span class="icon small has-img"><img src=source alt="" /></span> }.into_any(),
-        None => match glyph_icon.clone().filter(|_| !draft.simple_icon.get().trim().is_empty()).or_else(|| site_icon.clone()) {
-            Some(source) if site_icon.as_ref() != Some(&source) => view! { <span class="icon small has-img glyph" style=format!("background:{color}")><img src=source alt="" /></span> }.into_any(),
-            Some(source) => view! { <span class="icon small has-img"><img src=source alt="" /></span> }.into_any(),
-            None => view! { <span class="icon small" style=format!("background:{color}")>{initials.clone()}</span> }.into_any(),
-        },
-    }
+        let face = match draft.custom_icon.get() {
+            Some(source) => IconFace::Image(source),
+            None => glyph_icon
+                .clone()
+                .filter(|_| !draft.simple_icon.get().trim().is_empty())
+                .map(IconFace::Glyph)
+                .or_else(|| site_icon.clone().map(IconFace::Image))
+                .unwrap_or_else(|| IconFace::Initials(initials.clone())),
+        };
+        icon_view(face, &color, true)
     }
 }
 
@@ -302,11 +280,11 @@ fn IconRows(account: AccountView, draft: AccountDraft) -> impl IntoView {
         draft.custom_icon.set(None);
         draft.simple_icon.set(String::new());
         draft.icon_url.set(String::new());
-        draft.icon_error.set(String::new());
+        draft.icon_error.set(None);
     };
-    let apply_icon_url = move |_| {
+    let apply_icon_url = move |()| {
         let url = draft.icon_url.get_untracked().trim().to_string();
-        draft.icon_error.set(String::new());
+        draft.icon_error.set(None);
         if !url.is_empty() {
             draft.custom_icon.set(Some(url));
         } else if draft
@@ -334,19 +312,13 @@ fn IconRows(account: AccountView, draft: AccountDraft) -> impl IntoView {
                     <button class="btn small" type="button" on:click=move |_| send_command(UiCommand::RefreshIcon { account: id })>"Refresh site icon"</button>
                 </div>
             </div>
-            {move || { let error = draft.icon_error.get(); (!error.is_empty()).then(|| view! { <span class="error">{error}</span> }) }}
+            <ErrorNote message=draft.icon_error />
         </Row>
         <Row label="Simple Icons" hint="Brand glyph on the service color (slug from simpleicons.org, letters and digits only). Precedence: custom image, Simple Icon, site icon, initials.">
-            <input type="text" class="wide" placeholder="e.g. discord"
-                autocapitalize="off" spellcheck="false" autocomplete="off"
-                prop:value=move || draft.simple_icon.get() on:input=move |event| draft.simple_icon.set(event_target_value(&event)) use:no_autocorrect />
+            <TextField value=draft.simple_icon class="wide" placeholder="e.g. discord" />
         </Row>
         <Row label="Image URL">
-            <input type="url" class="wide" placeholder="https://example.com/icon.png"
-                autocapitalize="off" spellcheck="false" autocomplete="off"
-                prop:value=move || draft.icon_url.get()
-                on:input=move |event| draft.icon_url.set(event_target_value(&event))
-                on:change=apply_icon_url use:no_autocorrect />
+            <TextField value=draft.icon_url kind="url" class="wide" placeholder="https://example.com/icon.png" on_change=apply_icon_url />
         </Row>
     }
 }
@@ -404,21 +376,7 @@ fn BehaviourRows(
         <Row label="Force reload" hint="Reloads the page without the cache, for a service that stays broken after a normal reload. Sleeping and disabled services have nothing to reload.">
             <button class="btn small" type="button" disabled=!loaded on:click=move |_| send_command(UiCommand::ForceReload { account })>"Force reload"</button>
         </Row>
-        <Row label="User agent" hint="Changing the user agent reloads the account.">
-            <select prop:value=move || draft.user_agent_mode.get() on:change=move |event| draft.user_agent_mode.set(event_target_value(&event))>
-                <option value="">"Service default"</option>
-                <option value="webkit">"WebKit browser"</option>
-                <option value="chrome">"Chrome"</option>
-                <option value="default">{platform_texts::texts().system_user_agent}</option>
-                <option value="custom">"Custom\u{2026}"</option>
-            </select>
-        </Row>
-        {move || (draft.user_agent_mode.get() == "custom").then(|| view! {
-            <Row label="Custom user agent">
-                <input type="text" class="wide" autocapitalize="off" spellcheck="false" autocomplete="off"
-                    prop:value=move || draft.user_agent_custom.get() on:input=move |event| draft.user_agent_custom.set(event_target_value(&event)) use:no_autocorrect />
-            </Row>
-        })}
+        <UserAgentRows draft=draft.user_agent unset_mode=UNSET_USER_AGENT hint="Changing the user agent reloads the account." />
         <Row label="Always open in the app" hint="Links that open a new window to these hosts open inside the app with this account's login (e.g. a single-sign-on provider such as idp.example.org, or *.microsoftonline.com). Redirects within the page always stay in the app.">
             <textarea class="mono" rows="3" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="one host per line"
                 prop:value=move || draft.app_hosts.get() on:input=move |event| draft.app_hosts.set(event_target_value(&event)) use:no_autocorrect ></textarea>

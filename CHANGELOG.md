@@ -9,6 +9,12 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+## 0.6.0
+
+Settings can be exported and imported: everything into a new installation, or only the settings, custom services and service definition files into an existing one, keeping its services and logins. Each service can override the sidebar badge style and the dock badge. Slack shows its unread count and dot again.
+
+> **Upgrade notes:** the per-service *Count in dock badge* switch is gone. A service that had it off now uses the global dock badge setting; set its *Dock badge* to *Off* to exclude it again.
+
 ### Added
 
 #### All platforms
@@ -23,7 +29,6 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 #### All platforms
 
 - *Settings…* in a service's menu now reliably opens the settings dialog on that service, also when the dialog is closed, and scrolls to it
-- The per-service *Count in dock badge* switch is gone: set the service's dock badge to *Off* instead; services that had it off now use the global dock badge setting
 - The badge settings of a service use the same segmented buttons as the global settings
 - The *Sidebar badges* setting moved from *General* to *Notifications*
 - A custom service whose id equals a built-in service or a service definition file is logged when it replaces that service

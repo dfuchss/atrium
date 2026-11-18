@@ -99,14 +99,28 @@ pub enum UiCommand {
     OpenServicesFolder,
     /// Expert mode: re-read the TOML files in `<config>/services/` without a restart.
     ReloadServices,
-    /// Write the settings, the added services and the custom services to a file (see
-    /// `Platform::export_settings`).
-    ExportSettings,
-    /// Replace all settings and accounts (with their logins) by the content of an export file.
-    /// The UI asks the user to confirm first.
-    ImportSettings {
-        json: String,
-    },
     /// About tab: open [`PROJECT_URL`](crate::PROJECT_URL) in the browser.
     OpenProjectPage,
+}
+
+/// Sent with [`CMD_TRANSFER_COMMAND`](crate::CMD_TRANSFER_COMMAND); the backend shows the file
+/// dialogs and the result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransferCommand {
+    /// Save an export file at a location the user chooses.
+    Export(TransferScope),
+    /// Import an export file the user chooses. A full import needs an instance without
+    /// accounts and restarts the app.
+    Import(TransferScope),
+}
+
+/// What an export file holds, or what an import takes from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransferScope {
+    /// Accounts, settings, custom services and service definition files.
+    Full,
+    /// The same without the accounts.
+    Settings,
 }

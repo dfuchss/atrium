@@ -11,10 +11,7 @@ use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 use crate::logger::spawn_logged;
-use crate::{Input, TauriHost, bring_to_front, icons, menus, native, port_err};
-
-/// The exported settings are a backup the user may share: readable like any saved file.
-const EXPORT_FILE_MODE: u32 = 0o644;
+use crate::{Input, TauriHost, bring_to_front, graceful_restart, icons, menus, native, port_err};
 
 fn describe_simple_icon(result: &SimpleIconResult) -> String {
     match result {
@@ -92,37 +89,6 @@ impl<R: Runtime> Platform for TauriHost<R> {
             .map_err(port_err)
     }
 
-    fn export_settings(&self, json: &str) -> PortResult {
-        use tauri_plugin_dialog::DialogExt as _;
-        let (app, logger, json) = (self.app.clone(), self.logger.clone(), json.to_string());
-        // The dialog blocks until the user answers, so it must not run on the main thread.
-        let started = spawn_logged("export", &self.logger, move || {
-            let Some(chosen) = app
-                .dialog()
-                .file()
-                .set_file_name("atrium-settings.json")
-                .add_filter("Atrium settings", &["json"])
-                .blocking_save_file()
-            else {
-                return;
-            };
-            let result = chosen.into_path().map_err(port_err).and_then(|path| {
-                fs_util::write_atomically(&path, json.as_bytes(), EXPORT_FILE_MODE)
-                    .map(|()| path)
-                    .map_err(port_err)
-            });
-            match result {
-                Ok(path) => logger.log(&format!("exported settings to {}", path.display())),
-                Err(error) => logger.log(&format!("export settings failed: {error:?}")),
-            }
-        });
-        if started {
-            Ok(())
-        } else {
-            Err(port_err("cannot start the export"))
-        }
-    }
-
     fn load_services(&self) -> PortResult {
         let (defs, errors) = services::read_user_services(&self.services_dir()?);
         (self.feed)(Input::ServicesLoaded { defs, errors });
@@ -131,6 +97,11 @@ impl<R: Runtime> Platform for TauriHost<R> {
 
     fn focus_window(&self) -> PortResult {
         bring_to_front(&self.window()?).map_err(port_err)
+    }
+
+    fn restart(&self) -> PortResult {
+        graceful_restart(&self.app);
+        Ok(())
     }
 
     fn fetch_icon(&self, account: Uuid, url: &str) -> PortResult {

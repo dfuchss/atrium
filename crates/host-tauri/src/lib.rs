@@ -100,7 +100,7 @@ pub fn native_theme(theme: protocol::Theme) -> Option<Theme> {
 }
 
 pub use crate::menus::handle_menu_event;
-pub use crate::quit::{graceful_quit, is_quitting};
+pub use crate::quit::{graceful_quit, graceful_restart, is_quitting};
 
 /// Sink for inputs produced by the adapter; must not block.
 pub type Feed = Arc<dyn Fn(Input) + Send + Sync>;

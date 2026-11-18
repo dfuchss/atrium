@@ -1,150 +1,95 @@
 use super::*;
-use protocol::BadgeStyle;
 
-fn exported(core: &mut Core) -> String {
-    let effects = core.handle(Input::Ui(UiCommand::ExportSettings));
-    effects_of!(&effects, Effect::ExportSettings { json } => json.clone())
-        .pop()
-        .expect("export")
-}
-
-fn source_core() -> Core {
-    let (mut core, _) = started(vec![
-        account(1, "slack", "Work"),
-        account(2, "discord", "D"),
-    ]);
+fn add_custom(core: &mut Core, name: &str, url: &str) {
     core.handle(Input::Ui(UiCommand::AddCustomService {
-        service: CustomService {
-            id: String::new(),
-            name: "My chat".into(),
-            url: "https://chat.example.org/".into(),
-            color: "#123456".into(),
-            instance_label: None,
-            title_regex: None,
-            user_agent: None,
-        },
+        service: custom(name, url),
     }));
-    core.handle(Input::Ui(UiCommand::AddAccount {
-        service: "custom-my-chat".into(),
-        label: "Chat".into(),
-        instance: None,
-    }));
-    let mut settings = core.settings().clone();
-    settings.dnd = true;
-    settings.badge_style = BadgeStyle::Dot;
-    core.handle(Input::Ui(UiCommand::UpdateSettings { settings }));
-    update_account(&mut core, 1, |settings| {
-        settings.badge_style = Some(BadgeStyle::UrgentOnly);
-        settings.muted = true;
-    });
-    core
 }
 
 #[test]
-fn export_then_import_restores_settings_and_accounts() {
-    let json = exported(&mut source_core());
-    let (mut target, _) = started(vec![account(7, "mastodon", "Old")]);
-    let effects = target.handle(Input::Ui(UiCommand::ImportSettings { json }));
+fn settings_import_updates_known_custom_services_and_adds_the_others() {
+    let mut saved = Persisted::default();
+    saved.settings.app.dnd = true;
+    saved.custom_services = vec![
+        CustomService {
+            id: "custom-chat".into(),
+            ..custom("Chat", "https://new.example.org/")
+        },
+        CustomService {
+            id: "slack".into(),
+            ..custom("Slack", "https://other.example.org/")
+        },
+    ];
+    let (mut core, _) = started(vec![account(7, "discord", "D")]);
+    add_custom(&mut core, "Chat", "https://chat.example.org/");
+    add_custom(&mut core, "Mine", "https://mine.example.org/");
+
+    let effects = core.handle(Input::ImportSettings(saved));
+
     let snapshot = last_snapshot(&effects);
     assert!(snapshot.settings.dnd);
-    assert_eq!(snapshot.settings.badge_style, BadgeStyle::Dot);
-    let labels: Vec<_> = snapshot
-        .accounts
+    assert_eq!(snapshot.accounts.len(), 1);
+    assert_eq!(snapshot.active, Some(id(7)));
+    let custom: Vec<_> = snapshot
+        .custom_services
         .iter()
-        .map(|account| (account.service.as_str(), account.settings.label.as_str()))
+        .map(|service| (service.id.as_str(), service.url.as_str()))
         .collect();
     assert_eq!(
-        labels,
+        custom,
         [
-            ("slack", "Work"),
-            ("discord", "D"),
-            ("custom-my-chat", "Chat")
+            ("custom-chat", "https://new.example.org/"),
+            ("custom-mine", "https://mine.example.org/"),
+            ("custom-slack", "https://other.example.org/"),
         ]
     );
     assert_eq!(
-        snapshot.accounts[0].settings.badge_style,
-        Some(BadgeStyle::UrgentOnly)
+        core.registry.get("slack").unwrap().url,
+        Catalog::builtin().get("slack").unwrap().url
     );
-    assert!(snapshot.accounts[0].settings.muted);
-    assert!(snapshot.accounts.iter().all(|account| account.id != id(7)));
-    assert!(effects.contains(&Effect::DeleteProfile {
-        store_id: *id(7).as_bytes()
-    }));
-    assert_eq!(snapshot.custom_services.len(), 1);
 }
 
 #[test]
-fn unreadable_file_changes_nothing() {
-    let (mut core, _) = started(vec![account(1, "slack", "A")]);
-    for json in [
-        "not json",
-        r#"{"format":"other","version":1}"#,
-        r#"{"format":"atrium-settings","version":99}"#,
-    ] {
-        let effects = core.handle(Input::Ui(UiCommand::ImportSettings { json: json.into() }));
-        assert!(
-            !effects
-                .iter()
-                .any(|effect| matches!(effect, Effect::DeleteProfile { .. } | Effect::Persist(_))),
-            "{json}"
-        );
-        assert_eq!(last_snapshot(&effects).accounts.len(), 1);
-    }
-}
-
-#[test]
-fn accounts_of_unknown_services_are_skipped() {
-    let json = r#"{"format":"atrium-settings","version":1,"accounts":[
-        {"service":"no-such-service","label":"X"},
-        {"service":"slack","label":"S","instance":"kit"}]}"#;
+fn settings_import_saves_and_emits_once_and_skips_invalid_custom_services() {
+    let saved = Persisted {
+        custom_services: vec![
+            custom("One", "https://one.example.org/"),
+            custom("Two", "https://two.example.org/"),
+            custom("Broken", "not a url"),
+        ],
+        ..Persisted::default()
+    };
     let (mut core, _) = started(vec![]);
-    let effects = core.handle(Input::Ui(UiCommand::ImportSettings { json: json.into() }));
-    let snapshot = last_snapshot(&effects);
-    assert_eq!(snapshot.accounts.len(), 1);
-    assert_eq!(snapshot.accounts[0].settings.label, "S");
-}
 
-fn assert_unchanged(effects: &[Effect], core: &Core, json: &str) {
-    assert!(
-        !effects
-            .iter()
-            .any(|effect| matches!(effect, Effect::DeleteProfile { .. } | Effect::Persist(_))),
-        "{json}"
-    );
-    assert_eq!(
-        last_snapshot(effects).accounts.len(),
-        core.persisted.accounts.len()
-    );
+    let effects = core.handle(Input::ImportSettings(saved));
+
+    let count = |matches: fn(&Effect) -> bool| effects.iter().filter(|e| matches(e)).count();
+    assert_eq!(count(|effect| matches!(effect, Effect::Persist(_))), 1);
+    assert_eq!(count(|effect| matches!(effect, Effect::EmitSnapshot(_))), 1);
+    assert_eq!(last_snapshot(&effects).custom_services.len(), 2);
+    assert!(logs(&effects).iter().any(|line| line.contains("Broken")));
 }
 
 #[test]
-fn invalid_custom_service_or_account_changes_nothing() {
-    let (mut core, _) = started(vec![account(1, "slack", "A")]);
-    for json in [
-        r##"{"format":"atrium-settings","version":1,"custom_services":[
-            {"id":"","name":"Bad","url":"not a url","color":"#123456"}],
-            "accounts":[{"service":"slack","label":"S"}]}"##,
-        r##"{"format":"atrium-settings","version":1,"custom_services":[
-            {"id":"","name":"Bad","url":"https://x.example.org/","color":"#123456","title_regex":"("}]}"##,
-        r#"{"format":"atrium-settings","version":1,
-            "accounts":[{"service":"slack","label":"S"},{"service":"mastodon","label":"M","instance":"a b"}]}"#,
-    ] {
-        let effects = core.handle(Input::Ui(UiCommand::ImportSettings { json: json.into() }));
-        assert_unchanged(&effects, &core, json);
-    }
-    assert_eq!(core.persisted.custom_services.len(), 0);
-}
+fn full_import_replaces_the_saved_state() {
+    let mut saved = Persisted {
+        accounts: vec![account(7, "discord", "D")],
+        ..Persisted::default()
+    };
+    saved.settings.active = Some(id(7));
+    let (mut core, _) = started(vec![]);
 
-#[test]
-fn import_persists_and_emits_once_and_creates_disabled_accounts_without_view() {
-    let json = r#"{"format":"atrium-settings","version":1,"accounts":[
-        {"service":"slack","label":"A","enabled":true},
-        {"service":"slack","label":"B","enabled":false},
-        {"service":"discord","label":"C"}]}"#;
-    let (mut core, _) = started(vec![account(7, "mastodon", "Old")]);
-    let effects = core.handle(Input::Ui(UiCommand::ImportSettings { json: json.into() }));
-    let count = |f: fn(&Effect) -> bool| effects.iter().filter(|e| f(e)).count();
-    assert_eq!(count(|e| matches!(e, Effect::Persist(_))), 1);
-    assert_eq!(count(|e| matches!(e, Effect::EmitSnapshot(_))), 1);
-    assert_eq!(count(|e| matches!(e, Effect::CreateView { .. })), 2);
+    let imported = core.handle(Input::ImportEverything(saved.clone()));
+    let persisted = imported
+        .iter()
+        .position(|effect| matches!(effect, Effect::Persist(_)));
+    let restarted = imported
+        .iter()
+        .position(|effect| *effect == Effect::Restart);
+    assert!(persisted < restarted, "{imported:?}");
+    assert!(restarted.is_some());
+    let effects = core.handle(Input::Ui(UiCommand::SetDnd { enabled: true }));
+
+    saved.settings.app.dnd = true;
+    assert!(effects.contains(&Effect::Persist(saved)));
 }

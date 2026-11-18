@@ -1,79 +1,50 @@
-//! Export and import of the settings, the accounts and the custom services.
+//! Export and import of the accounts, the settings and the services. The backend shows the file
+//! dialogs and the result.
 
 use leptos::prelude::*;
-use protocol::UiCommand;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::Closure;
+use protocol::{CMD_TRANSFER_COMMAND, Snapshot, TransferCommand, TransferScope};
 
-use crate::commands::send_command;
-use crate::widgets::{ConfirmButton, ErrorNote, Row};
+use crate::widgets::Row;
+use crate::{query, tauri};
 
-/// Larger files are refused before they are read (the core refuses them as well).
-const MAX_IMPORT_BYTES: f64 = 32.0 * 1024.0 * 1024.0;
-
-/// Reads the chosen file as text into `pending`; an empty or unreadable file sets `error`.
-fn read_export(
-    input: &web_sys::HtmlInputElement,
-    pending: RwSignal<Option<String>>,
-    error: RwSignal<Option<String>>,
-) {
-    pending.set(None);
-    error.set(None);
-    let Some(file) = input.files().and_then(|files| files.get(0)) else {
-        return;
-    };
-    if file.size() > MAX_IMPORT_BYTES {
-        error.set(Some("The file is too large (the limit is 32 MiB).".into()));
-        input.set_value("");
-        return;
+fn send(command: TransferCommand) {
+    if query::use_tauri() {
+        leptos::task::spawn_local(tauri::send(CMD_TRANSFER_COMMAND, command));
     }
-    let Ok(reader) = web_sys::FileReader::new() else {
-        return;
-    };
-    let loaded_reader = reader.clone();
-    let on_load = Closure::once_into_js(move || {
-        match loaded_reader
-            .result()
-            .ok()
-            .and_then(|text| text.as_string())
-        {
-            Some(text) if !text.trim().is_empty() => pending.set(Some(text)),
-            _ => error.set(Some("The file is empty.".into())),
-        }
-    });
-    reader.set_onload(Some(on_load.unchecked_ref()));
-    if reader.read_as_text(&file).is_err() {
-        error.set(Some("Could not read the file.".into()));
+}
+
+/// A button that sends `command`; `class` is `btn` or `btn danger`.
+fn transfer_button(
+    label: &'static str,
+    class: &'static str,
+    command: TransferCommand,
+    disabled: Signal<bool>,
+) -> impl IntoView {
+    view! {
+        <button class=class type="button" disabled=move || disabled.get() on:click=move |_| send(command)>{label}</button>
     }
-    input.set_value("");
 }
 
 #[component]
-pub(super) fn TransferSection() -> impl IntoView {
-    let pending: RwSignal<Option<String>> = RwSignal::new(None);
-    let error: RwSignal<Option<String>> = RwSignal::new(None);
-    let import = Callback::new(move |()| {
-        if let Some(json) = pending.get_untracked() {
-            pending.set(None);
-            send_command(UiCommand::ImportSettings { json });
-        }
-    });
+pub(super) fn TransferSection(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
+    let has_accounts =
+        Signal::derive(move || snapshot.with(|snapshot| !snapshot.accounts.is_empty()));
+    let never = Signal::stored(false);
     view! {
         <h2>"Export and import"</h2>
         <div class="form">
-            <Row label="Export" hint="Saves the settings, the added services and the custom services to a file. You choose where to save it. Logins are not included.">
-                <button class="btn" type="button" on:click=move |_| send_command(UiCommand::ExportSettings)>"Export settings\u{2026}"</button>
-            </Row>
-            <Row label="Import" hint="Warning: importing overwrites all settings and removes all current services with their logins. The file is checked first; an invalid file changes nothing.">
+            <Row label="Export" hint="Everything: the accounts, the settings and the services. Settings: the same without the accounts. Logins are not included.">
                 <div class="actions">
-                    <input type="file" accept=".json,application/json" aria-label="Settings file to import"
-                        on:change=move |event| read_export(&event_target::<web_sys::HtmlInputElement>(&event), pending, error) />
-                    <Show when=move || pending.with(Option::is_some)>
-                        <ConfirmButton label="Import file" confirm_label="Overwrite everything" on_confirm=import />
-                    </Show>
+                    {transfer_button("Export everything\u{2026}", "btn", TransferCommand::Export(TransferScope::Full), never)}
+                    {transfer_button("Export settings\u{2026}", "btn", TransferCommand::Export(TransferScope::Settings), never)}
+                </div>
+            </Row>
+            <Row label="Import" hint="Everything: only without accounts; Atrium restarts and you log in again. Settings: your accounts stay, custom services are updated or added.">
+                <div class="actions">
+                    {transfer_button("Import everything\u{2026}", "btn danger", TransferCommand::Import(TransferScope::Full), has_accounts)}
+                    {transfer_button("Import settings\u{2026}", "btn danger", TransferCommand::Import(TransferScope::Settings), never)}
                 </div>
             </Row>
         </div>
-        <ErrorNote message=error />
     }
 }

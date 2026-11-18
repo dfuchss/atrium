@@ -206,6 +206,8 @@ impl Core {
                 result,
             } => self.simple_icon_fetched(account, &slug, result),
             Input::ServicesLoaded { defs, errors } => self.services_loaded(defs, errors),
+            Input::ImportSettings(saved) => self.import_settings(saved),
+            Input::ImportEverything(saved) => self.import_everything(saved),
         }
     }
 
@@ -240,8 +242,6 @@ impl Core {
             UiCommand::RemoveCustomService { id } => self.remove_custom_service(&id),
             UiCommand::OpenServicesFolder => vec![Effect::OpenServicesFolder],
             UiCommand::ReloadServices => vec![Effect::LoadServices],
-            UiCommand::ExportSettings => self.export_settings(),
-            UiCommand::ImportSettings { json } => self.import_settings(&json),
             UiCommand::OpenProjectPage => self.open_project_page(),
         }
     }

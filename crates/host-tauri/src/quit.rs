@@ -1,4 +1,4 @@
-//! Quitting after the service pages had a chance to unload.
+//! Quitting and restarting after the service pages had a chance to unload.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -25,8 +25,18 @@ pub fn is_quitting() -> bool {
 /// Navigating to `about:blank` fires `pagehide`/`unload`, so pages release what they hold
 /// (Element's session lock would otherwise look alive on the next start and show "Element is
 /// open in another window"). The wait runs on a background thread, then `app.exit(0)`, whose
-/// `ExitRequested` must be let through (see [`is_quitting`]). Only the first call does anything.
+/// `ExitRequested` must be let through (see [`is_quitting`]). Only the first call (of this or
+/// [`graceful_restart`]) does anything.
 pub fn graceful_quit<R: Runtime>(app: &AppHandle<R>) {
+    graceful_exit(app, false);
+}
+
+/// Like [`graceful_quit`], but starts the app again (`AppHandle::request_restart`).
+pub fn graceful_restart<R: Runtime>(app: &AppHandle<R>) {
+    graceful_exit(app, true);
+}
+
+fn graceful_exit<R: Runtime>(app: &AppHandle<R>, restart: bool) {
     if QUITTING.swap(true, Ordering::SeqCst) {
         return;
     }
@@ -37,13 +47,20 @@ pub fn graceful_quit<R: Runtime>(app: &AppHandle<R>) {
     } else {
         UNLOAD_GRACE
     };
+    let end = move |app: &AppHandle<R>| {
+        if restart {
+            app.request_restart();
+        } else {
+            app.exit(0);
+        }
+    };
     let exiting = app.clone();
     let spawned = spawn_logged("quit", &logger, move || {
         std::thread::sleep(grace);
-        exiting.exit(0);
+        end(&exiting);
     });
     if !spawned {
-        app.exit(0);
+        end(app);
     }
 }
 

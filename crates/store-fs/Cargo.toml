@@ -12,6 +12,7 @@ description.workspace = true
 domain.workspace = true
 fs-util.workspace = true
 protocol.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]

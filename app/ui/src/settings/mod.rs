@@ -121,7 +121,7 @@ pub(crate) fn SettingsDialog(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     Tab::Notifications => view! { <NotificationsTab snapshot=snapshot /> }.into_any(),
                     Tab::Dock => view! { <DockTab snapshot=snapshot /> }.into_any(),
                     Tab::Links => view! { <LinksTab snapshot=snapshot /> }.into_any(),
-                    Tab::Transfer => view! { <TransferSection /> }.into_any(),
+                    Tab::Transfer => view! { <TransferSection snapshot=snapshot /> }.into_any(),
                     Tab::About => view! { <AboutTab snapshot=snapshot /> }.into_any(),
                 }}
             </main>

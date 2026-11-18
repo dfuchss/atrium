@@ -15,7 +15,8 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 - Each service can override the sidebar badge style (*Count*, *Dot*, *Urgent only*) in its settings; *Global* keeps the default
 - Each service can override the *Dock badge* setting (*Unread count and dot*, *Unread count only*, *Off*) in its settings; *Global* keeps the default
-- The *Export and import* tab saves (to a location you choose) and restores the settings, the added services and the custom services; import asks for confirmation and overwrites everything, including the current logins
+- The *Export and import* tab saves everything (accounts, settings, custom services and service definition files) or the settings only to a file you choose; the file is readable by you only and holds no logins
+- *Import everything* takes a whole export into an Atrium without accounts and restarts it right after saving; *Import settings* takes the settings and custom services of an export and adds its service definition files, keeping your accounts and existing files
 
 ### Changed
 

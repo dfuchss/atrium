@@ -112,11 +112,9 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
             open_checked(&url, browser.as_deref(), ports),
         ),
         Effect::OpenServicesFolder => ("OpenServicesFolder", ports.platform.open_services_folder()),
-        Effect::ExportSettings { json } => {
-            ("ExportSettings", ports.platform.export_settings(&json))
-        }
         Effect::LoadServices => ("LoadServices", ports.platform.load_services()),
         Effect::FocusWindow => ("FocusWindow", ports.platform.focus_window()),
+        Effect::Restart => ("Restart", ports.platform.restart()),
         Effect::ApplySystemSettings(settings) => (
             "ApplySystemSettings",
             ports.platform.apply_system_settings(&settings),
@@ -240,13 +238,13 @@ mod tests {
         fn open_services_folder(&self) -> PortResult {
             Ok(())
         }
-        fn export_settings(&self, _: &str) -> PortResult {
-            Ok(())
-        }
         fn load_services(&self) -> PortResult {
             Ok(())
         }
         fn focus_window(&self) -> PortResult {
+            Ok(())
+        }
+        fn restart(&self) -> PortResult {
             Ok(())
         }
         fn fetch_icon(&self, _: Uuid, _: &str) -> PortResult {

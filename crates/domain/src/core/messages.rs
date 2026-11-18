@@ -248,6 +248,11 @@ pub enum Input {
         defs: Vec<ServiceDef>,
         errors: Vec<String>,
     },
+    /// The settings import: takes the app settings and the custom services of an export file.
+    ImportSettings(Persisted),
+    /// The full import: the saved state of an export file replaces the app's, which loads it
+    /// on its restart.
+    ImportEverything(Persisted),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -342,12 +347,10 @@ pub enum Effect {
         browser: Option<String>,
     },
     FocusWindow,
+    /// Quit and start the app again; runs after the effects before it, e.g. a [`Effect::Persist`].
+    Restart,
     /// Create `<config>/services/` (with README and example when empty) and show it.
     OpenServicesFolder,
-    /// Write the export file (JSON) to the user's downloads folder and show it.
-    ExportSettings {
-        json: String,
-    },
     /// Re-read the user's service files; answered with [`Input::ServicesLoaded`].
     LoadServices,
     /// Apply OS-level settings (launch at login, ...). Emitted on start and on every change.

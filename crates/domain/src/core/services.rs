@@ -82,7 +82,7 @@ impl Core {
             .any(|custom| custom.id == service_id)
     }
 
-    fn custom_service_index(&self, service_id: &str) -> Option<usize> {
+    pub(super) fn custom_service_index(&self, service_id: &str) -> Option<usize> {
         self.persisted
             .custom_services
             .iter()
@@ -97,15 +97,11 @@ impl Core {
     }
 
     pub(super) fn add_custom_service(&mut self, service: &CustomService) -> Vec<Effect> {
-        let mut custom = match crate::catalog::normalize_custom(service) {
+        let custom = match crate::catalog::normalize_custom(service) {
             Ok(custom) => custom,
             Err(error) => return self.rejected(format!("add custom service: {error}")),
         };
-        custom.id = crate::catalog::custom_service_id(&custom.name, |id| {
-            self.registry.defines_file_service(id) || self.is_custom(id)
-        });
-        let id = custom.id.clone();
-        self.persisted.custom_services.push(custom);
+        let id = self.push_custom_service(custom);
         let mut effects = log_effects(self.rebuild_catalog());
         effects.push(Effect::Log(format!("added custom service {id}")));
         self.custom_services_changed(effects)
@@ -128,6 +124,23 @@ impl Core {
         let id = custom.id.clone();
         self.persisted.custom_services[index] = custom;
         let mut effects = log_effects(self.rebuild_catalog());
+        effects.extend(self.recreate_views_of_service(&id));
+        self.custom_services_changed(effects)
+    }
+
+    /// Adds the normalised `custom` under a new id that clashes with no other service; returns
+    /// the id.
+    pub(super) fn push_custom_service(&mut self, mut custom: CustomService) -> String {
+        custom.id = crate::catalog::custom_service_id(&custom.name, |id| {
+            self.registry.defines_file_service(id) || self.is_custom(id)
+        });
+        let id = custom.id.clone();
+        self.persisted.custom_services.push(custom);
+        id
+    }
+
+    /// Recreates the loaded views of the accounts of the service `id`.
+    pub(super) fn recreate_views_of_service(&mut self, id: &str) -> Vec<Effect> {
         let users: Vec<Uuid> = self
             .persisted
             .accounts
@@ -135,10 +148,10 @@ impl Core {
             .filter(|account| account.service == id && self.is_loaded(account.id))
             .map(|account| account.id)
             .collect();
-        for account_id in users {
-            effects.extend(self.recreate_view(account_id));
-        }
-        self.custom_services_changed(effects)
+        users
+            .into_iter()
+            .flat_map(|account_id| self.recreate_view(account_id))
+            .collect()
     }
 
     /// Only unused services can be removed.

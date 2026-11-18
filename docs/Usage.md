@@ -74,7 +74,12 @@ Called *Launcher badge* on Linux and *Taskbar badge* on Windows. *Show*: *Unread
 
 ### Export and import
 
-*Export settings* saves the settings, the added services and the custom services to a file at a location you choose. Logins are not included. *Import* asks for a file and overwrites all settings. It removes all current services with their logins. Atrium checks the file first; an invalid file changes nothing.
+*Export everything* saves the accounts, the settings, the custom services and the files of the services folder to a file at a location you choose; *Export settings* leaves out the accounts. Logins are not included. The file is readable by you only, as it names your accounts and workspaces.
+
+Both imports ask for the file. Atrium refuses files that are no Atrium export or come from a newer Atrium.
+
+- *Import everything* works only while Atrium has no accounts. It takes the accounts, the settings and the custom services of the file, adds its service definition files and restarts Atrium right after saving. Log in to the accounts again.
+- *Import settings* takes the settings and the custom services of the file and adds its service definition files. Your accounts and logins stay. A custom service you already have (same id) is updated, any other is added. Service definition files you already have are kept; the result lists the files and custom services that were not imported.
 
 ### About
 

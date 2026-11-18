@@ -120,7 +120,7 @@ impl Core {
 
     /// Normalised settings plus the problems of fields that were dropped (invalid slug or app
     /// hosts); an error if the instance does not fit the service.
-    pub(super) fn normalized_account_settings(
+    fn normalized_account_settings(
         &self,
         account: &Account,
         mut settings: AccountSettings,

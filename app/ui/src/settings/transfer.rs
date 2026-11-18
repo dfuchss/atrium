@@ -8,6 +8,9 @@ use wasm_bindgen::prelude::Closure;
 use crate::commands::send_command;
 use crate::widgets::{ConfirmButton, ErrorNote, Row};
 
+/// Larger files are refused before they are read (the core refuses them as well).
+const MAX_IMPORT_BYTES: f64 = 32.0 * 1024.0 * 1024.0;
+
 /// Reads the chosen file as text into `pending`; an empty or unreadable file sets `error`.
 fn read_export(
     input: &web_sys::HtmlInputElement,
@@ -19,6 +22,11 @@ fn read_export(
     let Some(file) = input.files().and_then(|files| files.get(0)) else {
         return;
     };
+    if file.size() > MAX_IMPORT_BYTES {
+        error.set(Some("The file is too large (the limit is 32 MiB).".into()));
+        input.set_value("");
+        return;
+    }
     let Ok(reader) = web_sys::FileReader::new() else {
         return;
     };
@@ -58,11 +66,8 @@ pub(super) fn TransferSection() -> impl IntoView {
             </Row>
             <Row label="Import" hint="Warning: importing overwrites all settings and removes all current services with their logins. The file is checked first; an invalid file changes nothing.">
                 <div class="actions">
-                    <label class="btn file-btn">
-                        "Choose file\u{2026}"
-                        <input type="file" accept=".json,application/json" hidden
-                            on:change=move |event| read_export(&event_target::<web_sys::HtmlInputElement>(&event), pending, error) />
-                    </label>
+                    <input type="file" accept=".json,application/json" aria-label="Settings file to import"
+                        on:change=move |event| read_export(&event_target::<web_sys::HtmlInputElement>(&event), pending, error) />
                     <Show when=move || pending.with(Option::is_some)>
                         <ConfirmButton label="Import file" confirm_label="Overwrite everything" on_confirm=import />
                     </Show>

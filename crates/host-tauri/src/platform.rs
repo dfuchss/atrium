@@ -13,6 +13,9 @@ use uuid::Uuid;
 use crate::logger::spawn_logged;
 use crate::{Input, TauriHost, bring_to_front, icons, menus, native, port_err};
 
+/// The exported settings are a backup the user may share: readable like any saved file.
+const EXPORT_FILE_MODE: u32 = 0o644;
+
 fn describe_simple_icon(result: &SimpleIconResult) -> String {
     match result {
         SimpleIconResult::Found(data_url) => format!("{} bytes as data URL", data_url.len()),
@@ -103,10 +106,11 @@ impl<R: Runtime> Platform for TauriHost<R> {
             else {
                 return;
             };
-            let result = chosen
-                .into_path()
-                .map_err(port_err)
-                .and_then(|path| std::fs::write(&path, json).map(|()| path).map_err(port_err));
+            let result = chosen.into_path().map_err(port_err).and_then(|path| {
+                fs_util::write_atomically(&path, json.as_bytes(), EXPORT_FILE_MODE)
+                    .map(|()| path)
+                    .map_err(port_err)
+            });
             match result {
                 Ok(path) => logger.log(&format!("exported settings to {}", path.display())),
                 Err(error) => logger.log(&format!("export settings failed: {error:?}")),

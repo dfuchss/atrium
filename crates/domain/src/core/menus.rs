@@ -39,9 +39,9 @@ impl Core {
         let first = if loaded {
             item(AccountMenuAction::Sleep, self.active != Some(account_id))
         } else {
-            item(AccountMenuAction::WakeUp, account.enabled)
+            item(AccountMenuAction::WakeUp, account.settings.enabled)
         };
-        let notifications = if account.muted {
+        let notifications = if account.settings.muted {
             AccountMenuAction::EnableNotifications
         } else {
             AccountMenuAction::DisableNotifications
@@ -77,7 +77,7 @@ impl Core {
         let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
         };
-        if !account.enabled || self.is_loaded(account_id) {
+        if !account.settings.enabled || self.is_loaded(account_id) {
             return vec![Effect::Log(format!(
                 "wake up: account {account_id} is disabled or awake"
             ))];
@@ -101,7 +101,9 @@ impl Core {
 
     /// Applies the zoom step `next` picks for the current zoom; none at the end of the scale.
     fn step_zoom(&mut self, account_id: Uuid, next: fn(f64) -> Option<f64>) -> Vec<Effect> {
-        let current = self.account(account_id).map_or(1.0, |account| account.zoom);
+        let current = self
+            .account(account_id)
+            .map_or(1.0, |account| account.settings.zoom);
         match next(current) {
             Some(zoom) => self.set_zoom(account_id, zoom),
             None => vec![],
@@ -132,10 +134,10 @@ impl Core {
                 .persisted
                 .accounts
                 .iter()
-                .filter(|account| account.enabled)
+                .filter(|account| account.settings.enabled)
                 .map(|account| MenuAccount {
                     id: account.id,
-                    label: account.label.clone(),
+                    label: account.settings.label.clone(),
                     unread: self.unread.of(account.id).direct,
                 })
                 .collect(),

@@ -7,12 +7,12 @@ use regex::Regex;
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::{Core, DockBadge, Effect, NotificationReq};
+use super::{Core, DockBadge, Effect, MS_PER_MINUTE, NotificationReq};
 use crate::catalog::ServiceDef;
 use crate::throttle::RateLimiter;
 
 /// Body of notifications when previews are off.
-pub const HIDDEN_PREVIEW_BODY: &str = "New message";
+pub(super) const HIDDEN_PREVIEW_BODY: &str = "New message";
 
 /// Larger poll results are dropped unread: a page cannot make the core parse megabytes a second.
 const MAX_POLL_RESULT_BYTES: usize = 256 * 1024;
@@ -20,7 +20,6 @@ const MAX_POLL_RESULT_BYTES: usize = 256 * 1024;
 const NOTIFICATIONS_PER_POLL: usize = 5;
 /// Notifications shown per account and minute.
 const NOTIFICATIONS_PER_MINUTE: usize = 20;
-const MS_PER_MINUTE: u64 = 60_000;
 /// Longest notification title and body taken from a page, in characters.
 const NOTIFICATION_TITLE_MAX_CHARS: usize = 200;
 const NOTIFICATION_BODY_MAX_CHARS: usize = 1000;
@@ -210,13 +209,13 @@ impl Core {
             return vec![Self::unknown(account_id)];
         };
         let service_id = account.service.clone();
-        let Some(service) = self.catalog.get(&service_id) else {
+        let Some(service) = self.registry.get(&service_id) else {
             return vec![];
         };
         let has_poll = service.unread.poll.is_some();
         let unread = self
-            .title_rules
-            .get(&service_id)
+            .registry
+            .title_rules(&service_id)
             .map_or_default(|rules| rules.parse(title));
         self.unread.from_title.insert(account_id, unread);
         if has_poll && self.unread.polled.contains(&account_id) {
@@ -243,14 +242,14 @@ impl Core {
         let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
         };
-        let (muted, service_id) = (account.muted, account.service.clone());
-        let Some(service) = self.catalog.get(&service_id) else {
+        let (muted, service_id) = (account.settings.muted, account.service.clone());
+        let Some(service) = self.registry.get(&service_id) else {
             return vec![Effect::Log(format!(
                 "poll result: unknown service {service_id}"
             ))];
         };
         let has_poll = service.unread.poll.is_some();
-        let prefix = notification_prefix(&service.name, &account.label);
+        let prefix = notification_prefix(&service.name, &account.settings.label);
         if raw.len() > MAX_POLL_RESULT_BYTES {
             let problem = format!("{} bytes, larger than {MAX_POLL_RESULT_BYTES}", raw.len());
             return self.unread.poll_failed(account_id, &problem);
@@ -327,18 +326,18 @@ impl Core {
             return vec![Self::unknown(account_id)];
         };
         let settings = self.settings();
-        if settings.dnd || account.muted {
+        if settings.dnd || account.settings.muted {
             return vec![];
         }
         let service_name = self
-            .catalog
+            .registry
             .get(&account.service)
             .map_or(account.service.as_str(), |service| service.name.as_str());
         vec![Effect::Notify(NotificationReq {
             account: account_id,
             shim_id: None,
             title: format!("Downloaded {file_name}"),
-            body: notification_prefix(service_name, &account.label),
+            body: notification_prefix(service_name, &account.settings.label),
             sound: settings.notification_sound,
         })]
     }
@@ -388,12 +387,9 @@ impl Core {
     pub(super) fn badge(&self) -> DockBadge {
         let mut count = 0u32;
         let mut dot = false;
-        for account in self
-            .persisted
-            .accounts
-            .iter()
-            .filter(|account| account.in_dock_badge && !account.muted && account.enabled)
-        {
+        for account in self.persisted.accounts.iter().filter(|account| {
+            account.settings.in_dock_badge && !account.settings.muted && account.settings.enabled
+        }) {
             let unread = self.unread.of(account.id);
             count = count.saturating_add(unread.direct);
             dot |= unread.indirect;

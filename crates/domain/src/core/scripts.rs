@@ -6,7 +6,7 @@ use crate::model::Account;
 /// Picks the best site icon: an SVG `rel=icon` if present, otherwise the largest raster icon
 /// (from `sizes` or a `NNxNN` in the file name) among `rel=icon` and apple-touch icons, falling
 /// back to `/favicon.ico`. Returns an absolute URL (or null).
-pub const ICON_SCRIPT: &str = r#"(()=>{try{const abs=h=>new URL(h,document.baseURI).href;let best=null,score=-1;for(const l of document.querySelectorAll('link[rel~="icon"][href],link[rel~="apple-touch-icon"][href],link[rel~="apple-touch-icon-precomposed"][href]')){const href=l.getAttribute('href');const rel=(l.getAttribute('rel')||'').toLowerCase();const touch=rel.includes('apple-touch');const z=(l.getAttribute('sizes')||'').toLowerCase();const svg=!touch&&((l.getAttribute('type')||'').includes('svg')||/\.svg(\?|$)/i.test(href)||z==='any');let s=0;if(svg)s=1e6;else{for(const p of z.split(/\s+/)){const n=parseInt(p,10);if(n>s)s=n;}if(!s){const m=href.match(/(\d{2,4})x\d{2,4}/);s=m?parseInt(m[1],10):(touch?180:16);}}if(!touch)s+=0.5;if(s>score){score=s;best=href;}}if(best)return abs(best);return location.origin+'/favicon.ico';}catch(e){return null;}})()"#;
+pub(super) const ICON_SCRIPT: &str = r#"(()=>{try{const abs=h=>new URL(h,document.baseURI).href;let best=null,score=-1;for(const l of document.querySelectorAll('link[rel~="icon"][href],link[rel~="apple-touch-icon"][href],link[rel~="apple-touch-icon-precomposed"][href]')){const href=l.getAttribute('href');const rel=(l.getAttribute('rel')||'').toLowerCase();const touch=rel.includes('apple-touch');const z=(l.getAttribute('sizes')||'').toLowerCase();const svg=!touch&&((l.getAttribute('type')||'').includes('svg')||/\.svg(\?|$)/i.test(href)||z==='any');let s=0;if(svg)s=1e6;else{for(const p of z.split(/\s+/)){const n=parseInt(p,10);if(n>s)s=n;}if(!s){const m=href.match(/(\d{2,4})x\d{2,4}/);s=m?parseInt(m[1],10):(touch?180:16);}}if(!touch)s+=0.5;if(s>score){score=s;best=href;}}if(best)return abs(best);return location.origin+'/favicon.ico';}catch(e){return null;}})()"#;
 
 pub(super) const HISTORY_BACK: &str = "history.back()";
 pub(super) const HISTORY_FORWARD: &str = "history.forward()";
@@ -21,6 +21,7 @@ pub(super) fn init_script(service: &ServiceDef, account: &Account) -> String {
     }
     script.push_str(crate::NOTIFY_SHIM);
     if let Some(css) = account
+        .settings
         .custom_css
         .as_deref()
         .filter(|css| !css.trim().is_empty())

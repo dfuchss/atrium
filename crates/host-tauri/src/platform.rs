@@ -2,9 +2,8 @@
 
 use std::sync::PoisonError;
 
-use domain::core::SimpleIconResult;
 use domain::ports::{Platform, PortError, PortResult};
-use domain::{AccountMenu, DockBadge, MenuModel, redact_url};
+use domain::{AccountMenu, DockBadge, MenuModel, SimpleIconResult, redact_url};
 use protocol::{AppSettings, Theme};
 use tauri::{Manager, Runtime};
 use tauri_plugin_autostart::AutoLaunchManager;

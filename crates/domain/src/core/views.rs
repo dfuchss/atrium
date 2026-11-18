@@ -2,23 +2,24 @@
 
 use uuid::Uuid;
 
-use super::{Core, Effect, ICON_SCRIPT, ViewPolicy, ViewSpec, scripts};
+use super::scripts::{self, ICON_SCRIPT};
+use super::{Core, Effect, ViewPolicy, ViewSpec};
 use crate::model::Account;
 
 impl Core {
     pub(super) fn view_spec(&self, account: &Account) -> Result<ViewSpec, String> {
-        let service = self.catalog.get(&account.service).ok_or_else(|| {
+        let service = self.registry.get(&account.service).ok_or_else(|| {
             format!(
                 "account {}: unknown service {}",
                 account.id, account.service
             )
         })?;
-        let instance = account.instance.as_deref();
+        let instance = account.settings.instance.as_deref();
         let url = service
             .resolve_url(instance)
             .map_err(|error| format!("account {}: {error}", account.id))?;
         let platform = &self.user_agent_platform;
-        let user_agent = match &account.user_agent {
+        let user_agent = match &account.settings.user_agent {
             Some(preset) => crate::catalog::resolve_user_agent_preset(Some(preset), platform),
             None => service.resolve_user_agent(platform),
         };
@@ -34,13 +35,16 @@ impl Core {
 
     pub(super) fn view_policy(&self, account: &Account) -> ViewPolicy {
         let service_allows_media = self
-            .catalog
+            .registry
             .get(&account.service)
             .is_some_and(|service| service.allow_media);
         ViewPolicy {
-            link_target: account.link_target.unwrap_or(self.settings().link_target),
-            allow_media: account.allow_media.unwrap_or(service_allows_media),
-            app_hosts: account.app_hosts.clone(),
+            link_target: account
+                .settings
+                .link_target
+                .unwrap_or(self.settings().link_target),
+            allow_media: account.settings.allow_media.unwrap_or(service_allows_media),
+            app_hosts: account.settings.app_hosts.clone(),
         }
     }
 
@@ -51,7 +55,7 @@ impl Core {
         };
         match self.view_spec(account) {
             Ok(spec) => {
-                let (policy, zoom) = (self.view_policy(account), account.zoom);
+                let (policy, zoom) = (self.view_policy(account), account.settings.zoom);
                 self.loaded_views.insert(account_id);
                 vec![
                     Effect::SetViewPolicy {

@@ -1,3 +1,4 @@
+use super::super::tick::SLEEP_GAP_MS;
 use super::super::wake::{CRASH_RELOAD_WINDOW_MS, MAX_CRASH_RELOADS, WAKE_GRACE_MS};
 use super::*;
 use crate::model::Settings;
@@ -24,16 +25,7 @@ fn with_global_after_wake(mut core: Core, after_wake: AfterWake) -> Core {
 }
 
 fn reloads(effects: &[Effect]) -> Vec<Uuid> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::Reload(account) = effect {
-                Some(*account)
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::Reload(account) => *account)
 }
 
 const AFTER_SLEEP_MS: u64 = 31_000 + SLEEP_GAP_MS + 1;
@@ -230,7 +222,7 @@ fn account_override_beats_the_global_mode() {
     assert!(reloads(&wake(&mut core)).is_empty());
     assert_eq!(reloads(&tick_through_grace(&mut core)), vec![id(2)]);
     assert_eq!(
-        core.account(id(2)).unwrap().after_wake,
+        core.account(id(2)).unwrap().settings.after_wake,
         Some(AfterWake::Check)
     );
 }
@@ -338,7 +330,7 @@ fn settings_without_after_wake_load_with_defaults() {
     let mut v = serde_json::to_value(account(1, "slack", "A")).unwrap();
     v.as_object_mut().unwrap().remove("after_wake");
     let account: Account = serde_json::from_value(v).unwrap();
-    assert_eq!(account.after_wake, None);
+    assert_eq!(account.settings.after_wake, None);
 }
 
 #[test]

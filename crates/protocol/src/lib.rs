@@ -29,13 +29,16 @@ pub const CMD_SAVE_SERVICE_FILE: &str = "save_service_file";
 pub const CMD_DELETE_SERVICE_FILE: &str = "delete_service_file";
 pub const CMD_SET_SERVICE_FILE_ENABLED: &str = "set_service_file_enabled";
 pub const EVENT_SNAPSHOT: &str = "snapshot";
-/// Label of the local sidebar webview.
 /// Project page (repository) of Atrium.
 pub const PROJECT_URL: &str = "https://github.com/dfuchss/atrium";
+/// Label of the local sidebar webview.
 pub const UI_WEBVIEW: &str = "ui";
 /// Width of the sidebar at the largest icon size (logical px). The actual width depends on
 /// [`AppSettings::icon_size`], see [`IconSize::sidebar_width`].
-pub const SIDEBAR_WIDTH: f64 = 72.0;
+const SIDEBAR_WIDTH: f64 = 72.0;
+/// Placeholder in service URLs and hosts for the per-account part (instance host, workspace
+/// subdomain...), see [`AccountSettings::instance`].
+pub const INSTANCE_PLACEHOLDER: &str = "{instance}";
 
 /// Size of the account icons in the sidebar; the sidebar width follows it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -370,20 +373,26 @@ pub enum LinkTarget {
     AppWindow,
 }
 
-/// Per-account settings (editable in the settings dialog).
+/// Per-account settings (editable in the settings dialog), stored flat in each account of
+/// `accounts.json`. Fields added after v0.1 have serde defaults so older files still load.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AccountSettings {
     /// User-chosen label, e.g. "KIT" or "Work".
     pub label: String,
     /// Value for the service's `{instance}` placeholder (workspace, instance host...).
+    #[serde(default)]
     pub instance: Option<String>,
-    /// No notifications from this account.
+    /// No notifications from this account (and not counted in the dock badge).
+    #[serde(default)]
     pub muted: bool,
     /// Show the unread badge on the sidebar icon.
+    #[serde(default = "yes")]
     pub show_badge: bool,
     /// Count this account's unread in the dock badge.
+    #[serde(default = "yes")]
     pub in_dock_badge: bool,
     /// Overrides the service's user agent: "webkit" | "chrome" | "default" | literal; None = service default.
+    #[serde(default)]
     pub user_agent: Option<String>,
     /// Disabled accounts keep their settings and login but have no view (not loaded at all).
     #[serde(default = "yes")]
@@ -394,10 +403,6 @@ pub struct AccountSettings {
     /// Custom sidebar icon: `data:` URL (uploaded image) or https URL; None = site favicon.
     #[serde(default)]
     pub custom_icon: Option<String>,
-    /// Simple Icons slug (simpleicons.org, e.g. "discord"): a monochrome brand glyph drawn on the
-    /// service color. Used when no `custom_icon` is set; None = site favicon.
-    #[serde(default)]
-    pub simple_icon: Option<String>,
     /// Page zoom factor, 1.0 = 100 %.
     #[serde(default = "one")]
     pub zoom: f64,
@@ -418,6 +423,10 @@ pub struct AccountSettings {
     /// None = the service default (`allow_media` in the service definition; on for call apps).
     #[serde(default)]
     pub allow_media: Option<bool>,
+    /// Simple Icons slug (simpleicons.org, e.g. "discord"): a monochrome brand glyph drawn on the
+    /// service color. Used when no `custom_icon` is set; None = site favicon.
+    #[serde(default)]
+    pub simple_icon: Option<String>,
     /// Hosts (exact or `*.domain`) whose new-window requests always open as in-app window,
     /// whatever the link target. Normalised by the core on update.
     #[serde(default)]

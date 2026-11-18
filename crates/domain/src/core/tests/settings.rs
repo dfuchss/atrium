@@ -3,8 +3,8 @@ use super::*;
 #[test]
 fn snapshot_carries_settings_app_info_and_account_settings() {
     let mut a = account(1, "mastodon", "Fedi");
-    a.instance = Some("fosstodon.org".into());
-    a.show_badge = false;
+    a.settings.instance = Some("fosstodon.org".into());
+    a.settings.show_badge = false;
     let mut core = core_with(vec![a, account(2, "slack", "Slack")]);
     let info = AppInfo {
         os: OperatingSystem::Linux,
@@ -54,7 +54,7 @@ fn set_muted_and_dnd_map_onto_settings() {
     assert!(last_snapshot(&effects).accounts[0].settings.muted);
     assert!(
         effects.iter().any(
-            |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].muted)
+            |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].settings.muted)
         )
     );
     let effects = core.handle(Input::Ui(UiCommand::SetDnd { enabled: true }));
@@ -124,7 +124,7 @@ fn update_account_simple_fields_no_recreate() {
             .any(|effect| matches!(effect, Effect::Destroy(_) | Effect::CreateView { .. }))
     );
     assert!(effects.iter().any(
-        |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].label == "Work" && persisted.accounts[0].muted)
+        |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].settings.label == "Work" && persisted.accounts[0].settings.muted)
     ));
     let snapshot = last_snapshot(&effects);
     assert_eq!(
@@ -138,7 +138,7 @@ fn update_account_simple_fields_no_recreate() {
     assert_eq!(last_snapshot(&effects).accounts[0].settings.label, "Slack");
     let effects = core.handle(Input::Ui(UiCommand::UpdateAccount {
         account: id(9),
-        settings: core.account(id(1)).unwrap().settings(),
+        settings: core.account(id(1)).unwrap().settings.clone(),
     }));
     assert!(matches!(effects.as_slice(), [Effect::Log(_)]));
 }
@@ -146,7 +146,7 @@ fn update_account_simple_fields_no_recreate() {
 #[test]
 fn update_account_instance_recreates_view() {
     let mut a = account(1, "mastodon", "M");
-    a.instance = Some("mastodon.social".into());
+    a.settings.instance = Some("mastodon.social".into());
     let (mut core, _) = started(vec![account(2, "slack", "S"), a]);
     // inactive account -> recreated hidden
     let effects = update_account(&mut core, 1, |settings| {
@@ -160,7 +160,7 @@ fn update_account_instance_recreates_view() {
         ("https://fosstodon.org/", *id(1).as_bytes(), false)
     );
     assert_eq!(v[0].0.internal_hosts, vec!["fosstodon.org".to_string()]);
-    assert!(effects.iter().any(|effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[1].instance.as_deref() == Some("fosstodon.org"))));
+    assert!(effects.iter().any(|effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[1].settings.instance.as_deref() == Some("fosstodon.org"))));
     // same instance again -> nothing recreated
     let effects = update_account(&mut core, 1, |settings| {
         settings.instance = Some("fosstodon.org/".into());
@@ -182,7 +182,7 @@ fn update_account_instance_recreates_view() {
 #[test]
 fn update_account_invalid_instance_changes_nothing() {
     let mut a = account(1, "mastodon", "M");
-    a.instance = Some("mastodon.social".into());
+    a.settings.instance = Some("mastodon.social".into());
     let (mut core, _) = started(vec![a]);
     let before = core.snapshot();
     let effects = update_account(&mut core, 1, |settings| {
@@ -215,7 +215,7 @@ fn user_agent_override() {
     };
     assert_eq!(
         ua(&mut core, Some("chrome")),
-        Some(crate::catalog::chrome_user_agent(UA_PLATFORM))
+        crate::catalog::resolve_user_agent_preset(Some("chrome"), UA_PLATFORM)
     );
     assert_eq!(ua(&mut core, Some("default")), None);
     assert_eq!(ua(&mut core, Some(" Foo/1 ")).as_deref(), Some("Foo/1"));
@@ -234,13 +234,10 @@ fn update_account_before_start_does_not_recreate() {
             .iter()
             .any(|effect| matches!(effect, Effect::Destroy(_) | Effect::CreateView { .. }))
     );
-    let effects = core.handle(Input::Started {
-        width: 800.0,
-        height: 600.0,
-    });
+    let effects = core.handle(STARTED);
     assert_eq!(
         views(&effects)[0].0.user_agent,
-        Some(crate::catalog::chrome_user_agent(UA_PLATFORM))
+        crate::catalog::resolve_user_agent_preset(Some("chrome"), UA_PLATFORM)
     );
 }
 
@@ -263,7 +260,7 @@ fn custom_css_injected_and_recreates() {
         settings.custom_css = Some("  ".into());
     });
     assert_eq!(views(&effects)[0].0.init_script, crate::NOTIFY_SHIM);
-    assert_eq!(core.account(id(1)).unwrap().custom_css, None);
+    assert_eq!(core.account(id(1)).unwrap().settings.custom_css, None);
 }
 
 #[test]
@@ -279,29 +276,23 @@ fn settings_of_hibernated_account_apply_on_next_load() {
         effect,
         Effect::CreateView { .. } | Effect::SetZoom { .. } | Effect::Destroy(_)
     )));
-    assert_eq!(core.account(id(2)).unwrap().hibernate_after_min, Some(0));
+    assert_eq!(
+        core.account(id(2)).unwrap().settings.hibernate_after_min,
+        Some(0)
+    );
     let effects = core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
     assert_eq!(
         views(&effects)[0].0.user_agent,
-        Some(crate::catalog::chrome_user_agent(UA_PLATFORM))
+        crate::catalog::resolve_user_agent_preset(Some("chrome"), UA_PLATFORM)
     );
-    assert!(has(
-        &effects,
-        &Effect::SetZoom {
-            account: id(2),
-            zoom: 1.5
-        }
-    ));
+    assert!(effects.contains(&Effect::SetZoom {
+        account: id(2),
+        zoom: 1.5
+    }));
 }
 
 fn theme_effects(effects: &[Effect]) -> Vec<Theme> {
-    effects
-        .iter()
-        .filter_map(|effect| match effect {
-            Effect::ApplyTheme(theme) => Some(*theme),
-            _ => None,
-        })
-        .collect()
+    effects_of!(effects, Effect::ApplyTheme(theme) => *theme)
 }
 
 #[test]
@@ -318,13 +309,10 @@ fn persisted_theme_is_applied_at_start() {
     let mut core = Core::new(
         Catalog::builtin(),
         persisted,
-        Box::new(Uuid::new_v4),
+        Box::new(Uuid::nil),
         UA_PLATFORM.into(),
     );
-    let effects = core.handle(Input::Started {
-        width: 1000.0,
-        height: 600.0,
-    });
+    let effects = core.handle(STARTED);
     assert_eq!(theme_effects(&effects), vec![Theme::Dark]);
 }
 

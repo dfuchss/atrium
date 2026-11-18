@@ -31,7 +31,7 @@ fn app_hosts_normalised_and_policy_updated_live() {
     assert!(
         effects
             .iter()
-            .any(|effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].app_hosts == want))
+            .any(|effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].settings.app_hosts == want))
     );
     assert_eq!(last_snapshot(&effects).accounts[0].settings.app_hosts, want);
     // same list again -> no policy effect
@@ -57,7 +57,7 @@ fn view_policy_app_host_matching() {
 #[test]
 fn view_policy_emitted_on_create_and_change() {
     let mut b = account(2, "slack", "B");
-    b.link_target = Some(LinkTarget::SystemBrowser);
+    b.settings.link_target = Some(LinkTarget::SystemBrowser);
     let (mut core, effects) = started(vec![account(1, "slack", "A"), b]);
     let pos = |effects: &[Effect], effect: &Effect| effects.iter().position(|x| x == effect);
     let set1 = Effect::SetViewPolicy {
@@ -71,13 +71,10 @@ fn view_policy_emitted_on_create_and_change() {
         pos(&effects, &set1).unwrap() < created.unwrap(),
         "policy is set before the view exists"
     );
-    assert!(has(
-        &effects,
-        &Effect::SetZoom {
-            account: id(1),
-            zoom: 1.0
-        }
-    ));
+    assert!(effects.contains(&Effect::SetZoom {
+        account: id(1),
+        zoom: 1.0
+    }));
 
     let settings = AppSettings {
         link_target: LinkTarget::AppWindow,
@@ -109,7 +106,7 @@ fn view_policy_emitted_on_create_and_change() {
             .iter()
             .any(|effect| matches!(effect, Effect::Destroy(_) | Effect::CreateView { .. }))
     );
-    assert_eq!(core.account(id(2)).unwrap().link_target, None);
+    assert_eq!(core.account(id(2)).unwrap().settings.link_target, None);
 }
 
 #[test]
@@ -147,7 +144,7 @@ fn allow_media_from_service_and_override() {
     assert!(
         effects
             .iter()
-            .any(|effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[1].allow_media == Some(true)))
+            .any(|effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[1].settings.allow_media == Some(true)))
     );
     assert_eq!(
         last_snapshot(&effects).accounts[1].settings.allow_media,

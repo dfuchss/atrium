@@ -3,9 +3,9 @@ use super::*;
 #[test]
 fn hibernate_after_idle_time() {
     let mut b = account(2, "slack", "B");
-    b.hibernate_after_min = Some(1);
+    b.settings.hibernate_after_min = Some(1);
     let mut a = account(1, "slack", "A");
-    a.hibernate_after_min = Some(1);
+    a.settings.hibernate_after_min = Some(1);
     let (mut core, _) = started(vec![a, b]);
     let effects = tick_range(&mut core, 0, 50_000);
     assert!(destroys(&effects).is_empty());
@@ -53,7 +53,7 @@ fn global_hibernate_applies_to_accounts_without_override() {
 #[test]
 fn account_override_beats_global_hibernate() {
     let mut b = account(2, "slack", "B");
-    b.hibernate_after_min = Some(2);
+    b.settings.hibernate_after_min = Some(2);
     let (mut core, _) = started(vec![account(1, "slack", "A"), b]);
     set_global_hibernate(&mut core, Some(1));
     tick_range(&mut core, 0, 60_000);
@@ -65,7 +65,7 @@ fn account_override_beats_global_hibernate() {
 #[test]
 fn zero_means_never_even_with_global_hibernate() {
     let mut b = account(2, "slack", "B");
-    b.hibernate_after_min = Some(0);
+    b.settings.hibernate_after_min = Some(0);
     let (mut core, _) = started(vec![account(1, "slack", "A"), b]);
     set_global_hibernate(&mut core, Some(1));
     let effects = tick_range(&mut core, 0, 600_000);
@@ -85,7 +85,7 @@ fn old_persisted_account_json_loads() {
     let mut v = serde_json::to_value(account(1, "slack", "A")).unwrap();
     v.as_object_mut().unwrap().remove("hibernate_after_min");
     let a: Account = serde_json::from_value(v).unwrap();
-    assert_eq!(a.hibernate_after_min, None);
+    assert_eq!(a.settings.hibernate_after_min, None);
     let old: AppSettings = serde_json::from_str("{}").unwrap();
     assert_eq!(old.hibernate_after_min, None);
 }
@@ -119,15 +119,8 @@ fn hibernate_command() {
 
 fn start_asleep_account(n: u128) -> Account {
     let mut account = account(n, "slack", "Asleep");
-    account.start_asleep = true;
+    account.settings.start_asleep = true;
     account
-}
-
-fn startup_views(effects: &[Effect]) -> Vec<Uuid> {
-    views(effects)
-        .iter()
-        .map(|(spec, _)| spec.account)
-        .collect()
 }
 
 #[test]
@@ -137,11 +130,8 @@ fn start_asleep_account_gets_no_view_at_startup() {
         start_asleep_account(2),
         account(3, "slack", "C"),
     ]);
-    assert_eq!(startup_views(&effects), vec![id(1), id(3)]);
-    assert!(has(
-        &effects,
-        &Effect::Log(format!("[{}] starts asleep", id(2)))
-    ));
+    assert_eq!(created(&effects), vec![id(1), id(3)]);
+    assert!(effects.contains(&Effect::Log(format!("[{}] starts asleep", id(2)))));
     assert!(last_snapshot(&effects).accounts[1].hibernated);
     // like a hibernated account: no polls
     let effects = tick_range(&mut core, 0, 5_000);
@@ -166,19 +156,10 @@ fn selecting_a_start_asleep_account_loads_it() {
 fn active_start_asleep_account_is_loaded_anyway() {
     let mut core = core_with(vec![start_asleep_account(1), start_asleep_account(2)]);
     core.active = Some(id(2));
-    let effects = core.handle(Input::Started {
-        width: 1000.0,
-        height: 600.0,
-    });
-    assert_eq!(startup_views(&effects), vec![id(2)]);
-    assert!(!has(
-        &effects,
-        &Effect::Log(format!("[{}] starts asleep", id(2)))
-    ));
-    assert!(has(
-        &effects,
-        &Effect::Log(format!("[{}] starts asleep", id(1)))
-    ));
+    let effects = core.handle(STARTED);
+    assert_eq!(created(&effects), vec![id(2)]);
+    assert!(!effects.contains(&Effect::Log(format!("[{}] starts asleep", id(2)))));
+    assert!(effects.contains(&Effect::Log(format!("[{}] starts asleep", id(1)))));
 }
 
 #[test]
@@ -194,7 +175,7 @@ fn toggling_start_asleep_at_runtime_changes_nothing_now() {
 #[test]
 fn start_asleep_does_not_change_the_hibernation_timeout() {
     let mut b = start_asleep_account(2);
-    b.hibernate_after_min = Some(1);
+    b.settings.hibernate_after_min = Some(1);
     let (mut core, _) = started(vec![account(1, "slack", "A"), b]);
     core.handle(Input::Ui(UiCommand::Select { account: id(2) }));
     core.handle(Input::Ui(UiCommand::Select { account: id(1) }));

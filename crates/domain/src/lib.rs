@@ -4,25 +4,32 @@
 //! the outside world must perform. Adapters implement the traits in [`ports`] and
 //! [`runtime::apply`] maps effects onto them. The core never does IO itself.
 
-pub mod catalog;
-pub mod core;
-pub mod model;
+mod catalog;
+mod core;
+mod model;
 pub mod ports;
 pub mod runtime;
-pub mod security;
-pub mod throttle;
+mod security;
+mod throttle;
 
-pub use crate::catalog::{Catalog, CatalogError, ServiceDef, UnreadRules};
-pub use crate::catalog::{host_matches_any, normalize_app_hosts};
+pub use crate::catalog::{Catalog, ServiceDef, host_matches_any, webkit_user_agent};
 pub use crate::core::{
-    AccountMenu, AccountMenuAction, AccountMenuItem, Bounds, Core, DockBadge, Effect, ICON_SCRIPT,
-    Input, MenuAccount, MenuAction, MenuModel, NotificationReq, SLEEP_GAP_MS, ViewPolicy, ViewSpec,
-    ZOOM_STEPS,
+    AccountMenu, AccountMenuAction, AccountMenuItem, Bounds, Core, DockBadge, Effect, Input,
+    MenuAccount, MenuAction, MenuModel, NotificationReq, SimpleIconResult, ViewPolicy, ViewSpec,
+    simple_icon_url,
 };
 pub use crate::model::{Account, Persisted, Settings, unused_store_ids};
-pub use crate::security::{nav_allowed, opener_url_allowed, redact_url, window_title};
+pub use crate::security::{nav_allowed, redact_url, window_title};
 pub use crate::throttle::{RateLimiter, WindowQuota, WindowRefusal};
+
+/// Trimmed text; empty means none.
+fn trimmed(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(String::from)
+}
 
 /// JavaScript injected into every service page: collects web notifications into a queue
 /// (`window.__msgr`) that Rust drains by polling, as service pages get no Tauri IPC.
-pub const NOTIFY_SHIM: &str = include_str!("../assets/notify-shim.js");
+const NOTIFY_SHIM: &str = include_str!("../assets/notify-shim.js");

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use domain::core::{SimpleIconResult, simple_icon_url};
+use domain::{SimpleIconResult, simple_icon_url};
 
 /// Larger responses are rejected.
 pub(crate) const MAX_ICON_BYTES: u64 = 512 * 1024;
@@ -88,10 +88,10 @@ fn download(url: &str) -> Result<String, ureq::Error> {
 fn fetch(url: &str) -> Result<String, ureq::Error> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))
-        .user_agent(domain::catalog::webkit_user_agent(
+        .user_agent(domain::webkit_user_agent(
             &crate::native::user_agent_platform(),
         ))
-        // Only the requested URL passed the host allow-list (`domain::core::icons`); a redirect
+        // Only the requested URL passed the host allow-list (`domain::Core`); a redirect
         // could lead anywhere, so it is returned as is and refused below.
         .max_redirects(0)
         .build()

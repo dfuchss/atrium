@@ -4,7 +4,7 @@ use super::*;
 fn dialog_bounds() {
     let (mut core, _) = started(vec![account(1, "slack", "A")]);
     let effects = core.handle(Input::Ui(UiCommand::SetDialog { open: true }));
-    assert!(matches!(effects[0], Effect::SetUiBounds(b) if b.width == 1000.0));
+    assert!(matches!(effects[0], Effect::SetUiBounds(b) if b.width == WINDOW_WIDTH));
     assert_eq!(effects[1], Effect::Hide(id(1)));
     assert!(last_snapshot(&effects).dialog_open);
     let effects = core.handle(Input::Ui(UiCommand::SetDialog { open: false }));
@@ -29,14 +29,14 @@ fn icon_size_sets_sidebar_width() {
     let content = Bounds {
         x: 72.0,
         y: 0.0,
-        width: 1000.0 - 72.0,
-        height: 600.0,
+        width: WINDOW_WIDTH - 72.0,
+        height: WINDOW_HEIGHT,
     };
     assert!(effects.contains(&Effect::SetUiBounds(Bounds {
         x: 0.0,
         y: 0.0,
         width: 72.0,
-        height: 600.0
+        height: WINDOW_HEIGHT
     })));
     assert!(effects.contains(&Effect::SetBounds {
         account: id(1),
@@ -77,8 +77,8 @@ fn icon_size_change_with_open_dialog_keeps_views_covered() {
     assert!(effects.contains(&Effect::SetUiBounds(Bounds {
         x: 0.0,
         y: 0.0,
-        width: 1000.0,
-        height: 600.0
+        width: WINDOW_WIDTH,
+        height: WINDOW_HEIGHT
     })));
     assert!(
         !effects
@@ -92,7 +92,7 @@ fn icon_size_change_with_open_dialog_keeps_views_covered() {
             x: 0.0,
             y: 0.0,
             width: 64.0,
-            height: 600.0
+            height: WINDOW_HEIGHT
         })
     );
     assert_eq!(
@@ -103,7 +103,7 @@ fn icon_size_change_with_open_dialog_keeps_views_covered() {
                 x: 64.0,
                 y: 0.0,
                 width: 936.0,
-                height: 600.0
+                height: WINDOW_HEIGHT
             }
         }
     );

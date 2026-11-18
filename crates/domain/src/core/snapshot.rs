@@ -17,7 +17,7 @@ impl Core {
                 .collect(),
             active: self.active,
             services: self
-                .catalog
+                .registry
                 .services()
                 .iter()
                 .map(|service| self.service_info(service))
@@ -37,19 +37,19 @@ impl Core {
             edit_account: self.edit_account,
             settings: self.settings().clone(),
             app: self.app_info.clone(),
-            service_errors: self.service_errors.clone(),
+            service_errors: self.registry.errors().to_vec(),
         }
     }
 
     fn account_view(&self, account: &Account) -> AccountView {
-        let service = self.catalog.get(&account.service);
+        let service = self.registry.get(&account.service);
         let service_name =
             service.map_or_else(|| account.service.clone(), |service| service.name.clone());
         let unread = self.unread.of(account.id);
-        let initials_source = if account.label == service_name {
+        let initials_source = if account.settings.label == service_name {
             &service_name
         } else {
-            &account.label
+            &account.settings.label
         };
         let (icon, icon_glyph) = sidebar_icon(account);
         AccountView {
@@ -63,8 +63,8 @@ impl Core {
             instance_label: service.and_then(|service| service.instance_label.clone()),
             icon,
             icon_glyph,
-            hibernated: !account.enabled || (self.started && !self.is_loaded(account.id)),
-            settings: account.settings(),
+            hibernated: !account.settings.enabled || (self.started && !self.is_loaded(account.id)),
+            settings: account.settings.clone(),
         }
     }
 
@@ -87,13 +87,14 @@ impl Core {
 /// The sidebar icon and whether it is a Simple Icons glyph: the custom icon wins, then a cached
 /// glyph, then the favicon.
 fn sidebar_icon(account: &Account) -> (Option<String>, bool) {
-    let glyph = account.custom_icon.is_none()
-        && account.simple_icon.is_some()
+    let glyph = account.settings.custom_icon.is_none()
+        && account.settings.simple_icon.is_some()
         && account.simple_icon_data.is_some();
     if glyph {
         (account.simple_icon_data.clone(), true)
     } else {
         let icon = account
+            .settings
             .custom_icon
             .clone()
             .or_else(|| account.favicon.clone());

@@ -74,7 +74,7 @@ pub fn set_app_id(identifier: &str) {
     native::set_app_id(identifier);
 }
 
-/// The host's part of the user agent presets (see `domain::catalog::webkit_user_agent`).
+/// The host's part of the user agent presets (see `domain::webkit_user_agent`).
 pub fn user_agent_platform() -> String {
     native::user_agent_platform()
 }

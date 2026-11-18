@@ -22,6 +22,7 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 #### All platforms
 
 - *Settings…* in a service's menu now reliably opens the settings dialog on that service, also when the dialog is closed, and scrolls to it
+- The per-service *Count in dock badge* switch is gone: set the service's dock badge to *Off* instead; services that had it off load as *Off*
 - The badge settings of a service use the same segmented buttons as the global settings
 - The *Sidebar badges* setting moved from *General* to *Notifications*
 

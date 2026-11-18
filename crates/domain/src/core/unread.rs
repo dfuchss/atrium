@@ -269,9 +269,12 @@ impl Core {
         let mut count = 0u32;
         let mut dot = false;
         let global = self.settings().dock_badge;
-        for account in self.persisted.accounts.iter().filter(|account| {
-            account.settings.in_dock_badge && !account.settings.muted && account.settings.enabled
-        }) {
+        for account in self
+            .persisted
+            .accounts
+            .iter()
+            .filter(|account| !account.settings.muted && account.settings.enabled)
+        {
             let mode = account.settings.effective_dock_badge(global);
             if mode == DockBadgeMode::Off {
                 continue;

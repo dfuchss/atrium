@@ -25,8 +25,7 @@ Open the settings with the gear button or <kbd>⌘</kbd><kbd>,</kbd> (<kbd>Ctrl<
 | Enabled | Disabled accounts keep their login but are not loaded. |
 | Notifications | Off mutes the account: no notifications, and not counted in the badge. |
 | Unread badge | The unread badge on the sidebar icon, with its own style: *Global*, *Count*, *Dot* or *Urgent only*. |
-| Dock badge mode | The global *Dock badge* setting for this account: *Global*, *Unread count and dot*, *Unread count only* or *Off*. |
-| Count in dock badge | Count the account in the Dock badge (*launcher badge* on Linux, *taskbar badge* on Windows). |
+| Dock badge mode | The global *Dock badge* setting for this account: *Global*, *Unread count and dot*, *Unread count only* or *Off*. *Off* keeps this account out of the badge. |
 | Open links in | Where links that open a new window go: *Use global setting*, *System browser* or *App window*. |
 | Icon | *Use site icon* or *Refresh site icon*; a [Simple Icons](https://simpleicons.org/) slug (a brand glyph on the service colour); or an image URL or file. Precedence: custom image, Simple Icon, site icon, initials. |
 | Camera & microphone | *Service default*, *Allow* or *Block*; also covers screen capture, and only on the service's own hosts (see [Service definitions](Service-Definitions#hosts)). |

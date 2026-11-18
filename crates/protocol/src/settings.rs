@@ -270,7 +270,7 @@ pub struct AccountSettings {
     /// Overrides `AppSettings::badge_style`; None = use the global setting.
     #[serde(default)]
     pub badge_style: Option<BadgeStyle>,
-    /// Count this account's unread in the dock badge.
+    /// Replaced by `dock_badge`; false without a `dock_badge` reads as `Off`. Always saved as true.
     #[serde(default = "yes")]
     pub in_dock_badge: bool,
     /// Overrides `AppSettings::dock_badge` for this account; None = use the global setting.
@@ -328,7 +328,11 @@ impl AccountSettings {
     /// The dock badge mode of this account: its own, else the global `global`.
     #[must_use]
     pub fn effective_dock_badge(&self, global: DockBadgeMode) -> DockBadgeMode {
-        self.dock_badge.unwrap_or(global)
+        match (self.dock_badge, self.in_dock_badge) {
+            (Some(mode), _) => mode,
+            (None, false) => DockBadgeMode::Off,
+            (None, true) => global,
+        }
     }
 
     /// The sidebar icon shows the unread badge (`AppSettings::badge_when_muted` for muted accounts).

@@ -79,7 +79,6 @@ struct AccountDraft {
     show_badge: RwSignal<bool>,
     /// "" (global setting) or a `BadgeStyle` name.
     badge_style: RwSignal<String>,
-    in_dock_badge: RwSignal<bool>,
     /// "" (global setting) or a `DockBadgeMode` name.
     dock_badge: RwSignal<String>,
     enabled: RwSignal<bool>,
@@ -114,10 +113,10 @@ impl AccountDraft {
                     .map(|style| style.name().to_string())
                     .unwrap_or_default(),
             ),
-            in_dock_badge: RwSignal::new(settings.in_dock_badge),
             dock_badge: RwSignal::new(
                 settings
                     .dock_badge
+                    .or_else(|| (!settings.in_dock_badge).then_some(DockBadgeMode::Off))
                     .map(|mode| mode.name().to_string())
                     .unwrap_or_default(),
             ),
@@ -172,7 +171,7 @@ impl AccountDraft {
             muted: !self.notifications.get_untracked(),
             show_badge: self.show_badge.get_untracked(),
             badge_style: BadgeStyle::from_name(&self.badge_style.get_untracked()),
-            in_dock_badge: self.in_dock_badge.get_untracked(),
+            in_dock_badge: true,
             dock_badge: DockBadgeMode::from_name(&self.dock_badge.get_untracked()),
             user_agent: self.user_agent.value(UNSET_USER_AGENT),
             enabled: self.enabled.get_untracked(),
@@ -256,7 +255,6 @@ pub(super) fn EditForm(
                 </div>
                 <span class="hint">{format!("Global setting: {}.", badge_style_label(global_badge_style))}</span>
             </Row>
-            <Toggle label=platform_texts::texts().account_badge_toggle checked=draft.in_dock_badge on_change=move |enabled| draft.in_dock_badge.set(enabled) />
             <Row label=platform_texts::texts().badge_tab>
                 <div class="btn-group seg">
                     {draft_segment(draft.dock_badge, "", "Global")}

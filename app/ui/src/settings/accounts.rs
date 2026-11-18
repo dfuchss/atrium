@@ -12,7 +12,7 @@ use crate::commands::send_command;
 use crate::glyphs::{ICON_BACK, ICON_DOWN, ICON_FORWARD, ICON_RELOAD, ICON_UP};
 use crate::widgets::{
     ConfirmButton, Icon, Row, TextField, account_by_id, account_icon, focus_by_id,
-    instance_field_label,
+    instance_field_label, scroll_to_id,
 };
 
 /// Value of the service option that jumps to the custom services tab.
@@ -33,6 +33,7 @@ pub(super) fn AccountsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
         if let Some(id) = ui.edit_account.get() {
             editing.set(Some(id));
             ui.edit_account.set(None);
+            scroll_to_id(account_dom_id(id));
         }
     });
     let ids = Memo::new(move |_| {
@@ -191,6 +192,10 @@ fn submit_account(
     label_value
 }
 
+fn account_dom_id(id: Uuid) -> String {
+    format!("acct-{id}")
+}
+
 #[component]
 fn AccountRow(
     snapshot: ReadSignal<Snapshot>,
@@ -207,7 +212,7 @@ fn AccountRow(
             let global_badge_style = snapshot.with_untracked(|snapshot| snapshot.settings.badge_style);
             let media_default = snapshot.with_untracked(|snapshot| snapshot.services.iter().find(|service| service.id == account.service).is_some_and(|service| service.allow_media));
             view! {
-                <div class="acct-item" class:open=is_editing>
+                <div class="acct-item" class:open=is_editing id=account_dom_id(id)>
                     <div class="row">
                         <button class="row-main" title="Edit account" on:click=move |_| {
                             editing.set(if editing.get_untracked() == Some(id) { None } else { Some(id) });

@@ -76,6 +76,18 @@ pub(crate) fn focus_by_id(id: &'static str) {
     });
 }
 
+/// Scrolls the element `id` into view after the next render.
+pub(crate) fn scroll_to_id(id: String) {
+    request_animation_frame(move || {
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(&id))
+        {
+            element.scroll_into_view();
+        }
+    });
+}
+
 /// Inline SVG drawn with `currentColor`, centred in a fixed-size box.
 #[component]
 pub(crate) fn Icon(svg: &'static str) -> impl IntoView {

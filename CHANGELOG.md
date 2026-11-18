@@ -19,6 +19,7 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 #### All platforms
 
+- *Settings…* in a service's menu now reliably opens the settings dialog on that service and scrolls to it
 - The *Sidebar badges* setting moved from *General* to *Notifications*
 
 ## 0.5.0

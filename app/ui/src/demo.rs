@@ -26,7 +26,7 @@ pub(crate) fn demo_snapshot() -> Snapshot {
         }],
         services,
         dialog_open: false,
-        edit_account: None,
+        edit_request: None,
         settings: AppSettings::default(),
         service_errors: vec![],
         app: AppInfo {

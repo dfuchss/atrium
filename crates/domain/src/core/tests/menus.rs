@@ -291,13 +291,32 @@ fn account_menu_settings_and_reload() {
     });
     let snapshot = last_snapshot(&effects);
     assert!(snapshot.dialog_open);
-    assert_eq!(snapshot.edit_account, Some(id(2)));
-    let effects = core.handle(Input::Ui(UiCommand::SetDialog { open: false }));
+    let first = snapshot.edit_request.expect("request");
+    assert_eq!(first.account, id(2));
+    let effects = core.handle(Input::Ui(UiCommand::SetDialog { open: true }));
     assert_eq!(
-        last_snapshot(&effects).edit_account,
-        None,
-        "asked only once"
+        last_snapshot(&effects).edit_request,
+        Some(first),
+        "a later snapshot keeps the request"
     );
+    let effects = core.handle(Input::AccountMenu {
+        account: id(1),
+        action: AccountMenuAction::Settings,
+    });
+    let second = last_snapshot(&effects).edit_request.expect("request");
+    assert_eq!(second.account, id(1));
+    assert_ne!(second.seq, first.seq);
+    let effects = core.handle(Input::AccountMenu {
+        account: id(1),
+        action: AccountMenuAction::Settings,
+    });
+    assert_ne!(
+        last_snapshot(&effects).edit_request.expect("request").seq,
+        second.seq,
+        "asking again is a new request"
+    );
+    let effects = core.handle(Input::Ui(UiCommand::SetDialog { open: false }));
+    assert_eq!(last_snapshot(&effects).edit_request, None);
 
     let effects = core.handle(Input::AccountMenu {
         account: id(2),

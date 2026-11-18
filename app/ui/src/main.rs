@@ -111,10 +111,12 @@ fn App() -> impl IntoView {
     let dialog_open = Memo::new(move |_| snapshot.with(|snapshot| snapshot.dialog_open));
     let root = Memo::new(move |_| snapshot.with(root_class));
     let variables = Memo::new(move |_| snapshot.with(layout_variables));
+    // A memo, so only a new request (not every snapshot) switches the tab.
+    let edit_request = Memo::new(move |_| snapshot.with(|snapshot| snapshot.edit_request));
     Effect::new(move || {
-        if let Some(id) = snapshot.with(|snapshot| snapshot.edit_account) {
+        if let Some(request) = edit_request.get() {
             ui_state.tab.set(Tab::Accounts);
-            ui_state.edit_account.set(Some(id));
+            ui_state.edit_account.set(Some(request.account));
         }
     });
     view! {

@@ -57,9 +57,7 @@ impl Core {
             service: account.service.clone(),
             initials: initials(initials_source),
             service_name,
-            color: service
-                .map(|service| service.color.clone())
-                .unwrap_or_default(),
+            color: service.map_or_else(String::new, |service| service.color.clone()),
             unread: unread.direct,
             indirect: unread.indirect,
             instance_label: service.and_then(|service| service.instance_label.clone()),

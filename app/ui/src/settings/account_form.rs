@@ -110,15 +110,13 @@ impl AccountDraft {
             badge_style: RwSignal::new(
                 settings
                     .badge_style
-                    .map(|style| style.name().to_string())
-                    .unwrap_or_default(),
+                    .map_or_else(String::new, |style| style.name().to_string()),
             ),
             dock_badge: RwSignal::new(
                 settings
                     .dock_badge
                     .or_else(|| (!settings.in_dock_badge).then_some(DockBadgeMode::Off))
-                    .map(|mode| mode.name().to_string())
-                    .unwrap_or_default(),
+                    .map_or_else(String::new, |mode| mode.name().to_string()),
             ),
             enabled: RwSignal::new(settings.enabled),
             start_asleep: RwSignal::new(settings.start_asleep),
@@ -141,14 +139,12 @@ impl AccountDraft {
             hibernate_after: RwSignal::new(
                 settings
                     .hibernate_after_min
-                    .map(|minutes| minutes.to_string())
-                    .unwrap_or_default(),
+                    .map_or_else(String::new, |minutes| minutes.to_string()),
             ),
             after_wake: RwSignal::new(
                 settings
                     .after_wake
-                    .map(|mode| mode.name().to_string())
-                    .unwrap_or_default(),
+                    .map_or_else(String::new, |mode| mode.name().to_string()),
             ),
             custom_css: RwSignal::new(settings.custom_css.clone().unwrap_or_default()),
             app_hosts: RwSignal::new(settings.app_hosts.join("\n")),

@@ -92,8 +92,7 @@ impl Core {
         };
         let internal_hosts = self
             .view_spec(account)
-            .map(|spec| spec.internal_hosts)
-            .unwrap_or_default();
+            .map_or_else(|_| Vec::new(), |spec| spec.internal_hosts);
         let Some(url) = decode_icon_url(raw) else {
             return vec![Effect::Log(format!(
                 "icon of account {account_id}: no icon URL ({raw:.100})"

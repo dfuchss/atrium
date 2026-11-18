@@ -252,8 +252,7 @@ fn app_info(
         services_dir: services_dir.display().to_string(),
         log_file: host
             .log_file()
-            .map(|path| path.display().to_string())
-            .unwrap_or_default(),
+            .map_or_else(String::new, |path| path.display().to_string()),
     }
 }
 

@@ -50,7 +50,7 @@ pub fn write_atomically(path: &Path, bytes: &[u8], mode: u32) -> io::Result<()> 
     std::fs::create_dir_all(folder)?;
     let name = path
         .file_name()
-        .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
+        .map_or_default(|name| name.to_string_lossy().into_owned());
     let temporary = path.with_file_name(format!(".{name}.tmp"));
     let written = write_and_sync(&temporary, bytes, mode)
         .and_then(|()| std::fs::rename(&temporary, path))

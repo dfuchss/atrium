@@ -130,12 +130,12 @@ impl AccountDraft {
             hibernate_after: RwSignal::new(
                 settings
                     .hibernate_after_min
-                    .map_or_else(String::new, |minutes| minutes.to_string()),
+                    .map_or_default(|minutes| minutes.to_string()),
             ),
             after_wake: RwSignal::new(
                 settings
                     .after_wake
-                    .map_or_else(String::new, |mode| mode.name().to_string()),
+                    .map_or_default(|mode| mode.name().to_string()),
             ),
             custom_css: RwSignal::new(settings.custom_css.clone().unwrap_or_default()),
             app_hosts: RwSignal::new(settings.app_hosts.join("\n")),

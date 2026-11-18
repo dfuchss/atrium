@@ -57,7 +57,7 @@ impl Core {
             service: account.service.clone(),
             initials: initials(initials_source),
             service_name,
-            color: service.map_or_else(String::new, |service| service.color.clone()),
+            color: service.map_or_default(|service| service.color.clone()),
             unread: unread.direct,
             indirect: unread.indirect,
             instance_label: service.and_then(|service| service.instance_label.clone()),
@@ -108,7 +108,7 @@ pub(super) fn initials(text: &str) -> String {
     let first_upper = |word: &str| -> String {
         word.chars()
             .next()
-            .map_or_else(String::new, |first| first.to_uppercase().collect())
+            .map_or_default(|first| first.to_uppercase().collect())
     };
     let words: Vec<&str> = text.split_whitespace().collect();
     match words.as_slice() {

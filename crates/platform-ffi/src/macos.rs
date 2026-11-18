@@ -226,7 +226,7 @@ extern "C-unwind" fn run_prompt_panel(
 ) {
     let completion = completion.copy();
     let kind = DialogKind::Prompt {
-        default_text: default_text.map_or_else(String::new, ToString::to_string),
+        default_text: default_text.map_or_default(ToString::to_string),
     };
     run_panel(webview, frame, kind, prompt, move |answer| match answer {
         DialogAnswer::Text(text) => {

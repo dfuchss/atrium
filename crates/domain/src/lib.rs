@@ -34,5 +34,5 @@ fn trimmed(value: Option<&str>) -> Option<String> {
 }
 
 /// JavaScript injected into every service page: collects web notifications into a queue
-/// (`window.__msgr`) that Rust drains by polling, as service pages get no Tauri IPC.
+/// (`window.__atrium`) that Rust drains by polling, as service pages get no Tauri IPC.
 const NOTIFY_SHIM: &str = include_str!("../assets/notify-shim.js");

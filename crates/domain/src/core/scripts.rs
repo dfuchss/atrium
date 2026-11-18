@@ -35,20 +35,20 @@ pub(super) fn init_script(service: &ServiceDef, account: &Account) -> String {
 /// Drains the shim's notification queue and returns it with the value [`unread_script`] left
 /// in the shim, as one JSON string. Fixed text, so it parses whatever a service's expression
 /// looks like, and a value that is no JSON cannot cost the drained notifications.
-pub(super) const POLL_SCRIPT: &str = "(()=>{const m=window.__msgr;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()";
+pub(super) const POLL_SCRIPT: &str = "(()=>{const m=window.__atrium;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()";
 
 /// Evaluates a service's unread expression into the shim for the next [`POLL_SCRIPT`]. A script
 /// of its own: a syntax error in the expression fails only this evaluation, not the drain.
 /// Not `new Function`, which pages without CSP `unsafe-eval` refuse.
 pub(super) fn unread_script(expression: &str) -> String {
     format!(
-        "(()=>{{const m=window.__msgr;if(!m)return;m.unread=null;try{{m.unread=(\n{expression}\n)}}catch(e){{}}}})()"
+        "(()=>{{const m=window.__atrium;if(!m)return;m.unread=null;try{{m.unread=(\n{expression}\n)}}catch(e){{}}}})()"
     )
 }
 
 /// Forwards a click on a native notification to the page's notification object.
 pub(super) fn notification_click_script(shim_id: u64) -> String {
-    format!("window.__msgr&&window.__msgr.click({shim_id})")
+    format!("window.__atrium&&window.__atrium.click({shim_id})")
 }
 
 /// Removes the given `localStorage` keys at document start (before page scripts run).
@@ -62,7 +62,7 @@ fn storage_cleaner(keys: &[String]) -> String {
 fn css_injector(css: &str) -> String {
     let css = json_string(css);
     format!(
-        "(()=>{{const css={css};const add=()=>{{if(document.getElementById('__msgr_css'))return;const s=document.createElement('style');s.id='__msgr_css';s.textContent=css;(document.head||document.documentElement).appendChild(s);}};if(document.documentElement)add();document.addEventListener('DOMContentLoaded',add);}})();"
+        "(()=>{{const css={css};const add=()=>{{if(document.getElementById('__atrium_css'))return;const s=document.createElement('style');s.id='__atrium_css';s.textContent=css;(document.head||document.documentElement).appendChild(s);}};if(document.documentElement)add();document.addEventListener('DOMContentLoaded',add);}})();"
     )
 }
 

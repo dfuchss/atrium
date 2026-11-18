@@ -116,7 +116,7 @@ fn notification_click() {
         effects[n - 1],
         Effect::Eval {
             account: id(2),
-            script: "window.__msgr&&window.__msgr.click(5)".into()
+            script: "window.__atrium&&window.__atrium.click(5)".into()
         }
     );
 }

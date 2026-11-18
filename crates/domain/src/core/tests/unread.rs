@@ -190,8 +190,9 @@ fn a_broken_expression_stays_out_of_the_drain_script() {
     let broken = "1})();document.title='x';(()=>{(";
     let script = scripts::unread_script(broken);
     assert!(
-        script
-            .starts_with("(()=>{const m=window.__msgr;if(!m)return;m.unread=null;try{m.unread=(\n")
+        script.starts_with(
+            "(()=>{const m=window.__atrium;if(!m)return;m.unread=null;try{m.unread=(\n"
+        )
     );
     assert!(script.ends_with("\n)}catch(e){}})()"));
     assert!(!scripts::POLL_SCRIPT.contains(broken));
@@ -207,7 +208,7 @@ fn tick_script_exact_and_unknown_account() {
         effects,
         vec![Effect::Poll {
             account: id(1),
-            script: "(()=>{const m=window.__msgr;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()".into()
+            script: "(()=>{const m=window.__atrium;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()".into()
         }]
     );
     assert!(matches!(

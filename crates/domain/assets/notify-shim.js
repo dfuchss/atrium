@@ -1,7 +1,7 @@
 // Injected into every service view. Collects web notifications into a queue that Rust drains
 // via eval_with_callback; the page gets no Tauri IPC access.
 (() => {
-  if (window.__msgr) return;
+  if (window.__atrium) return;
   // Bounded until the next drain (every second): a page cannot pile up notifications.
   const MAX_QUEUED = 50;
   const q = [], live = new Map();
@@ -23,7 +23,7 @@
   Object.defineProperty(window, 'Notification', { value: N, writable: false, configurable: false });
   const SWR = window.ServiceWorkerRegistration;
   if (SWR) SWR.prototype.showNotification = function (t, o) { push(t, o, null); return Promise.resolve(); };
-  window.__msgr = {
+  window.__atrium = {
     q, probe: null,
     drain() { return q.splice(0, q.length); },
     click(id) { const n = live.get(id); if (n) { window.focus(); if (n.onclick) n.onclick(new Event('click')); n.dispatchEvent(new Event('click')); } },

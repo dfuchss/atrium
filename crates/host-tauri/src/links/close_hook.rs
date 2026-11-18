@@ -12,7 +12,7 @@ use crate::logger::spawn_logged;
 /// window (and a service view with a single page in its history may close itself). So this
 /// wrapper only records the call; [`watch_close`] polls it in popups and closes their window.
 /// Nothing polls a service view, where the call does nothing.
-pub(crate) const CLOSE_HOOK: &str = "(()=>{if(window.__msgrCloseHook)return;window.__msgrCloseHook=1;window.close=function(){window.__msgrClosed=true;};})();";
+pub(crate) const CLOSE_HOOK: &str = "(()=>{if(window.__atriumCloseHook)return;window.__atriumCloseHook=1;window.close=function(){window.__atriumClosed=true;};})();";
 
 /// Closes the window `label` once its page called `window.close()` (see [`CLOSE_HOOK`]);
 /// ends when the window is gone.
@@ -24,7 +24,7 @@ pub(super) fn watch_close<R: Runtime>(app: AppHandle<R>, label: String, logger: 
                 break;
             };
             let target = window.clone();
-            let _ = window.eval_with_callback("!!window.__msgrClosed", move |raw| {
+            let _ = window.eval_with_callback("!!window.__atriumClosed", move |raw| {
                 if raw == "true" {
                     let _ = target.close();
                 }
@@ -39,7 +39,7 @@ mod tests {
 
     #[test]
     fn close_hook_only_records_the_call() {
-        assert!(CLOSE_HOOK.contains("window.close=function(){window.__msgrClosed=true;}"));
+        assert!(CLOSE_HOOK.contains("window.close=function(){window.__atriumClosed=true;}"));
         assert!(!CLOSE_HOOK.contains(".close("));
     }
 }

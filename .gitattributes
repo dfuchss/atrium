@@ -1,3 +1,4 @@
 # LF everywhere, also in Windows checkouts: the scripts run in Bash, and templates and tests
 # compare text with LF line ends.
 * text=auto eol=lf
+graphify-out/graph.json merge=graphify

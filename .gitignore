@@ -6,3 +6,4 @@ app/src-tauri/gen/
 .claude/
 .serena/
 graphify-out/
+Claude.md

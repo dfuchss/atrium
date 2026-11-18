@@ -27,6 +27,7 @@ fn snapshot_carries_settings_app_info_and_account_settings() {
         instance: Some("fosstodon.org".into()),
         muted: false,
         show_badge: false,
+        badge_style: None,
         in_dock_badge: true,
         user_agent: None,
         enabled: true,

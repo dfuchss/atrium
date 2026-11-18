@@ -1,4 +1,4 @@
-//! Tabs of the app-wide settings: general, notifications, badge, links and about.
+//! Tabs of the app-wide settings: general, notifications (with the sidebar badges), links and about.
 
 use leptos::prelude::*;
 use protocol::{
@@ -54,7 +54,6 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {size_button(IconSize::Large, "Large")}
                 </div>
             </Row>
-            <BadgeRow snapshot=snapshot />
             <Row label="Appearance" hint=texts.theme_hint>
                 <div class="btn-group seg">
                     {theme_button(Theme::Auto, "Auto")}
@@ -90,7 +89,7 @@ fn BadgeRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
         setting_segment(snapshot, BADGE_STYLE, value, label)
     };
     view! {
-        <Row label="Sidebar badges" hint="Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
+        <Row label="Sidebar badges" hint="Default for all services; a service can override it in its settings. Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
             <div class="btn-group seg">
                 {badge_button(BadgeStyle::Count, "Count")}
                 {badge_button(BadgeStyle::Dot, "Dot")}
@@ -108,6 +107,7 @@ pub(super) fn NotificationsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView 
             {app_toggle(snapshot, "Do not disturb", "Suppress all notifications.", |settings| settings.dnd, |settings, enabled| settings.dnd = enabled)}
             {app_toggle(snapshot, "Message preview", "Otherwise only \u{201C}New message\u{201D} is shown.", |settings| settings.notification_preview, |settings, enabled| settings.notification_preview = enabled)}
             {app_toggle(snapshot, "Play sound", "", |settings| settings.notification_sound, |settings, enabled| settings.notification_sound = enabled)}
+            <BadgeRow snapshot=snapshot />
             {app_toggle(snapshot, "Badge when muted", "Keep the unread badge on the sidebar icon of accounts whose notifications are off.", |settings| settings.badge_when_muted, |settings, enabled| settings.badge_when_muted = enabled)}
         </div>
     }

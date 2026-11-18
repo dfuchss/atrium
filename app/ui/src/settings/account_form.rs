@@ -1,7 +1,7 @@
 //! Inline edit form of one account.
 
 use leptos::prelude::*;
-use protocol::{AccountSettings, AccountView, AfterWake, LinkTarget, UiCommand};
+use protocol::{AccountSettings, AccountView, AfterWake, BadgeStyle, LinkTarget, UiCommand};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -75,6 +75,8 @@ struct AccountDraft {
     instance: RwSignal<String>,
     notifications: RwSignal<bool>,
     show_badge: RwSignal<bool>,
+    /// "" (global setting) or a `BadgeStyle` name.
+    badge_style: RwSignal<String>,
     in_dock_badge: RwSignal<bool>,
     enabled: RwSignal<bool>,
     start_asleep: RwSignal<bool>,
@@ -102,6 +104,11 @@ impl AccountDraft {
             instance: RwSignal::new(settings.instance.clone().unwrap_or_default()),
             notifications: RwSignal::new(!settings.muted),
             show_badge: RwSignal::new(settings.show_badge),
+            badge_style: RwSignal::new(
+                settings
+                    .badge_style
+                    .map_or_default(|style| style.name().to_string()),
+            ),
             in_dock_badge: RwSignal::new(settings.in_dock_badge),
             enabled: RwSignal::new(settings.enabled),
             start_asleep: RwSignal::new(settings.start_asleep),
@@ -151,6 +158,7 @@ impl AccountDraft {
             instance: non_empty(&self.instance.get_untracked()).filter(|_| has_instance),
             muted: !self.notifications.get_untracked(),
             show_badge: self.show_badge.get_untracked(),
+            badge_style: BadgeStyle::from_name(&self.badge_style.get_untracked()),
             in_dock_badge: self.in_dock_badge.get_untracked(),
             user_agent: self.user_agent.value(UNSET_USER_AGENT),
             enabled: self.enabled.get_untracked(),
@@ -197,6 +205,7 @@ pub(super) fn EditForm(
     media_default: bool,
     global_hibernate: Option<u32>,
     global_after_wake: AfterWake,
+    global_badge_style: BadgeStyle,
 ) -> impl IntoView {
     let id = account.id;
     let loaded = !account.hibernated;
@@ -225,6 +234,12 @@ pub(super) fn EditForm(
             <Toggle label="Enabled" hint="Disabled accounts keep their login but are not loaded." checked=draft.enabled on_change=move |enabled| draft.enabled.set(enabled) />
             <Toggle label="Notifications" checked=draft.notifications on_change=move |enabled| draft.notifications.set(enabled) />
             <Toggle label="Unread badge" checked=draft.show_badge on_change=move |enabled| draft.show_badge.set(enabled) />
+            <Row label="Badge style" hint="Overrides the badge style of the notification settings for this account.">
+                <select prop:value=move || draft.badge_style.get() on:change=move |event| draft.badge_style.set(event_target_value(&event))>
+                    <option value="">{format!("Use global setting ({})", badge_style_label(global_badge_style))}</option>
+                    {BadgeStyle::ALL.map(|style| view! { <option value=style.name()>{badge_style_label(style)}</option> })}
+                </select>
+            </Row>
             <Toggle label=platform_texts::texts().account_badge_toggle checked=draft.in_dock_badge on_change=move |enabled| draft.in_dock_badge.set(enabled) />
             <Row label="Open links in">
                 <select prop:value=move || draft.link_target.get() on:change=move |event| draft.link_target.set(match event_target_value(&event).as_str() {
@@ -241,6 +256,14 @@ pub(super) fn EditForm(
             <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake account=id loaded=loaded />
             <FormActions disabled=false on_cancel=move |()| editing.set(None) />
         </form>
+    }
+}
+
+fn badge_style_label(style: BadgeStyle) -> &'static str {
+    match style {
+        BadgeStyle::Count => "Count",
+        BadgeStyle::Dot => "Dot",
+        BadgeStyle::UrgentOnly => "Urgent only",
     }
 }
 

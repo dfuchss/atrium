@@ -105,6 +105,7 @@ fn demo_account(
             instance: service.instance_label.map(|_| "example".to_string()),
             muted: false,
             show_badge: true,
+            badge_style: None,
             in_dock_badge: true,
             user_agent: None,
             enabled: true,

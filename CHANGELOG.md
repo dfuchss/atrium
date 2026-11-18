@@ -9,6 +9,18 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+### Added
+
+#### All platforms
+
+- Each service can override the sidebar badge style (*Count*, *Dot*, *Urgent only*) in its settings; *Use global setting* keeps the default
+
+### Changed
+
+#### All platforms
+
+- The *Sidebar badges* setting moved from *General* to *Notifications*
+
 ## 0.5.0
 
 Sidebar badges tell mentions and direct messages (a red count) from other unread messages (a white dot), with a setting for each style and for muted accounts. Right-clicking a service opens a menu to put it to sleep, open its settings, turn its notifications on or off, or reload it. External links from the Linux AppImage now also open on Fedora-like hosts.

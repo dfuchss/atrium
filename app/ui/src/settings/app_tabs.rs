@@ -11,7 +11,10 @@ use crate::commands::{send_command, update_settings};
 use crate::desktop::DesktopIntegration;
 use crate::platform_texts;
 use crate::update::UpdateSection;
-use crate::widgets::{HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, number_options};
+use crate::widgets::{
+    HIBERNATE_MINUTES, Row, after_wake_options, badge_style_label, dock_badge_label, minutes_label,
+    number_options,
+};
 
 const ICON_SIZE: Setting<IconSize> = (
     |settings| settings.icon_size,
@@ -91,9 +94,7 @@ fn BadgeRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     view! {
         <Row label="Sidebar badges" hint="Default for all services; a service can override it in its settings. Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
             <div class="btn-group seg">
-                {badge_button(BadgeStyle::Count, "Count")}
-                {badge_button(BadgeStyle::Dot, "Dot")}
-                {badge_button(BadgeStyle::UrgentOnly, "Urgent only")}
+                {BadgeStyle::ALL.map(|style| badge_button(style, badge_style_label(style)))}
             </div>
         </Row>
     }
@@ -122,9 +123,7 @@ pub(super) fn DockTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
         <h2>{platform_texts::texts().badge_tab}</h2>
         <div class="form">
             <Row label="Show" hint="Accounts can be excluded individually in their settings (Accounts tab).">
-                {mode_option(DockBadgeMode::All, "Unread count and dot")}
-                {mode_option(DockBadgeMode::CountOnly, "Unread count only")}
-                {mode_option(DockBadgeMode::Off, "Off")}
+                {DockBadgeMode::ALL.map(|mode| mode_option(mode, dock_badge_label(mode)))}
             </Row>
         </div>
     }

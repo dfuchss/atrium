@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use leptos::prelude::*;
-use protocol::{AccountView, AfterWake, Snapshot};
+use protocol::{AccountView, AfterWake, BadgeStyle, DockBadgeMode, Snapshot};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 
@@ -282,6 +282,22 @@ pub(crate) fn after_wake_label(mode: AfterWake) -> &'static str {
         AfterWake::Check => "Check, reload if stuck",
         AfterWake::Reload => "Reload",
         AfterWake::Never => "Do nothing",
+    }
+}
+
+pub(crate) fn dock_badge_label(mode: DockBadgeMode) -> &'static str {
+    match mode {
+        DockBadgeMode::All => "Unread count and dot",
+        DockBadgeMode::CountOnly => "Unread count only",
+        DockBadgeMode::Off => "Off",
+    }
+}
+
+pub(crate) fn badge_style_label(style: BadgeStyle) -> &'static str {
+    match style {
+        BadgeStyle::Count => "Count",
+        BadgeStyle::Dot => "Dot",
+        BadgeStyle::UrgentOnly => "Urgent only",
     }
 }
 

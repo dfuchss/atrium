@@ -164,24 +164,6 @@ impl DockBadgeMode {
         DockBadgeMode::CountOnly,
         DockBadgeMode::Off,
     ];
-
-    /// The stored name (`all`, `count_only`, `off`), e.g. as form value.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            DockBadgeMode::All => "all",
-            DockBadgeMode::CountOnly => "count_only",
-            DockBadgeMode::Off => "off",
-        }
-    }
-
-    /// The mode stored as `name`, if any.
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<DockBadgeMode> {
-        DockBadgeMode::ALL
-            .into_iter()
-            .find(|mode| mode.name() == name)
-    }
 }
 
 /// Sidebar unread badges. Urgent unread (mentions, direct messages) is red; normal unread
@@ -200,24 +182,6 @@ pub enum BadgeStyle {
 
 impl BadgeStyle {
     pub const ALL: [BadgeStyle; 3] = [BadgeStyle::Count, BadgeStyle::Dot, BadgeStyle::UrgentOnly];
-
-    /// The stored name (`count`, `dot`, `urgent_only`), e.g. as form value.
-    #[must_use]
-    pub fn name(self) -> &'static str {
-        match self {
-            BadgeStyle::Count => "count",
-            BadgeStyle::Dot => "dot",
-            BadgeStyle::UrgentOnly => "urgent_only",
-        }
-    }
-
-    /// The style stored as `name`, if any.
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<BadgeStyle> {
-        BadgeStyle::ALL
-            .into_iter()
-            .find(|style| style.name() == name)
-    }
 
     /// The badge for `urgent` unread ([`AccountView::unread`](crate::AccountView::unread)) and
     /// `normal` unread ([`AccountView::indirect`](crate::AccountView::indirect)); urgent unread
@@ -316,18 +280,6 @@ pub struct AccountSettings {
 }
 
 impl AccountSettings {
-    /// The badge style of this account: its own, else the global `global`.
-    #[must_use]
-    pub fn effective_badge_style(&self, global: BadgeStyle) -> BadgeStyle {
-        self.badge_style.unwrap_or(global)
-    }
-
-    /// The dock badge mode of this account: its own, else the global `global`.
-    #[must_use]
-    pub fn effective_dock_badge(&self, global: DockBadgeMode) -> DockBadgeMode {
-        self.dock_badge.unwrap_or(global)
-    }
-
     /// The sidebar icon shows the unread badge (`AppSettings::badge_when_muted` for muted accounts).
     #[must_use]
     pub fn shows_badge(&self, badge_when_muted: bool) -> bool {
@@ -358,53 +310,5 @@ mod tests {
         assert_eq!(BadgeStyle::UrgentOnly.badge(0, false), Badge::None);
         assert_eq!(BadgeStyle::UrgentOnly.badge(0, true), Badge::None);
         assert_eq!(BadgeStyle::UrgentOnly.badge(3, true), Badge::Count(3));
-    }
-
-    #[test]
-    fn account_badge_style_overrides_global() {
-        let mut account = crate::AccountSettings {
-            label: String::new(),
-            instance: None,
-            muted: false,
-            show_badge: true,
-            badge_style: None,
-            dock_badge: None,
-            user_agent: None,
-            enabled: true,
-            link_target: None,
-            custom_icon: None,
-            zoom: 1.0,
-            hibernate_after_min: None,
-            start_asleep: false,
-            after_wake: None,
-            custom_css: None,
-            allow_media: None,
-            simple_icon: None,
-            app_hosts: vec![],
-        };
-        assert_eq!(
-            account.effective_badge_style(BadgeStyle::Dot),
-            BadgeStyle::Dot
-        );
-        account.badge_style = Some(BadgeStyle::UrgentOnly);
-        assert_eq!(
-            account.effective_badge_style(BadgeStyle::Dot),
-            BadgeStyle::UrgentOnly
-        );
-        for style in BadgeStyle::ALL {
-            assert_eq!(BadgeStyle::from_name(style.name()), Some(style));
-        }
-        assert_eq!(
-            account.effective_dock_badge(DockBadgeMode::Off),
-            DockBadgeMode::Off
-        );
-        account.dock_badge = Some(DockBadgeMode::CountOnly);
-        assert_eq!(
-            account.effective_dock_badge(DockBadgeMode::Off),
-            DockBadgeMode::CountOnly
-        );
-        for mode in DockBadgeMode::ALL {
-            assert_eq!(DockBadgeMode::from_name(mode.name()), Some(mode));
-        }
     }
 }

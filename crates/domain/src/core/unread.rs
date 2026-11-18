@@ -274,7 +274,7 @@ impl Core {
             .iter()
             .filter(|account| !account.settings.muted && account.settings.enabled)
         {
-            let mode = account.settings.effective_dock_badge(global);
+            let mode = account.settings.dock_badge.unwrap_or(global);
             if mode == DockBadgeMode::Off {
                 continue;
             }

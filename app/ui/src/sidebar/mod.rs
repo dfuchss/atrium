@@ -95,7 +95,7 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
                 let hibernated = account.settings.enabled && account.hibernated;
                 view! {
                     {account_icon(&account, false)}
-                    {show_badge.then(|| match account.settings.effective_badge_style(global_badge_style.get()).badge(account.unread, account.indirect) {
+                    {show_badge.then(|| match account.settings.badge_style.unwrap_or(global_badge_style.get()).badge(account.unread, account.indirect) {
                         Badge::Count(count) => view! { <span class="badge">{badge_text(count)}</span> }.into_any(),
                         Badge::UrgentDot => view! { <span class="dot urgent"></span> }.into_any(),
                         Badge::NormalDot => view! { <span class="dot"></span> }.into_any(),

@@ -41,6 +41,37 @@ struct Shared {
     snapshot: SnapshotCache,
 }
 
+/// Calls `$then!` with the Tauri commands, each with the protocol constant the UI calls it by:
+/// the one list behind the invoke handler and the test of the names.
+macro_rules! with_commands {
+    ($then:ident) => {
+        $then! {
+            ui_command => CMD_UI_COMMAND,
+            get_snapshot => CMD_GET_SNAPSHOT,
+            service_files::list_service_files => CMD_LIST_SERVICE_FILES,
+            service_files::read_service_file => CMD_READ_SERVICE_FILE,
+            service_files::new_service_template => CMD_NEW_SERVICE_TEMPLATE,
+            service_files::validate_service => CMD_VALIDATE_SERVICE,
+            service_files::save_service_file => CMD_SAVE_SERVICE_FILE,
+            service_files::delete_service_file => CMD_DELETE_SERVICE_FILE,
+            service_files::set_service_file_enabled => CMD_SET_SERVICE_FILE_ENABLED,
+            desktop::get_desktop_entry => CMD_GET_DESKTOP_ENTRY,
+            desktop::install_desktop_entry => CMD_INSTALL_DESKTOP_ENTRY,
+            desktop::uninstall_desktop_entry => CMD_UNINSTALL_DESKTOP_ENTRY,
+            desktop::list_browsers => CMD_LIST_BROWSERS,
+            updates::update_command => CMD_UPDATE_COMMAND,
+            updates::get_update_status => CMD_GET_UPDATE_STATUS,
+        }
+    };
+}
+
+/// The invoke handler of the commands of [`with_commands`].
+macro_rules! handler {
+    ($($($segment:ident)::+ => $constant:ident),* $(,)?) => {
+        tauri::generate_handler![$($($segment)::+),*]
+    };
+}
+
 #[tauri::command]
 #[expect(
     clippy::needless_pass_by_value,
@@ -343,23 +374,7 @@ fn main() {
             feed,
             snapshot: snapshot_cache,
         })
-        .invoke_handler(tauri::generate_handler![
-            ui_command,
-            get_snapshot,
-            service_files::list_service_files,
-            service_files::read_service_file,
-            service_files::new_service_template,
-            service_files::validate_service,
-            service_files::save_service_file,
-            service_files::delete_service_file,
-            service_files::set_service_file_enabled,
-            desktop::get_desktop_entry,
-            desktop::install_desktop_entry,
-            desktop::uninstall_desktop_entry,
-            desktop::list_browsers,
-            updates::update_command,
-            updates::get_update_status,
-        ])
+        .invoke_handler(with_commands!(handler))
         // App menu and tray menu items (built by the host from the core's menu model).
         .on_menu_event(move |app, event| {
             host_tauri::handle_menu_event(app, MAIN_WINDOW, event.id().as_ref(), &menu_feed);
@@ -389,36 +404,18 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::Value;
 
     /// Tauri binds a command by the name of its function, the UI calls it by the protocol
     /// constant: renaming one without the other must fail here, not at runtime.
     #[test]
     fn commands_are_named_like_their_protocol_constants() {
-        macro_rules! handlers {
-            ($($handler:path => $constant:ident),* $(,)?) => {[$({
-                let _ = $handler;
-                (stringify!($handler), protocol::$constant)
-            }),*]};
+        macro_rules! names {
+            ($($($segment:ident)::+ => $constant:ident),* $(,)?) => {
+                [$((stringify!($($segment)::+), protocol::$constant)),*]
+            };
         }
-        let commands = handlers!(
-            ui_command => CMD_UI_COMMAND,
-            get_snapshot => CMD_GET_SNAPSHOT,
-            service_files::list_service_files => CMD_LIST_SERVICE_FILES,
-            service_files::read_service_file => CMD_READ_SERVICE_FILE,
-            service_files::new_service_template => CMD_NEW_SERVICE_TEMPLATE,
-            service_files::validate_service => CMD_VALIDATE_SERVICE,
-            service_files::save_service_file => CMD_SAVE_SERVICE_FILE,
-            service_files::delete_service_file => CMD_DELETE_SERVICE_FILE,
-            service_files::set_service_file_enabled => CMD_SET_SERVICE_FILE_ENABLED,
-            desktop::get_desktop_entry => CMD_GET_DESKTOP_ENTRY,
-            desktop::install_desktop_entry => CMD_INSTALL_DESKTOP_ENTRY,
-            desktop::uninstall_desktop_entry => CMD_UNINSTALL_DESKTOP_ENTRY,
-            desktop::list_browsers => CMD_LIST_BROWSERS,
-            updates::update_command => CMD_UPDATE_COMMAND,
-            updates::get_update_status => CMD_GET_UPDATE_STATUS,
-        );
+        let commands = with_commands!(names);
         for (path, constant) in commands {
             assert_eq!(path.rsplit("::").next().unwrap().trim(), constant);
         }

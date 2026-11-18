@@ -8,11 +8,12 @@ use crate::catalog::ServiceDef;
 
 impl Core {
     /// Applies the user's service files found at startup (call before `Input::Started`).
-    /// Their problems are logged on start and shown in the snapshot.
+    /// Their problems are logged on start and shown in the snapshot. The startup log is
+    /// replaced: the problems of the custom services found by `new` are found again here.
     pub fn set_user_services(&mut self, defs: Vec<ServiceDef>, errors: Vec<String>) {
-        self.startup_log.extend(errors.iter().cloned());
-        // Problems of the custom services are already in the startup log (see `new`).
-        self.apply_user_services(defs, errors);
+        self.startup_log.clone_from(&errors);
+        let problems = self.apply_user_services(defs, errors);
+        self.startup_log.extend(problems);
     }
 
     /// Reload of the user's files: new catalog and unread rules; accounts whose view would now

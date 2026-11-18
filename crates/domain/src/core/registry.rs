@@ -60,7 +60,8 @@ impl ServiceRegistry {
 
     /// Replaces the user definitions (a failed file keeps the previous definitions of ids that
     /// no file defines any more, as the failed file may be the one that defined them) and
-    /// rebuilds the catalog. Returns the problems of the custom services.
+    /// rebuilds the catalog. Returns the problems of the custom services, including those that
+    /// replace a built-in or file service of the same id.
     pub(super) fn apply_user_services(
         &mut self,
         mut defs: Vec<ServiceDef>,
@@ -83,10 +84,22 @@ impl ServiceRegistry {
         self.user_defs = defs;
         self.base = base;
         self.errors = errors;
-        self.rebuild(custom_services)
+        let mut problems: Vec<String> = custom_services
+            .iter()
+            .filter(|custom| self.defines_file_service(&custom.id))
+            .map(|custom| {
+                format!(
+                    "custom service {:?} replaces the built-in or file service of the same id",
+                    custom.id
+                )
+            })
+            .collect();
+        problems.extend(self.rebuild(custom_services));
+        problems
     }
 
-    /// Catalog = base + valid custom services; recompiles the unread rules. Returns problems.
+    /// Catalog = base + valid custom services; recompiles the unread rules. Returns the problems
+    /// of the invalid custom services.
     pub(super) fn rebuild(&mut self, custom_services: &[CustomService]) -> Vec<String> {
         let mut catalog = self.base.clone();
         let mut problems = vec![];

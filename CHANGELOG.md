@@ -25,6 +25,7 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 - The per-service *Count in dock badge* switch is gone: set the service's dock badge to *Off* instead; services that had it off now use the global dock badge setting
 - The badge settings of a service use the same segmented buttons as the global settings
 - The *Sidebar badges* setting moved from *General* to *Notifications*
+- A custom service whose id equals a built-in service or a service definition file is logged when it replaces that service
 
 ### Fixed
 

@@ -68,6 +68,8 @@ pub trait Platform: Send + Sync {
     /// Creates `<config>/services/` (with a README and an example if it holds no definitions)
     /// and shows it in the file manager.
     fn open_services_folder(&self) -> PortResult;
+    /// Saves `json` as a new file in the downloads folder and shows it in the file manager.
+    fn export_settings(&self, json: &str) -> PortResult;
     /// Re-reads `<config>/services/*.toml` in the background; the adapter later sends
     /// `Input::ServicesLoaded`.
     fn load_services(&self) -> PortResult;

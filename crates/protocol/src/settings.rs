@@ -175,7 +175,7 @@ pub enum BadgeStyle {
 impl BadgeStyle {
     pub const ALL: [BadgeStyle; 3] = [BadgeStyle::Count, BadgeStyle::Dot, BadgeStyle::UrgentOnly];
 
-    /// The stored name ("count", "dot", "urgent_only"), e.g. as form value.
+    /// The stored name (`count`, `dot`, `urgent_only`), e.g. as form value.
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
@@ -188,7 +188,9 @@ impl BadgeStyle {
     /// The style stored as `name`, if any.
     #[must_use]
     pub fn from_name(name: &str) -> Option<BadgeStyle> {
-        BadgeStyle::ALL.into_iter().find(|style| style.name() == name)
+        BadgeStyle::ALL
+            .into_iter()
+            .find(|style| style.name() == name)
     }
 
     /// The badge for `urgent` unread ([`AccountView::unread`](crate::AccountView::unread)) and
@@ -348,7 +350,10 @@ mod tests {
             simple_icon: None,
             app_hosts: vec![],
         };
-        assert_eq!(account.effective_badge_style(BadgeStyle::Dot), BadgeStyle::Dot);
+        assert_eq!(
+            account.effective_badge_style(BadgeStyle::Dot),
+            BadgeStyle::Dot
+        );
         account.badge_style = Some(BadgeStyle::UrgentOnly);
         assert_eq!(
             account.effective_badge_style(BadgeStyle::Dot),

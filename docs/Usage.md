@@ -24,7 +24,7 @@ Open the settings with the gear button or <kbd>⌘</kbd><kbd>,</kbd> (<kbd>Ctrl<
 | Instance | Only for services that ask for one (its label comes from the service, e.g. *Element web host*). Changing it reloads the account. |
 | Enabled | Disabled accounts keep their login but are not loaded. |
 | Notifications | Off mutes the account: no notifications, and not counted in the badge. |
-| Unread badge | The unread badge on the sidebar icon. |
+| Unread badge | The unread badge on the sidebar icon, with its own style: *Use global setting*, *Count*, *Dot* or *Urgent only*. |
 | Count in dock badge | Count the account in the Dock badge (*launcher badge* on Linux, *taskbar badge* on Windows). |
 | Open links in | Where links that open a new window go: *Use global setting*, *System browser* or *App window*. |
 | Icon | *Use site icon* or *Refresh site icon*; a [Simple Icons](https://simpleicons.org/) slug (a brand glyph on the service colour); or an image URL or file. Precedence: custom image, Simple Icon, site icon, initials. |
@@ -49,7 +49,6 @@ Below them, *Service definition files* lists the TOML files of the services fold
 | Setting | What it does |
 |---|---|
 | Sidebar icon size | Small, medium or large icons; the sidebar width follows. |
-| Sidebar badges | *Count*, *Dot* or *Urgent only*. Mentions and direct messages show red, with their number or as a dot; other unread messages show a white dot. *Urgent only* shows the red number and hides the white dot. |
 | Appearance | *Auto*, *Light* or *Dark*. Auto follows the system; service pages follow if they support it. |
 | Launch at login | Start Atrium when you log in. |
 | Start hidden | Start without showing the window. |
@@ -58,10 +57,13 @@ Below them, *Service definition files* lists the TOML files of the services fold
 | Put inactive services to sleep after | 5, 15, 30, 60 or 120 minutes, or *Never*. Sleeping services free memory but show no notifications or unread counts until you open them again. |
 | After waking from sleep | *Check, reload if stuck* reloads only the services that stop responding after a wake, *Reload* reloads all, *Do nothing*. When this applies differs per platform: [macOS](macOS#desktop-integration), [Linux](Linux#desktop-integration), [Windows](Windows#desktop-integration). |
 | Desktop integration | Linux and Windows only: install, update or remove the launcher entry ([Linux](Linux#desktop-integration)) or Start menu shortcut ([Windows](Windows#desktop-integration)). |
+| Export and import | *Export settings* saves the settings, the added services and the custom services to a file in your Downloads folder. Logins are not included. *Import* asks for a file and overwrites all settings. It removes all current services with their logins. Atrium checks the file first; an invalid file changes nothing. |
 
 ### Notifications
 
 *Do not disturb* suppresses all notifications. *Message preview* shows the message text (otherwise only "New message"), *Play sound* plays the notification sound. *Badge when muted* keeps or hides the sidebar badge of accounts with notifications off.
+
+*Sidebar badges*: *Count*, *Dot* or *Urgent only*. Mentions and direct messages show red, with their number or as a dot; other unread messages show a white dot. *Urgent only* shows the red number and hides the white dot.
 
 ### Dock badge
 

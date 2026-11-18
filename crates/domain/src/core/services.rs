@@ -64,7 +64,7 @@ impl Core {
     }
 
     /// Rebuilds the catalog after a change of the custom services; returns their problems.
-    fn rebuild_catalog(&mut self) -> Vec<String> {
+    pub(super) fn rebuild_catalog(&mut self) -> Vec<String> {
         self.registry.rebuild(&self.persisted.custom_services)
     }
 

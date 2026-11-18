@@ -7,6 +7,7 @@ mod browser_row;
 mod custom_services;
 mod service_editor;
 mod service_files;
+mod transfer;
 mod user_agent;
 
 use leptos::prelude::*;

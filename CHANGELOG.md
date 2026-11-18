@@ -14,6 +14,7 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 #### All platforms
 
 - Each service can override the sidebar badge style (*Count*, *Dot*, *Urgent only*) in its settings; *Use global setting* keeps the default
+- *Export settings* and *Import* in *General* save and restore the settings, the added services and the custom services; import asks for confirmation and overwrites everything, including the current logins
 
 ### Changed
 

@@ -344,6 +344,10 @@ pub enum Effect {
     FocusWindow,
     /// Create `<config>/services/` (with README and example when empty) and show it.
     OpenServicesFolder,
+    /// Write the export file (JSON) to the user's downloads folder and show it.
+    ExportSettings {
+        json: String,
+    },
     /// Re-read the user's service files; answered with [`Input::ServicesLoaded`].
     LoadServices,
     /// Apply OS-level settings (launch at login, ...). Emitted on start and on every change.

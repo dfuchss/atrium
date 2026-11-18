@@ -112,6 +112,9 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
             open_checked(&url, browser.as_deref(), ports),
         ),
         Effect::OpenServicesFolder => ("OpenServicesFolder", ports.platform.open_services_folder()),
+        Effect::ExportSettings { json } => {
+            ("ExportSettings", ports.platform.export_settings(&json))
+        }
         Effect::LoadServices => ("LoadServices", ports.platform.load_services()),
         Effect::FocusWindow => ("FocusWindow", ports.platform.focus_window()),
         Effect::ApplySystemSettings(settings) => (
@@ -235,6 +238,9 @@ mod tests {
             Ok(())
         }
         fn open_services_folder(&self) -> PortResult {
+            Ok(())
+        }
+        fn export_settings(&self, _: &str) -> PortResult {
             Ok(())
         }
         fn load_services(&self) -> PortResult {

@@ -15,6 +15,7 @@ mod services;
 mod settings;
 mod snapshot;
 mod tick;
+mod transfer;
 mod unread;
 mod views;
 mod wake;
@@ -239,6 +240,8 @@ impl Core {
             UiCommand::RemoveCustomService { id } => self.remove_custom_service(&id),
             UiCommand::OpenServicesFolder => vec![Effect::OpenServicesFolder],
             UiCommand::ReloadServices => vec![Effect::LoadServices],
+            UiCommand::ExportSettings => self.export_settings(),
+            UiCommand::ImportSettings { json } => self.import_settings(&json),
             UiCommand::OpenProjectPage => self.open_project_page(),
         }
     }

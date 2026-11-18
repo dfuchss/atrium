@@ -99,6 +99,14 @@ pub enum UiCommand {
     OpenServicesFolder,
     /// Expert mode: re-read the TOML files in `<config>/services/` without a restart.
     ReloadServices,
+    /// Write the settings, the added services and the custom services to a file (see
+    /// `Platform::export_settings`).
+    ExportSettings,
+    /// Replace all settings and accounts (with their logins) by the content of an export file.
+    /// The UI asks the user to confirm first.
+    ImportSettings {
+        json: String,
+    },
     /// About tab: open [`PROJECT_URL`](crate::PROJECT_URL) in the browser.
     OpenProjectPage,
 }

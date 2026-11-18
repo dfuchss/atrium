@@ -6,6 +6,7 @@ use protocol::{
 };
 
 use super::browser_row::BrowserRow;
+use super::transfer::TransferSection;
 use super::{Setting, app_toggle, setting_radio, setting_segment};
 use crate::commands::{send_command, update_settings};
 use crate::desktop::DesktopIntegration;
@@ -80,6 +81,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             </Row>
         </div>
         <DesktopIntegration />
+        <TransferSection />
     }
 }
 

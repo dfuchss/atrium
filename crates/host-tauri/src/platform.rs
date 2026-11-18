@@ -89,6 +89,25 @@ impl<R: Runtime> Platform for TauriHost<R> {
             .map_err(port_err)
     }
 
+    fn export_settings(&self, json: &str) -> PortResult {
+        use std::io::Write as _;
+        let dir = self.app.path().download_dir().map_err(port_err)?;
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        let path = dir.join(format!("atrium-settings-{seconds}.json"));
+        // `create_new`: an earlier export is never overwritten.
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .and_then(|mut file| file.write_all(json.as_bytes()))
+            .map_err(port_err)?;
+        self.logger
+            .log(&format!("exported settings to {}", path.display()));
+        self.app.opener().reveal_item_in_dir(&path).map_err(port_err)
+    }
+
     fn load_services(&self) -> PortResult {
         let (defs, errors) = services::read_user_services(&self.services_dir()?);
         (self.feed)(Input::ServicesLoaded { defs, errors });

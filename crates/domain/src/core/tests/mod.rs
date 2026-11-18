@@ -32,6 +32,7 @@ mod layout;
 mod menus;
 mod services;
 mod settings;
+mod transfer;
 mod unread;
 mod view_policy;
 mod wake;

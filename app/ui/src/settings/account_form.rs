@@ -245,18 +245,20 @@ pub(super) fn EditForm(
             <Toggle label="Enabled" hint="Disabled accounts keep their login but are not loaded." checked=draft.enabled on_change=move |enabled| draft.enabled.set(enabled) />
             <Toggle label="Notifications" checked=draft.notifications on_change=move |enabled| draft.notifications.set(enabled) />
             <Toggle label="Unread badge" checked=draft.show_badge on_change=move |enabled| draft.show_badge.set(enabled) />
-            <Row label="Badge style" hint="Overrides the badge style of the notification settings for this account.">
-                <select prop:value=move || draft.badge_style.get() on:change=move |event| draft.badge_style.set(event_target_value(&event))>
-                    <option value="">{format!("Use global setting ({})", badge_style_label(global_badge_style))}</option>
-                    {BadgeStyle::ALL.map(|style| view! { <option value=style.name()>{badge_style_label(style)}</option> })}
-                </select>
+            <Row label="Badge style">
+                <div class="btn-group seg">
+                    {draft_segment(draft.badge_style, "", "Global")}
+                    {BadgeStyle::ALL.map(|style| draft_segment(draft.badge_style, style.name(), badge_style_label(style)))}
+                </div>
+                <span class="hint">{format!("Global setting: {}.", badge_style_label(global_badge_style))}</span>
             </Row>
             <Toggle label=platform_texts::texts().account_badge_toggle checked=draft.in_dock_badge on_change=move |enabled| draft.in_dock_badge.set(enabled) />
-            <Row label=platform_texts::texts().badge_tab hint="Overrides the global setting of this badge for this account.">
-                <select prop:value=move || draft.dock_badge.get() on:change=move |event| draft.dock_badge.set(event_target_value(&event))>
-                    <option value="">{format!("Use global setting ({})", dock_badge_label(global_dock_badge))}</option>
-                    {DockBadgeMode::ALL.map(|mode| view! { <option value=mode.name()>{dock_badge_label(mode)}</option> })}
-                </select>
+            <Row label=platform_texts::texts().badge_tab>
+                <div class="btn-group seg">
+                    {draft_segment(draft.dock_badge, "", "Global")}
+                    {DockBadgeMode::ALL.map(|mode| draft_segment(draft.dock_badge, mode.name(), dock_badge_label(mode)))}
+                </div>
+                <span class="hint">{format!("Global setting: {}.", dock_badge_label(global_dock_badge))}</span>
             </Row>
             <Row label="Open links in">
                 <select prop:value=move || draft.link_target.get() on:change=move |event| draft.link_target.set(match event_target_value(&event).as_str() {
@@ -273,6 +275,13 @@ pub(super) fn EditForm(
             <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake account=id loaded=loaded />
             <FormActions disabled=false on_cancel=move |()| editing.set(None) />
         </form>
+    }
+}
+
+/// Button of a segmented control bound to a draft field; `value` "" is the global setting.
+fn draft_segment(field: RwSignal<String>, value: &'static str, label: &'static str) -> impl IntoView {
+    view! {
+        <button type="button" class="btn" class:on=move || field.get() == value on:click=move |_| field.set(value.to_string())>{label}</button>
     }
 }
 

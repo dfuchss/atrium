@@ -7,7 +7,7 @@ mod account_menu;
 mod app_menu;
 mod tray;
 
-use domain::{Input, MenuAccount, MenuAction, MenuModel};
+use domain::{AccountMenuAction, Input, MenuAccount, MenuAction, MenuModel};
 use protocol::UiCommand;
 use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
@@ -116,10 +116,19 @@ fn menu_command(id: &str) -> Option<MenuCommand> {
         ID_ZOOM_OUT => menu(MenuAction::ZoomOut),
         ID_ZOOM_RESET => menu(MenuAction::ZoomReset),
         ID_OPEN_BROWSER => menu(MenuAction::OpenInBrowser),
-        _ if id.starts_with(ID_ACCOUNT_MENU) => MenuCommand {
-            show_window: false,
-            input: Some(account_menu_input(id)?),
-        },
+        _ if id.starts_with(ID_ACCOUNT_MENU) => {
+            let input = account_menu_input(id)?;
+            MenuCommand {
+                show_window: matches!(
+                    input,
+                    Input::AccountMenu {
+                        action: AccountMenuAction::Settings,
+                        ..
+                    }
+                ),
+                input: Some(input),
+            }
+        }
         _ => {
             let account = Uuid::parse_str(id.strip_prefix(ID_ACCOUNT)?).ok()?;
             MenuCommand {

@@ -88,7 +88,7 @@ mod tests {
             assert_eq!(
                 menu_command(&account_menu_item_id(account, action)),
                 Some(MenuCommand {
-                    show_window: false,
+                    show_window: action == AccountMenuAction::Settings,
                     input: Some(Input::AccountMenu { account, action })
                 })
             );

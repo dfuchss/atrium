@@ -9,6 +9,10 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+## 0.5.0
+
+Sidebar badges tell mentions and direct messages (a red count) from other unread messages (a white dot), with a setting for each style and for muted accounts. Right-clicking a service opens a menu to put it to sleep, open its settings, turn its notifications on or off, or reload it. External links from the Linux AppImage now also open on Fedora-like hosts.
+
 ### Added
 
 #### All platforms

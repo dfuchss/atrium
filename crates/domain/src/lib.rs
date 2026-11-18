@@ -19,7 +19,10 @@ pub use crate::core::{
     simple_icon_url,
 };
 pub use crate::model::{Account, Persisted, Settings, unused_store_ids};
-pub use crate::security::{nav_allowed, redact_url, window_title};
+pub use crate::security::{
+    NewWindowGate, NewWindowRoute, nav_allowed, new_window_gate, new_window_route, redact_url,
+    window_title,
+};
 pub use crate::throttle::{RateLimiter, WindowQuota, WindowRefusal};
 
 /// Trimmed text; empty means none.

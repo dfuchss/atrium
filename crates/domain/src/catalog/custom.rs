@@ -2,7 +2,7 @@
 
 use protocol::{CustomService, INSTANCE_PLACEHOLDER};
 
-use super::is_hex_color;
+use super::parse::is_hex_color;
 
 /// Unread rule of custom services without an own `title_regex`: "(3) Title".
 pub(super) const DEFAULT_TITLE_REGEX: &str = r"^\((\d+)\)";

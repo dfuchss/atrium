@@ -82,8 +82,9 @@ pub enum DockBadge {
 }
 
 /// Per-account decisions the adapter must take synchronously inside native callbacks
-/// (new-window requests, permission requests), so it keeps the latest value per account.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// (new-window requests, permission requests), so it keeps the latest value per account. The
+/// default (links to the system browser, no media) applies to an account without one.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ViewPolicy {
     /// Where non-popup new windows go.
     pub link_target: LinkTarget,

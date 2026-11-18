@@ -8,6 +8,7 @@ mod icons;
 mod layout;
 mod menus;
 mod messages;
+mod notifications;
 mod registry;
 mod scripts;
 mod services;
@@ -37,6 +38,7 @@ pub use messages::{
 };
 
 use layout::WindowSize;
+use notifications::NOTIFICATIONS_PER_MINUTE;
 use registry::ServiceRegistry;
 use unread::UnreadTracker;
 use wake::{CRASH_RELOAD_WINDOW_MS, MAX_CRASH_RELOADS};
@@ -77,6 +79,8 @@ pub struct Core {
     /// User agent preset of new accounts whose service asks for the `webkit` one (see
     /// [`Core::set_new_account_user_agent`]).
     new_account_user_agent: Option<String>,
+    /// Notifications per account and minute.
+    notification_limit: RateLimiter<Uuid>,
     /// External opens (browser, mail app) per account, so a page cannot flood the desktop.
     external_link_limit: RateLimiter<Uuid>,
     /// Reloads after a crashed web process per account, so a crashing page is not reloaded
@@ -126,6 +130,7 @@ impl Core {
             startup_log: vec![],
             log_page_titles: false,
             new_account_user_agent: None,
+            notification_limit: RateLimiter::new(NOTIFICATIONS_PER_MINUTE, MS_PER_MINUTE),
             external_link_limit: RateLimiter::new(1, EXTERNAL_LINK_INTERVAL_MS),
             crash_reload_limit: RateLimiter::new(MAX_CRASH_RELOADS, CRASH_RELOAD_WINDOW_MS),
             crash_reloads_stopped: HashSet::new(),

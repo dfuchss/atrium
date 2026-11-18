@@ -1,4 +1,4 @@
-use super::super::unread::HIDDEN_PREVIEW_BODY;
+use super::super::notifications::HIDDEN_PREVIEW_BODY;
 use super::*;
 
 #[test]

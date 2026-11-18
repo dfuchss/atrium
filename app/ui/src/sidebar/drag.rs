@@ -1,17 +1,13 @@
-//! The sidebar: one button per account (reorderable by dragging) and the tool buttons.
+//! Reordering the account buttons by dragging them.
 
 use std::time::Duration;
 
 use leptos::prelude::*;
-use protocol::{Badge, Snapshot, UiCommand, UpdateStatus};
+use protocol::{Snapshot, UiCommand};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 
 use crate::commands::send_command;
-use crate::glyphs::{ICON_BELL, ICON_BELL_OFF, ICON_GEAR, ICON_PLUS};
-use crate::settings::{Tab, open_dialog};
-use crate::update::UpdateStatusSignal;
-use crate::widgets::{Icon, account_by_id, account_icon};
 
 /// Pointer movement (px) before a press on an icon becomes a drag.
 const DRAG_THRESHOLD: f64 = 4.0;
@@ -35,21 +31,13 @@ struct DragStart {
 
 /// Visible drag state that drives the per-icon transforms.
 #[derive(Clone, Copy, PartialEq)]
-struct DragPreview {
-    account: Uuid,
+pub(super) struct DragPreview {
+    pub(super) account: Uuid,
     source: usize,
     target: usize,
     offset_y: f64,
     /// Distance between two neighbouring icons.
     pitch: f64,
-}
-
-fn badge_text(unread: u32) -> String {
-    if unread > 99 {
-        "99+".into()
-    } else {
-        unread.to_string()
-    }
 }
 
 #[expect(
@@ -67,7 +55,7 @@ fn index_delta(source: usize, target: usize) -> i32 {
 }
 
 /// Transform of the icon `account` at position `index` while `preview` is shown.
-fn drag_style(preview: Option<DragPreview>, account: Uuid, index: usize) -> String {
+pub(super) fn drag_style(preview: Option<DragPreview>, account: Uuid, index: usize) -> String {
     let Some(preview) = preview else {
         return String::new();
     };
@@ -162,19 +150,19 @@ fn reordered(mut order: Vec<Uuid>, preview: DragPreview) -> Vec<Uuid> {
 
 /// Drag state of the account list, shared by its pointer handlers.
 #[derive(Clone, Copy)]
-struct DragState {
+pub(super) struct DragState {
     snapshot: ReadSignal<Snapshot>,
-    preview: RwSignal<Option<DragPreview>>,
+    pub(super) preview: RwSignal<Option<DragPreview>>,
     start: StoredValue<Option<DragStart>>,
     /// Swallows the click that follows a drag.
-    suppress_click: StoredValue<bool>,
+    pub(super) suppress_click: StoredValue<bool>,
     /// Rendered order; frozen while a drag is active, resynced from the snapshot afterwards.
-    order: RwSignal<Vec<Uuid>>,
-    list: NodeRef<leptos::html::Div>,
+    pub(super) order: RwSignal<Vec<Uuid>>,
+    pub(super) list: NodeRef<leptos::html::Div>,
 }
 
 impl DragState {
-    fn new(snapshot: ReadSignal<Snapshot>) -> DragState {
+    pub(super) fn new(snapshot: ReadSignal<Snapshot>) -> DragState {
         let state = DragState {
             snapshot,
             preview: RwSignal::new(None),
@@ -230,7 +218,7 @@ impl DragState {
         self.order.set(next);
     }
 
-    fn pointer_down(self, event: &web_sys::PointerEvent) {
+    pub(super) fn pointer_down(self, event: &web_sys::PointerEvent) {
         if event.button() != 0 || !event.is_primary() {
             return;
         }
@@ -247,7 +235,7 @@ impl DragState {
         }
     }
 
-    fn pointer_move(self, event: &web_sys::PointerEvent) {
+    pub(super) fn pointer_move(self, event: &web_sys::PointerEvent) {
         let Some(mut start) = self.start.get_value() else {
             return;
         };
@@ -268,7 +256,7 @@ impl DragState {
         self.preview.set(Some(drag_preview(&start, offset_y)));
     }
 
-    fn pointer_up(self, event: &web_sys::PointerEvent) {
+    pub(super) fn pointer_up(self, event: &web_sys::PointerEvent) {
         let Some(start) = self.start.get_value() else {
             return;
         };
@@ -288,12 +276,12 @@ impl DragState {
         }
     }
 
-    fn pointer_cancel(self) {
+    pub(super) fn pointer_cancel(self) {
         self.start.set_value(None);
         self.finish(false);
     }
 
-    fn lost_pointer_capture(self) {
+    pub(super) fn lost_pointer_capture(self) {
         if self.start.get_value().is_some_and(|start| start.active) {
             self.start.set_value(None);
             self.finish(false);
@@ -301,7 +289,7 @@ impl DragState {
     }
 
     /// Escape during a drag puts the icons back.
-    fn escape(self) {
+    pub(super) fn escape(self) {
         if let Some(mut start) = self.start.get_value()
             && start.active
             && !start.cancelled
@@ -310,122 +298,5 @@ impl DragState {
             self.start.set_value(Some(start));
             self.finish(false);
         }
-    }
-}
-
-#[component]
-pub(crate) fn Sidebar(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    let drag = DragState::new(snapshot);
-    window_event_listener(leptos::ev::keydown, move |event| {
-        if event.key() == "Escape" {
-            drag.escape();
-        }
-    });
-    view! {
-        <nav class="sidebar">
-            <div
-                class="accounts"
-                node_ref=drag.list
-                class:dragging=move || drag.preview.get().is_some()
-                on:pointerdown=move |event| drag.pointer_down(&event)
-                on:pointermove=move |event| drag.pointer_move(&event)
-                on:pointerup=move |event| drag.pointer_up(&event)
-                on:pointercancel=move |_| drag.pointer_cancel()
-                on:lostpointercapture=move |_| drag.lost_pointer_capture()
-                on:dragstart=|event: web_sys::DragEvent| event.prevent_default()
-            >
-                <For
-                    each=move || drag.order.get()
-                    key=|id| *id
-                    children=move |id| view! { <AccountButton snapshot=snapshot drag=drag id=id /> }
-                />
-            </div>
-            <SidebarTools snapshot=snapshot />
-        </nav>
-    }
-}
-
-#[component]
-fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> impl IntoView {
-    let account = account_by_id(snapshot, id);
-    let active = move || snapshot.with(|snapshot| snapshot.active == Some(id));
-    let badge_when_muted =
-        Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_when_muted));
-    let badge_style = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_style));
-    view! {
-        <button
-            class="acct"
-            class:active=active
-            class:muted=move || account.get().is_some_and(|account| account.settings.muted)
-            class:disabled=move || account.get().is_some_and(|account| !account.settings.enabled)
-            class:hibernated=move || account.get().is_some_and(|account| account.settings.enabled && account.hibernated)
-            title=move || account.get().map_or_default(|account| format!("{} \u{2013} {}", account.service_name, account.settings.label))
-            data-id=id.to_string()
-            draggable="false"
-            class:dragged=move || drag.preview.get().is_some_and(|preview| preview.account == id)
-            style=move || {
-                let index = drag.order.with(|order| order.iter().position(|other| *other == id)).unwrap_or(0);
-                drag_style(drag.preview.get(), id, index)
-            }
-            on:click=move |_| {
-                if drag.suppress_click.get_value() {
-                    drag.suppress_click.set_value(false);
-                } else {
-                    send_command(UiCommand::Select { account: id });
-                }
-            }
-            on:contextmenu=move |event| {
-                event.prevent_default();
-                send_command(UiCommand::ShowAccountMenu { account: id });
-            }
-        >
-            {move || account.get().map(|account| {
-                let show_badge = account.settings.shows_badge(badge_when_muted.get());
-                let muted = account.settings.muted;
-                let hibernated = account.settings.enabled && account.hibernated;
-                view! {
-                    {account_icon(&account, false)}
-                    {show_badge.then(|| match badge_style.get().badge(account.unread, account.indirect) {
-                        Badge::Count(count) => view! { <span class="badge">{badge_text(count)}</span> }.into_any(),
-                        Badge::UrgentDot => view! { <span class="dot urgent"></span> }.into_any(),
-                        Badge::NormalDot => view! { <span class="dot"></span> }.into_any(),
-                        Badge::None => ().into_any(),
-                    })}
-                    {muted.then(|| view! { <span class="mute-mark">"\u{1F507}"</span> })}
-                    {hibernated.then(|| view! { <span class="moon-mark" title="Sleeping">"\u{1F319}"</span> })}
-                }
-            })}
-        </button>
-    }
-}
-
-/// Add account, settings and Do Not Disturb.
-#[component]
-fn SidebarTools(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    let dnd = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.dnd));
-    let UpdateStatusSignal(update_status) = expect_context::<UpdateStatusSignal>();
-    let has_update = Memo::new(move |_| {
-        update_status.with(|status| status.as_ref().is_some_and(UpdateStatus::has_update))
-    });
-    view! {
-        <div class="bottom">
-            <button class="tool" title="Add account" on:click=move |_| open_dialog(Tab::Accounts, true)><Icon svg=ICON_PLUS /></button>
-            <button
-                class="tool"
-                class:update=move || has_update.get()
-                title=move || if has_update.get() { "Settings \u{2013} update available" } else { "Settings" }
-                on:click=move |_| open_dialog(if has_update.get_untracked() { Tab::About } else { Tab::General }, false)
-            >
-                <Icon svg=ICON_GEAR />
-            </button>
-            <button
-                class="tool"
-                class:on=move || dnd.get()
-                title=move || if dnd.get() { "Do not disturb: on" } else { "Do not disturb: off" }
-                on:click=move |_| send_command(UiCommand::SetDnd { enabled: !dnd.get_untracked() })
-            >
-                {move || view! { <Icon svg=if dnd.get() { ICON_BELL_OFF } else { ICON_BELL } /> }}
-            </button>
-        </div>
     }
 }

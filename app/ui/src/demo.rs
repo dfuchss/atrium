@@ -26,7 +26,7 @@ pub(crate) fn demo_snapshot() -> Snapshot {
         }],
         services,
         dialog_open: false,
-        edit_account: None,
+        edit_request: None,
         settings: AppSettings::default(),
         service_errors: vec![],
         app: AppInfo {
@@ -105,7 +105,8 @@ fn demo_account(
             instance: service.instance_label.map(|_| "example".to_string()),
             muted: false,
             show_badge: true,
-            in_dock_badge: true,
+            badge_style: None,
+            dock_badge: None,
             user_agent: None,
             enabled: true,
             link_target: None,

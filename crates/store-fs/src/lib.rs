@@ -1,7 +1,8 @@
-//! File-based [`domain::ports::Store`]: one JSON file (`ACCOUNTS_FILE`) in a directory, and the
-//! user's service definition files ([`services`]).
+//! File-based [`domain::ports::Store`]: one JSON file (`ACCOUNTS_FILE`) in a directory, the
+//! user's service definition files ([`services`]) and export files ([`transfer`]).
 
 pub mod services;
+pub mod transfer;
 
 use std::fs;
 use std::path::PathBuf;
@@ -34,6 +35,24 @@ impl FsStore {
         fs_util::lock_ignoring_poison(&self.quarantined).take()
     }
 
+    /// The saved state like [`Store::load`], but a corrupt accounts file is an error and stays
+    /// where it is.
+    pub fn read(&self) -> PortResult<Persisted> {
+        self.parse()?
+            .map_err(|error| port_error(&format!("parse {ACCOUNTS_FILE}"), error))
+    }
+
+    /// The parsed accounts file (empty if there is none yet), or why it does not parse.
+    fn parse(&self) -> PortResult<Result<Persisted, serde_json::Error>> {
+        match fs::read(self.file()) {
+            Ok(bytes) => Ok(serde_json::from_slice(&bytes)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Ok(Ok(Persisted::default()))
+            }
+            Err(error) => Err(port_error(&format!("read {ACCOUNTS_FILE}"), error)),
+        }
+    }
+
     /// True if the accounts file exists and no earlier version was set aside as corrupt: only
     /// then does it name every account whose web data may still be in use.
     pub fn lists_all_accounts(&self) -> bool {
@@ -52,7 +71,7 @@ impl FsStore {
 const ACCOUNTS_FILE: &str = "accounts.json";
 
 /// The file names the user's accounts and workspaces: readable by the user only.
-const ACCOUNTS_FILE_MODE: u32 = 0o600;
+pub(crate) const ACCOUNTS_FILE_MODE: u32 = 0o600;
 
 /// Name prefix of a corrupt [`ACCOUNTS_FILE`] kept for inspection.
 fn corrupt_file_prefix() -> String {
@@ -65,18 +84,11 @@ fn port_error(action: &str, error: impl std::fmt::Display) -> PortError {
 
 impl Store for FsStore {
     fn load(&self) -> PortResult<Persisted> {
-        let path = self.file();
-        let bytes = match fs::read(&path) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Persisted::default());
-            }
-            Err(error) => return Err(port_error(&format!("read {ACCOUNTS_FILE}"), error)),
-        };
-        let parse_error = match serde_json::from_slice(&bytes) {
+        let parse_error = match self.parse()? {
             Ok(persisted) => return Ok(persisted),
             Err(error) => error,
         };
+        let path = self.file();
         // Keep the unreadable file for inspection and start empty.
         let seconds = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -113,7 +125,6 @@ mod tests {
         let id = uuid_like();
         let mut account = Account::new(id, "slack", "KIT", Some("x".into()));
         account.settings.muted = true;
-        account.settings.in_dock_badge = false;
         account.settings.user_agent = Some("chrome".into());
         Persisted {
             accounts: vec![account],
@@ -182,6 +193,14 @@ mod tests {
     }
 
     #[test]
+    fn read_leaves_a_corrupt_file_in_place() {
+        let d = tempfile::tempdir().unwrap();
+        fs::write(d.path().join(ACCOUNTS_FILE), "{nope").unwrap();
+        assert!(FsStore::new(d.path()).read().is_err());
+        assert!(d.path().join(ACCOUNTS_FILE).exists());
+    }
+
+    #[test]
     fn corrupt_is_renamed() {
         let d = tempfile::tempdir().unwrap();
         fs::write(d.path().join(ACCOUNTS_FILE), "{nope").unwrap();
@@ -200,6 +219,11 @@ mod tests {
                 .starts_with(&corrupt_file_prefix())
         });
         assert!(found);
+        assert_eq!(
+            s.read().unwrap(),
+            Persisted::default(),
+            "nothing left to read"
+        );
         s.save(&sample()).unwrap();
         assert_eq!(s.load().unwrap(), sample());
     }

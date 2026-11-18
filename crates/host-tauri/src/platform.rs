@@ -11,7 +11,7 @@ use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 use crate::logger::spawn_logged;
-use crate::{Input, TauriHost, bring_to_front, icons, menus, native, port_err};
+use crate::{Input, TauriHost, bring_to_front, graceful_restart, icons, menus, native, port_err};
 
 fn describe_simple_icon(result: &SimpleIconResult) -> String {
     match result {
@@ -97,6 +97,11 @@ impl<R: Runtime> Platform for TauriHost<R> {
 
     fn focus_window(&self) -> PortResult {
         bring_to_front(&self.window()?).map_err(port_err)
+    }
+
+    fn restart(&self) -> PortResult {
+        graceful_restart(&self.app);
+        Ok(())
     }
 
     fn fetch_icon(&self, account: Uuid, url: &str) -> PortResult {

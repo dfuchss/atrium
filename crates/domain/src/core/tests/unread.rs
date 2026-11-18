@@ -279,20 +279,26 @@ fn dock_badge_modes() {
 }
 
 #[test]
-fn dock_badge_respects_in_dock_badge() {
+fn dock_badge_account_mode_overrides_global() {
     let mut a = account(1, "discord", "A");
-    a.settings.in_dock_badge = false;
+    a.settings.dock_badge = Some(DockBadgeMode::CountOnly);
     let (mut core, _) = started(vec![a, account(2, "discord", "B")]);
     let effects = core.handle(Input::TitleChanged {
         account: id(1),
-        title: "(3) A".into(),
+        title: "• A".into(),
     });
     assert!(badges(&effects).is_empty());
-    assert_eq!(last_snapshot(&effects).accounts[0].unread, 3);
-    let effects = update_account(&mut core, 1, |settings| settings.in_dock_badge = true);
-    assert_eq!(badges(&effects), vec![DockBadge::Count(3)]);
-    let effects = update_account(&mut core, 1, |settings| settings.muted = true);
+    let effects = core.handle(Input::TitleChanged {
+        account: id(2),
+        title: "• B".into(),
+    });
+    assert_eq!(badges(&effects), vec![DockBadge::Dot]);
+    let effects = update_account(&mut core, 2, |settings| {
+        settings.dock_badge = Some(DockBadgeMode::Off);
+    });
     assert_eq!(badges(&effects), vec![DockBadge::None]);
+    let effects = update_account(&mut core, 2, |settings| settings.dock_badge = None);
+    assert_eq!(badges(&effects), vec![DockBadge::Dot]);
 }
 
 #[test]

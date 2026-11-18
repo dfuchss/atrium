@@ -1,7 +1,9 @@
 //! Inline edit form of one account.
 
 use leptos::prelude::*;
-use protocol::{AccountSettings, AccountView, AfterWake, LinkTarget, UiCommand};
+use protocol::{
+    AccountSettings, AccountView, AfterWake, BadgeStyle, DockBadgeMode, LinkTarget, UiCommand,
+};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -11,8 +13,8 @@ use crate::commands::send_command;
 use crate::platform_texts;
 use crate::widgets::{
     ErrorNote, FormActions, HIBERNATE_MINUTES, IconFace, Row, TextField, Toggle, after_wake_label,
-    after_wake_options, hibernate_label, icon_view, instance_field_label, minutes_label,
-    no_autocorrect, non_empty, number_options,
+    after_wake_options, badge_style_label, dock_badge_label, hibernate_label, icon_view,
+    instance_field_label, minutes_label, no_autocorrect, non_empty, number_options,
 };
 
 /// Uploaded icons larger than this are rejected (they are stored in `accounts.json`).
@@ -75,7 +77,10 @@ struct AccountDraft {
     instance: RwSignal<String>,
     notifications: RwSignal<bool>,
     show_badge: RwSignal<bool>,
-    in_dock_badge: RwSignal<bool>,
+    /// `None`: the global setting.
+    badge_style: RwSignal<Option<BadgeStyle>>,
+    /// `None`: the global setting.
+    dock_badge: RwSignal<Option<DockBadgeMode>>,
     enabled: RwSignal<bool>,
     start_asleep: RwSignal<bool>,
     /// "" (global setting), "system" or "app".
@@ -102,7 +107,8 @@ impl AccountDraft {
             instance: RwSignal::new(settings.instance.clone().unwrap_or_default()),
             notifications: RwSignal::new(!settings.muted),
             show_badge: RwSignal::new(settings.show_badge),
-            in_dock_badge: RwSignal::new(settings.in_dock_badge),
+            badge_style: RwSignal::new(settings.badge_style),
+            dock_badge: RwSignal::new(settings.dock_badge),
             enabled: RwSignal::new(settings.enabled),
             start_asleep: RwSignal::new(settings.start_asleep),
             link_target: RwSignal::new(match settings.link_target {
@@ -151,7 +157,8 @@ impl AccountDraft {
             instance: non_empty(&self.instance.get_untracked()).filter(|_| has_instance),
             muted: !self.notifications.get_untracked(),
             show_badge: self.show_badge.get_untracked(),
-            in_dock_badge: self.in_dock_badge.get_untracked(),
+            badge_style: self.badge_style.get_untracked(),
+            dock_badge: self.dock_badge.get_untracked(),
             user_agent: self.user_agent.value(UNSET_USER_AGENT),
             enabled: self.enabled.get_untracked(),
             link_target: match self.link_target.get_untracked() {
@@ -197,6 +204,8 @@ pub(super) fn EditForm(
     media_default: bool,
     global_hibernate: Option<u32>,
     global_after_wake: AfterWake,
+    global_badge_style: BadgeStyle,
+    global_dock_badge: DockBadgeMode,
 ) -> impl IntoView {
     let id = account.id;
     let loaded = !account.hibernated;
@@ -225,7 +234,20 @@ pub(super) fn EditForm(
             <Toggle label="Enabled" hint="Disabled accounts keep their login but are not loaded." checked=draft.enabled on_change=move |enabled| draft.enabled.set(enabled) />
             <Toggle label="Notifications" checked=draft.notifications on_change=move |enabled| draft.notifications.set(enabled) />
             <Toggle label="Unread badge" checked=draft.show_badge on_change=move |enabled| draft.show_badge.set(enabled) />
-            <Toggle label=platform_texts::texts().account_badge_toggle checked=draft.in_dock_badge on_change=move |enabled| draft.in_dock_badge.set(enabled) />
+            <Row label="Badge style">
+                <div class="btn-group seg">
+                    {draft_segment(draft.badge_style, None, "Global")}
+                    {BadgeStyle::ALL.map(|style| draft_segment(draft.badge_style, Some(style), badge_style_label(style)))}
+                </div>
+                <span class="hint">{format!("Global setting: {}.", badge_style_label(global_badge_style))}</span>
+            </Row>
+            <Row label=platform_texts::texts().badge_tab>
+                <div class="btn-group seg">
+                    {draft_segment(draft.dock_badge, None, "Global")}
+                    {DockBadgeMode::ALL.map(|mode| draft_segment(draft.dock_badge, Some(mode), dock_badge_label(mode)))}
+                </div>
+                <span class="hint">{format!("Global setting: {}.", dock_badge_label(global_dock_badge))}</span>
+            </Row>
             <Row label="Open links in">
                 <select prop:value=move || draft.link_target.get() on:change=move |event| draft.link_target.set(match event_target_value(&event).as_str() {
                     "system" => "system",
@@ -241,6 +263,17 @@ pub(super) fn EditForm(
             <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake account=id loaded=loaded />
             <FormActions disabled=false on_cancel=move |()| editing.set(None) />
         </form>
+    }
+}
+
+/// Button of a segmented control bound to a draft field; `value` `None` is the global setting.
+fn draft_segment<T: Copy + PartialEq + Send + Sync + 'static>(
+    field: RwSignal<Option<T>>,
+    value: Option<T>,
+    label: &'static str,
+) -> impl IntoView {
+    view! {
+        <button type="button" class="btn" class:on=move || field.get() == value on:click=move |_| field.set(value)>{label}</button>
     }
 }
 

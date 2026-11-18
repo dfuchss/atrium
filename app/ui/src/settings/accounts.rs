@@ -12,7 +12,7 @@ use crate::commands::send_command;
 use crate::glyphs::{ICON_BACK, ICON_DOWN, ICON_FORWARD, ICON_RELOAD, ICON_UP};
 use crate::widgets::{
     ConfirmButton, Icon, Row, TextField, account_by_id, account_icon, focus_by_id,
-    instance_field_label,
+    instance_field_label, scroll_to_id,
 };
 
 /// Value of the service option that jumps to the custom services tab.
@@ -28,11 +28,15 @@ pub(super) fn AccountsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
         snapshot.with_untracked(|snapshot| snapshot.accounts.get(index).map(|account| account.id))
     });
     ui.edit_index.set(None);
+    if let Some(id) = initial_edit {
+        scroll_to_id(account_dom_id(id));
+    }
     let editing: RwSignal<Option<Uuid>> = RwSignal::new(initial_edit);
     Effect::new(move || {
         if let Some(id) = ui.edit_account.get() {
             editing.set(Some(id));
             ui.edit_account.set(None);
+            scroll_to_id(account_dom_id(id));
         }
     });
     let ids = Memo::new(move |_| {
@@ -191,6 +195,10 @@ fn submit_account(
     label_value
 }
 
+fn account_dom_id(id: Uuid) -> String {
+    format!("acct-{id}")
+}
+
 #[component]
 fn AccountRow(
     snapshot: ReadSignal<Snapshot>,
@@ -204,9 +212,11 @@ fn AccountRow(
             let edited = account.clone();
             let global_hibernate = snapshot.with_untracked(|snapshot| snapshot.settings.hibernate_after_min);
             let global_after_wake = snapshot.with_untracked(|snapshot| snapshot.settings.after_wake);
+            let global_badge_style = snapshot.with_untracked(|snapshot| snapshot.settings.badge_style);
+            let global_dock_badge = snapshot.with_untracked(|snapshot| snapshot.settings.dock_badge);
             let media_default = snapshot.with_untracked(|snapshot| snapshot.services.iter().find(|service| service.id == account.service).is_some_and(|service| service.allow_media));
             view! {
-                <div class="acct-item" class:open=is_editing>
+                <div class="acct-item" class:open=is_editing id=account_dom_id(id)>
                     <div class="row">
                         <button class="row-main" title="Edit account" on:click=move |_| {
                             editing.set(if editing.get_untracked() == Some(id) { None } else { Some(id) });
@@ -223,7 +233,7 @@ fn AccountRow(
                         <ConfirmButton label="Remove" confirm_label="Confirm remove" on_confirm=move |()| send_command(UiCommand::RemoveAccount { account: id }) />
                     </div>
                     <AccountActions id=id enabled=account.settings.enabled />
-                    {move || is_editing().then(|| view! { <EditForm account=edited.clone() editing=editing media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake /> })}
+                    {move || is_editing().then(|| view! { <EditForm account=edited.clone() editing=editing media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake global_badge_style=global_badge_style global_dock_badge=global_dock_badge /> })}
                 </div>
             }
         })}

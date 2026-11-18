@@ -10,7 +10,7 @@ const README: &str = include_str!("../assets/services-README.md");
 const EXAMPLE: &str = include_str!("../assets/example.toml.disabled");
 
 const README_NAME: &str = "README.md";
-const EXAMPLE_NAME: &str = "example.toml.disabled";
+pub(crate) const EXAMPLE_NAME: &str = "example.toml.disabled";
 
 const ENABLED_SUFFIX: &str = ".toml";
 const DISABLED_SUFFIX: &str = ".toml.disabled";

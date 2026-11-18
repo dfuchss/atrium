@@ -84,6 +84,9 @@ impl Core {
     }
 
     pub(super) fn set_dialog(&mut self, open: bool) -> Vec<Effect> {
+        if !open {
+            self.edit_request = None;
+        }
         if open == self.dialog_open {
             return vec![self.emit()];
         }

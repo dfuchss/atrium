@@ -1,6 +1,7 @@
 [package]
 name = "atrium"
 edition.workspace = true
+rust-version.workspace = true
 version.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -16,6 +17,7 @@ host-tauri.workspace = true
 updater.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }
+tauri-plugin-dialog.workspace = true
 tauri-plugin-notification.workspace = true
 tauri-plugin-opener.workspace = true
 tauri-plugin-autostart = "2.7.0"

@@ -158,6 +158,14 @@ pub enum DockBadgeMode {
     Off,
 }
 
+impl DockBadgeMode {
+    pub const ALL: [DockBadgeMode; 3] = [
+        DockBadgeMode::All,
+        DockBadgeMode::CountOnly,
+        DockBadgeMode::Off,
+    ];
+}
+
 /// Sidebar unread badges. Urgent unread (mentions, direct messages) is red; normal unread
 /// (new messages in a subscribed channel) is a white dot and has no count.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,6 +181,8 @@ pub enum BadgeStyle {
 }
 
 impl BadgeStyle {
+    pub const ALL: [BadgeStyle; 3] = [BadgeStyle::Count, BadgeStyle::Dot, BadgeStyle::UrgentOnly];
+
     /// The badge for `urgent` unread ([`AccountView::unread`](crate::AccountView::unread)) and
     /// `normal` unread ([`AccountView::indirect`](crate::AccountView::indirect)); urgent unread
     /// hides the normal dot.
@@ -221,9 +231,12 @@ pub struct AccountSettings {
     /// Show the unread badge on the sidebar icon.
     #[serde(default = "yes")]
     pub show_badge: bool,
-    /// Count this account's unread in the dock badge.
-    #[serde(default = "yes")]
-    pub in_dock_badge: bool,
+    /// Overrides `AppSettings::badge_style`; None = use the global setting.
+    #[serde(default)]
+    pub badge_style: Option<BadgeStyle>,
+    /// Overrides `AppSettings::dock_badge` for this account; None = use the global setting.
+    #[serde(default)]
+    pub dock_badge: Option<DockBadgeMode>,
     /// Overrides the service's user agent: "webkit" | "chrome" | "default" | literal; None = service default.
     #[serde(default)]
     pub user_agent: Option<String>,

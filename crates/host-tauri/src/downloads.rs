@@ -23,9 +23,9 @@ fn unused_path(dir: &Path, name: &OsStr) -> PathBuf {
     }
     let original = Path::new(name);
     let stem = original.file_stem().unwrap_or(name).to_string_lossy();
-    let extension = original.extension().map_or_else(String::new, |extension| {
-        format!(".{}", extension.to_string_lossy())
-    });
+    let extension = original
+        .extension()
+        .map_or_default(|extension| format!(".{}", extension.to_string_lossy()));
     (1..u32::MAX)
         .map(|n| dir.join(format!("{stem} ({n}){extension}")))
         .find(|path| !path.exists())

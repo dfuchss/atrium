@@ -38,7 +38,8 @@ impl Account {
                 instance,
                 muted: false,
                 show_badge: true,
-                in_dock_badge: true,
+                badge_style: None,
+                dock_badge: None,
                 user_agent: None,
                 enabled: true,
                 link_target: None,
@@ -173,9 +174,7 @@ mod tests {
             ),
             ("KIT", Some("kit"), true)
         );
-        assert!(
-            a.settings.show_badge && a.settings.in_dock_badge && a.settings.user_agent.is_none()
-        );
+        assert!(a.settings.show_badge && a.settings.user_agent.is_none());
         assert!(
             a.settings.enabled
                 && a.settings.link_target.is_none()
@@ -228,7 +227,8 @@ mod tests {
             "instance": "kit",
             "muted": false,
             "show_badge": true,
-            "in_dock_badge": true,
+            "badge_style": null,
+            "dock_badge": null,
             "user_agent": null,
             "enabled": true,
             "link_target": "app_window",

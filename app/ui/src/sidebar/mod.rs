@@ -60,7 +60,8 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
     let active = move || snapshot.with(|snapshot| snapshot.active == Some(id));
     let badge_when_muted =
         Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_when_muted));
-    let badge_style = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_style));
+    let global_badge_style =
+        Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_style));
     view! {
         <button
             class="acct"
@@ -94,7 +95,7 @@ fn AccountButton(snapshot: ReadSignal<Snapshot>, drag: DragState, id: Uuid) -> i
                 let hibernated = account.settings.enabled && account.hibernated;
                 view! {
                     {account_icon(&account, false)}
-                    {show_badge.then(|| match badge_style.get().badge(account.unread, account.indirect) {
+                    {show_badge.then(|| match account.settings.badge_style.unwrap_or(global_badge_style.get()).badge(account.unread, account.indirect) {
                         Badge::Count(count) => view! { <span class="badge">{badge_text(count)}</span> }.into_any(),
                         Badge::UrgentDot => view! { <span class="dot urgent"></span> }.into_any(),
                         Badge::NormalDot => view! { <span class="dot"></span> }.into_any(),

@@ -288,3 +288,52 @@ fn startup_user_services_errors_reach_snapshot() {
     core.set_user_services(vec![], vec!["bad file".into()]);
     assert_eq!(core.snapshot().service_errors, vec!["bad file".to_string()]);
 }
+
+#[test]
+fn file_service_with_the_id_of_a_custom_service_is_logged() {
+    let (mut core, _) = core_with_custom_chat();
+    let effects = core.handle(Input::ServicesLoaded {
+        defs: vec![user_def("custom-my-chat", "https://file.example/")],
+        errors: vec![],
+    });
+    assert!(
+        logs(&effects)
+            .iter()
+            .any(|line| line.contains("\"custom-my-chat\" replaces"))
+    );
+    let chat = last_snapshot(&effects)
+        .services
+        .into_iter()
+        .find(|service| service.id == "custom-my-chat")
+        .unwrap();
+    assert_eq!(chat.url, "https://chat.example.org/app");
+}
+
+#[test]
+fn custom_service_replacing_a_file_service_is_logged_once_on_start() {
+    let persisted = Persisted {
+        custom_services: vec![CustomService {
+            id: "chat".into(),
+            ..custom("Chat", "https://chat.example.org/")
+        }],
+        ..Persisted::default()
+    };
+    let mut core = Core::new(
+        Catalog::builtin(),
+        persisted,
+        Box::new(|| id(1)),
+        UA_PLATFORM.into(),
+    );
+    core.set_user_services(vec![user_def("chat", "https://file.example/")], vec![]);
+    let replaces = |effects: &[Effect]| {
+        logs(effects)
+            .iter()
+            .filter(|line| line.contains("\"chat\" replaces"))
+            .count()
+    };
+    assert_eq!(replaces(&core.handle(STARTED)), 1);
+    let effects = core.handle(Input::Ui(UiCommand::AddCustomService {
+        service: custom("Other", "https://other.example.org/"),
+    }));
+    assert_eq!(replaces(&effects), 0);
+}

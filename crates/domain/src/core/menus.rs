@@ -1,5 +1,6 @@
 //! Native app, tray and account menus: their commands and their content.
 
+use protocol::EditRequest;
 use uuid::Uuid;
 
 use super::settings::ZOOM_STEPS;
@@ -92,10 +93,12 @@ impl Core {
         if !self.has_account(account_id) {
             return vec![Self::unknown(account_id)];
         }
-        self.edit_account = Some(account_id);
-        let effects = self.set_dialog(true);
-        self.edit_account = None;
-        effects
+        self.edit_seq = self.edit_seq.wrapping_add(1);
+        self.edit_request = Some(EditRequest {
+            account: account_id,
+            seq: self.edit_seq,
+        });
+        self.set_dialog(true)
     }
 
     /// Applies the zoom step `next` picks for the current zoom; none at the end of the scale.

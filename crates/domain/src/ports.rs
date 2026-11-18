@@ -72,6 +72,8 @@ pub trait Platform: Send + Sync {
     /// `Input::ServicesLoaded`.
     fn load_services(&self) -> PortResult;
     fn focus_window(&self) -> PortResult;
+    /// Quits gracefully and starts the app again.
+    fn restart(&self) -> PortResult;
     /// Downloads an icon in the background; the adapter later sends `Input::IconFetched`.
     fn fetch_icon(&self, account: Uuid, url: &str) -> PortResult;
     /// Downloads the Simple Icons glyph `slug` in the background; the adapter later sends

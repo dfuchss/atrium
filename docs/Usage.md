@@ -24,8 +24,8 @@ Open the settings with the gear button or <kbd>⌘</kbd><kbd>,</kbd> (<kbd>Ctrl<
 | Instance | Only for services that ask for one (its label comes from the service, e.g. *Element web host*). Changing it reloads the account. |
 | Enabled | Disabled accounts keep their login but are not loaded. |
 | Notifications | Off mutes the account: no notifications, and not counted in the badge. |
-| Unread badge | The unread badge on the sidebar icon. |
-| Count in dock badge | Count the account in the Dock badge (*launcher badge* on Linux, *taskbar badge* on Windows). |
+| Unread badge | The unread badge on the sidebar icon, with its own style: *Global*, *Count*, *Dot* or *Urgent only*. |
+| Dock badge mode | The global *Dock badge* setting for this account: *Global*, *Unread count and dot*, *Unread count only* or *Off*. *Off* keeps this account out of the badge. |
 | Open links in | Where links that open a new window go: *Use global setting*, *System browser* or *App window*. |
 | Icon | *Use site icon* or *Refresh site icon*; a [Simple Icons](https://simpleicons.org/) slug (a brand glyph on the service colour); or an image URL or file. Precedence: custom image, Simple Icon, site icon, initials. |
 | Camera & microphone | *Service default*, *Allow* or *Block*; also covers screen capture, and only on the service's own hosts (see [Service definitions](Service-Definitions#hosts)). |
@@ -49,7 +49,6 @@ Below them, *Service definition files* lists the TOML files of the services fold
 | Setting | What it does |
 |---|---|
 | Sidebar icon size | Small, medium or large icons; the sidebar width follows. |
-| Sidebar badges | *Count*, *Dot* or *Urgent only*. Mentions and direct messages show red, with their number or as a dot; other unread messages show a white dot. *Urgent only* shows the red number and hides the white dot. |
 | Appearance | *Auto*, *Light* or *Dark*. Auto follows the system; service pages follow if they support it. |
 | Launch at login | Start Atrium when you log in. |
 | Start hidden | Start without showing the window. |
@@ -63,13 +62,24 @@ Below them, *Service definition files* lists the TOML files of the services fold
 
 *Do not disturb* suppresses all notifications. *Message preview* shows the message text (otherwise only "New message"), *Play sound* plays the notification sound. *Badge when muted* keeps or hides the sidebar badge of accounts with notifications off.
 
+*Sidebar badges*: *Count*, *Dot* or *Urgent only*. Mentions and direct messages show red, with their number or as a dot; other unread messages show a white dot. *Urgent only* shows the red number and hides the white dot.
+
 ### Dock badge
 
-Called *Launcher badge* on Linux and *Taskbar badge* on Windows. *Show*: *Unread count and dot* (a dot when only indirect unread exists), *Unread count only* or *Off*. Accounts can be left out in their settings.
+Called *Launcher badge* on Linux and *Taskbar badge* on Windows. *Show*: *Unread count and dot* (a dot when only indirect unread exists), *Unread count only* or *Off*. Services can override the mode in their own settings, or be left out with *Off*.
 
 ### Links
 
 *New-window links* go to the *System browser* or an *App window* that shares the account's login; accounts can override it. Sign-in popups always stay in the app, so OAuth and SSO keep working. *Browser* picks the browser: on macOS the name of an installed application (e.g. Firefox), on Linux and Windows one of the installed browsers that Atrium lists. Without a choice, links open in the system default browser.
+
+### Export and import
+
+*Export everything* saves the accounts, the settings, the custom services and the files of the services folder to a file at a location you choose; *Export settings* leaves out the accounts. Logins are not included. The file is readable by you only, as it names your accounts and workspaces.
+
+Both imports ask for the file. Atrium refuses files that are no Atrium export or come from a newer Atrium.
+
+- *Import everything* works only while Atrium has no accounts. It takes the accounts, the settings and the custom services of the file, adds its service definition files and restarts Atrium right after saving. Log in to the accounts again.
+- *Import settings* takes the settings and the custom services of the file and adds its service definition files. Your accounts and logins stay. A custom service you already have (same id) is updated, any other is added. Service definition files you already have are kept; the result lists the files and custom services that were not imported.
 
 ### About
 

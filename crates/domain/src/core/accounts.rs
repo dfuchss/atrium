@@ -65,6 +65,7 @@ impl Core {
         let mut effects = vec![];
         if self.dialog_open {
             self.dialog_open = false;
+            self.edit_request = None;
             effects.push(Effect::SetUiBounds(self.sidebar_bounds()));
         }
         if let Some(previous) = self.active.filter(|&previous| previous != account_id) {

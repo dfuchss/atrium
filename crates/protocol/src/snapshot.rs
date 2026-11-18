@@ -15,13 +15,21 @@ pub struct Snapshot {
     /// The user-defined services (also contained in `services`, with `custom: true`).
     pub custom_services: Vec<CustomService>,
     pub dialog_open: bool,
-    /// The account whose settings the dialog opens with (account menu "Settings…"); set only
-    /// in the snapshot that asks for it.
-    pub edit_account: Option<Uuid>,
+    /// Account menu "Settings…": the dialog shows this account's settings. Stays set until the
+    /// dialog closes, so a snapshot that follows right after cannot hide it from the UI.
+    pub edit_request: Option<EditRequest>,
     pub settings: AppSettings,
     pub app: AppInfo,
     /// Problems of the last load of `<config>/services/*.toml` (startup or reload).
     pub service_errors: Vec<String>,
+}
+
+/// A request to show one account's settings. `seq` grows with each request, so asking again for
+/// the same account is a new request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EditRequest {
+    pub account: Uuid,
+    pub seq: u32,
 }
 
 /// Operating system the host runs on; the UI words the settings after it.

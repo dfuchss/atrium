@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use leptos::prelude::*;
-use protocol::{AccountView, AfterWake, Snapshot};
+use protocol::{AccountView, AfterWake, BadgeStyle, DockBadgeMode, Snapshot};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 
@@ -72,6 +72,18 @@ pub(crate) fn focus_by_id(id: &'static str) {
             .and_then(|element| element.dyn_into::<web_sys::HtmlElement>().ok())
         {
             let _ = element.focus();
+        }
+    });
+}
+
+/// Scrolls the element `id` into view after the next render.
+pub(crate) fn scroll_to_id(id: String) {
+    request_animation_frame(move || {
+        if let Some(element) = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(&id))
+        {
+            element.scroll_into_view();
         }
     });
 }
@@ -270,6 +282,22 @@ pub(crate) fn after_wake_label(mode: AfterWake) -> &'static str {
         AfterWake::Check => "Check, reload if stuck",
         AfterWake::Reload => "Reload",
         AfterWake::Never => "Do nothing",
+    }
+}
+
+pub(crate) fn dock_badge_label(mode: DockBadgeMode) -> &'static str {
+    match mode {
+        DockBadgeMode::All => "Unread count and dot",
+        DockBadgeMode::CountOnly => "Unread count only",
+        DockBadgeMode::Off => "Off",
+    }
+}
+
+pub(crate) fn badge_style_label(style: BadgeStyle) -> &'static str {
+    match style {
+        BadgeStyle::Count => "Count",
+        BadgeStyle::Dot => "Dot",
+        BadgeStyle::UrgentOnly => "Urgent only",
     }
 }
 

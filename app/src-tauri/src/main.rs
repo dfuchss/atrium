@@ -13,6 +13,7 @@ mod service_files;
 mod snapshot_cache;
 #[cfg(windows)]
 mod start_menu;
+mod transfer;
 mod updates;
 
 use std::path::{Path, PathBuf};
@@ -55,6 +56,7 @@ macro_rules! with_commands {
             service_files::save_service_file => CMD_SAVE_SERVICE_FILE,
             service_files::delete_service_file => CMD_DELETE_SERVICE_FILE,
             service_files::set_service_file_enabled => CMD_SET_SERVICE_FILE_ENABLED,
+            transfer::transfer_command => CMD_TRANSFER_COMMAND,
             desktop::get_desktop_entry => CMD_GET_DESKTOP_ENTRY,
             desktop::install_desktop_entry => CMD_INSTALL_DESKTOP_ENTRY,
             desktop::uninstall_desktop_entry => CMD_UNINSTALL_DESKTOP_ENTRY,
@@ -271,6 +273,7 @@ fn setup(
     host.log(&format!("---- Atrium {version} starting ----"));
     let config_dir = config_dir(app, dev, &host)?;
     let store = FsStore::new(config_dir.clone());
+    app.manage(FsStore::new(config_dir.clone()));
     updates::start(app, &config_dir, host.log_sink(), dev.release_dir.clone())?;
     app.manage(desktop::DesktopLog(host.log_sink()));
     let load = load_persisted(&store, &host);
@@ -343,6 +346,7 @@ fn builder_with_plugins(dev: &DevHooks) -> tauri::Builder<Wry> {
         host_tauri::guard_single_instance(builder, MAIN_WINDOW)
     };
     builder
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(

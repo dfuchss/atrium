@@ -16,7 +16,7 @@ Settings → Custom services → *Open folder* opens it (Settings → About show
 
 - Atrium reads every `*.toml` file of the folder at startup and on *Reload*, in file name order. Other files, such as `*.toml.disabled`, are ignored.
 - A definition whose `id` equals a built-in service (`element`, `slack`, `teams`, `discord`, `whatsapp`, `rainbow`, `linkedin`, `mastodon`, `bluesky`) replaces it; a new `id` adds a service to the *Add account* list. If two files define the same `id`, the later file name wins.
-- Custom services created in Settings → Custom services are stored in `accounts.json`, not as files. Their ids start with `custom-`.
+- Custom services created in Settings → Custom services are stored in `accounts.json`, not as files. Their ids start with `custom-`. If a file defines the same id as a custom service, the custom service is used and the log says so.
 - On *Reload*, accounts whose view would change with the new definition reload their page (the login stays); the others only get the new link and permission rules.
 
 ## Errors

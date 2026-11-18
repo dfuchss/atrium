@@ -15,6 +15,7 @@ mod services;
 mod settings;
 mod snapshot;
 mod tick;
+mod transfer;
 mod unread;
 mod views;
 mod wake;
@@ -24,7 +25,7 @@ mod tests;
 
 use std::collections::{HashMap, HashSet};
 
-use protocol::{AppInfo, AppSettings, UiCommand};
+use protocol::{AppInfo, AppSettings, EditRequest, UiCommand};
 use uuid::Uuid;
 
 use crate::catalog::Catalog;
@@ -52,8 +53,9 @@ pub struct Core {
     user_agent_platform: String,
     active: Option<Uuid>,
     dialog_open: bool,
-    /// [`protocol::Snapshot::edit_account`] of the snapshot being emitted.
-    edit_account: Option<Uuid>,
+    /// [`protocol::Snapshot::edit_request`] of the snapshot being emitted.
+    edit_request: Option<EditRequest>,
+    edit_seq: u32,
     window: WindowSize,
     started: bool,
     unread: UnreadTracker,
@@ -115,7 +117,8 @@ impl Core {
             user_agent_platform,
             active,
             dialog_open: false,
-            edit_account: None,
+            edit_request: None,
+            edit_seq: 0,
             window: WindowSize::default(),
             started: false,
             unread: UnreadTracker::default(),
@@ -203,6 +206,8 @@ impl Core {
                 result,
             } => self.simple_icon_fetched(account, &slug, result),
             Input::ServicesLoaded { defs, errors } => self.services_loaded(defs, errors),
+            Input::ImportSettings(saved) => self.import_settings(saved),
+            Input::ImportEverything(saved) => self.import_everything(saved),
         }
     }
 

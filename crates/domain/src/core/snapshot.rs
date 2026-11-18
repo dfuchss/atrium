@@ -34,7 +34,7 @@ impl Core {
                 })
                 .collect(),
             dialog_open: self.dialog_open,
-            edit_account: self.edit_account,
+            edit_request: self.edit_request,
             settings: self.settings().clone(),
             app: self.app_info.clone(),
             service_errors: self.registry.errors().to_vec(),
@@ -108,7 +108,7 @@ pub(super) fn initials(text: &str) -> String {
     let first_upper = |word: &str| -> String {
         word.chars()
             .next()
-            .map_or_else(String::new, |first| first.to_uppercase().collect())
+            .map_or_default(|first| first.to_uppercase().collect())
     };
     let words: Vec<&str> = text.split_whitespace().collect();
     match words.as_slice() {

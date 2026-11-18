@@ -114,6 +114,7 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
         Effect::OpenServicesFolder => ("OpenServicesFolder", ports.platform.open_services_folder()),
         Effect::LoadServices => ("LoadServices", ports.platform.load_services()),
         Effect::FocusWindow => ("FocusWindow", ports.platform.focus_window()),
+        Effect::Restart => ("Restart", ports.platform.restart()),
         Effect::ApplySystemSettings(settings) => (
             "ApplySystemSettings",
             ports.platform.apply_system_settings(&settings),
@@ -241,6 +242,9 @@ mod tests {
             Ok(())
         }
         fn focus_window(&self) -> PortResult {
+            Ok(())
+        }
+        fn restart(&self) -> PortResult {
             Ok(())
         }
         fn fetch_icon(&self, _: Uuid, _: &str) -> PortResult {

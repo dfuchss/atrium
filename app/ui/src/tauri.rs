@@ -48,8 +48,8 @@ pub(crate) async fn call<R: DeserializeOwned>(
     serde_wasm_bindgen::from_value(payload).map_err(|error| error.to_string())
 }
 
-/// Sends a `UiCommand` or an `UpdateCommand` to the backend command `command`; errors are
-/// logged to the console.
+/// Sends a `UiCommand`, an `UpdateCommand` or a `TransferCommand` to the backend command
+/// `command`; errors are logged to the console.
 pub(crate) async fn send(command: &str, payload: impl Serialize) {
     #[derive(Serialize)]
     struct Args<P> {

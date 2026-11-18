@@ -1,4 +1,4 @@
-//! Tabs of the app-wide settings: general, notifications, badge, links and about.
+//! Tabs of the app-wide settings: general, notifications (with the sidebar badges), links and about.
 
 use leptos::prelude::*;
 use protocol::{
@@ -11,7 +11,10 @@ use crate::commands::{send_command, update_settings};
 use crate::desktop::DesktopIntegration;
 use crate::platform_texts;
 use crate::update::UpdateSection;
-use crate::widgets::{HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, number_options};
+use crate::widgets::{
+    HIBERNATE_MINUTES, Row, after_wake_options, badge_style_label, dock_badge_label, minutes_label,
+    number_options,
+};
 
 const ICON_SIZE: Setting<IconSize> = (
     |settings| settings.icon_size,
@@ -54,7 +57,6 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {size_button(IconSize::Large, "Large")}
                 </div>
             </Row>
-            <BadgeRow snapshot=snapshot />
             <Row label="Appearance" hint=texts.theme_hint>
                 <div class="btn-group seg">
                     {theme_button(Theme::Auto, "Auto")}
@@ -90,11 +92,9 @@ fn BadgeRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
         setting_segment(snapshot, BADGE_STYLE, value, label)
     };
     view! {
-        <Row label="Sidebar badges" hint="Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
+        <Row label="Sidebar badges" hint="Default for all services; a service can override it in its settings. Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
             <div class="btn-group seg">
-                {badge_button(BadgeStyle::Count, "Count")}
-                {badge_button(BadgeStyle::Dot, "Dot")}
-                {badge_button(BadgeStyle::UrgentOnly, "Urgent only")}
+                {BadgeStyle::ALL.map(|style| badge_button(style, badge_style_label(style)))}
             </div>
         </Row>
     }
@@ -108,6 +108,7 @@ pub(super) fn NotificationsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView 
             {app_toggle(snapshot, "Do not disturb", "Suppress all notifications.", |settings| settings.dnd, |settings, enabled| settings.dnd = enabled)}
             {app_toggle(snapshot, "Message preview", "Otherwise only \u{201C}New message\u{201D} is shown.", |settings| settings.notification_preview, |settings, enabled| settings.notification_preview = enabled)}
             {app_toggle(snapshot, "Play sound", "", |settings| settings.notification_sound, |settings, enabled| settings.notification_sound = enabled)}
+            <BadgeRow snapshot=snapshot />
             {app_toggle(snapshot, "Badge when muted", "Keep the unread badge on the sidebar icon of accounts whose notifications are off.", |settings| settings.badge_when_muted, |settings, enabled| settings.badge_when_muted = enabled)}
         </div>
     }
@@ -121,10 +122,8 @@ pub(super) fn DockTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     view! {
         <h2>{platform_texts::texts().badge_tab}</h2>
         <div class="form">
-            <Row label="Show" hint="Accounts can be excluded individually in their settings (Accounts tab).">
-                {mode_option(DockBadgeMode::All, "Unread count and dot")}
-                {mode_option(DockBadgeMode::CountOnly, "Unread count only")}
-                {mode_option(DockBadgeMode::Off, "Off")}
+            <Row label="Show" hint="Services can override this in their own settings (Accounts tab).">
+                {DockBadgeMode::ALL.map(|mode| mode_option(mode, dock_badge_label(mode)))}
             </Row>
         </div>
     }

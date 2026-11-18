@@ -33,6 +33,8 @@ pub const CMD_VALIDATE_SERVICE: &str = "validate_service";
 pub const CMD_SAVE_SERVICE_FILE: &str = "save_service_file";
 pub const CMD_DELETE_SERVICE_FILE: &str = "delete_service_file";
 pub const CMD_SET_SERVICE_FILE_ENABLED: &str = "set_service_file_enabled";
+/// Export and import (argument `{ command: TransferCommand }`, bypasses the core).
+pub const CMD_TRANSFER_COMMAND: &str = "transfer_command";
 pub const EVENT_SNAPSHOT: &str = "snapshot";
 /// Project page (repository) of Atrium.
 pub const PROJECT_URL: &str = "https://github.com/dfuchss/atrium";

@@ -101,9 +101,7 @@ pub fn redact_url(raw: &str) -> String {
     let Some(host) = url.host_str() else {
         return format!("{}:", url.scheme());
     };
-    let port = url
-        .port()
-        .map_or_else(String::new, |port| format!(":{port}"));
+    let port = url.port().map_or_default(|port| format!(":{port}"));
     let path: String = url.path().chars().take(REDACTED_PATH_MAX_CHARS).collect();
     format!("{}://{host}{port}{path}", url.scheme())
 }

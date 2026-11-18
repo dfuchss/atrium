@@ -9,6 +9,25 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+### Added
+
+#### All platforms
+
+- Each service can override the sidebar badge style (*Count*, *Dot*, *Urgent only*) in its settings; *Global* keeps the default
+- Each service can override the *Dock badge* setting (*Unread count and dot*, *Unread count only*, *Off*) in its settings; *Global* keeps the default
+- The *Export and import* tab saves everything (accounts, settings, custom services and service definition files) or the settings only to a file you choose; the file is readable by you only and holds no logins
+- *Import everything* takes a whole export into an Atrium without accounts and restarts it right after saving; *Import settings* takes the settings and custom services of an export and adds its service definition files, keeping your accounts and existing files
+
+### Changed
+
+#### All platforms
+
+- *Settings…* in a service's menu now reliably opens the settings dialog on that service, also when the dialog is closed, and scrolls to it
+- The per-service *Count in dock badge* switch is gone: set the service's dock badge to *Off* instead; services that had it off now use the global dock badge setting
+- The badge settings of a service use the same segmented buttons as the global settings
+- The *Sidebar badges* setting moved from *General* to *Notifications*
+- A custom service whose id equals a built-in service or a service definition file is logged when it replaces that service
+
 ### Fixed
 
 #### All platforms

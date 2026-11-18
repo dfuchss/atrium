@@ -157,7 +157,7 @@ input[type=color] { width: 56px; height: 30px; padding: 2px; border: 1px solid v
 /* "Added <label>" in the empty label column beside the Add button: one line, so it never resizes the row. */
 .frow .added-note { color: var(--ok); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 h3.spaced { margin-top: 22px; }
-.edit.form { margin: 4px 0 12px; background: var(--bg); }
+.edit.form { margin: 4px 0 12px; }
 .custom-form h3 { padding-top: 10px; margin: 0; }
 .list { border-top: 1px solid var(--line); }
 .acct-item .row { padding: 6px 0; }

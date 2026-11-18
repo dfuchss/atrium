@@ -1,7 +1,10 @@
-//! File operations and the mutex lock shared by Atrium's crates.
+//! File operations, the mutex lock and the running `AppImage` (`appimage`) shared by Atrium's
+//! crates.
 //!
 //! Permission bits (`mode`) exist on Unix only. On Windows they are ignored: Atrium's files lie
 //! in the user's profile, whose folders pass on an access list that leaves other users out.
+
+pub mod appimage;
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write as _};

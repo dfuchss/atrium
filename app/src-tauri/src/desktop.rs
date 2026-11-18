@@ -41,9 +41,9 @@ pub(crate) fn uninstall_desktop_entry(
 /// The desktop entry of the running `AppImage`.
 #[cfg(not(windows))]
 mod platform {
+    use fs_util::appimage::{RunningAppImage, running_appimage};
     use protocol::DesktopEntryState;
     use tauri::AppHandle;
-    use updater::{RunningAppImage, running_appimage};
 
     use super::DesktopLog;
     use crate::desktop_entry::{self, DesktopDirs};

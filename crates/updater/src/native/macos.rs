@@ -8,7 +8,7 @@ mod quarantine;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::location::{self, InstallLocation, RunningAppImage};
+use crate::location::{self, InstallLocation};
 use crate::staging::place_next_to_install;
 use crate::version::Version;
 
@@ -35,12 +35,6 @@ pub fn install_location(debug_build: bool) -> InstallLocation {
         std::env::current_exe(),
         |executable, can_replace| resolve(executable, home.as_deref(), can_replace),
     )
-}
-
-/// An app bundle is not an `AppImage`.
-#[must_use]
-pub fn running_appimage() -> Option<RunningAppImage> {
-    None
 }
 
 /// Decides for the running `executable` (`<bundle>/Contents/MacOS/<name>`). Only bundles

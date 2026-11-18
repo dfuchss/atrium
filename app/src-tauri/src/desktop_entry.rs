@@ -8,9 +8,9 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use fs_util::appimage::RunningAppImage;
 use fs_util::write_atomically;
 use protocol::DesktopEntryState;
-use updater::RunningAppImage;
 
 /// The entry of the `AppImage` bundle; `{{exec}}` stands for the quoted path of the file and
 /// `{{icon}}` for the name of the icon.

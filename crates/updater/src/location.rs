@@ -12,15 +12,6 @@ pub enum InstallLocation {
     ManualOnly { reason: String },
 }
 
-/// The `AppImage` Atrium runs from (Linux).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RunningAppImage {
-    /// The `AppImage` file that was started (`$APPIMAGE`).
-    pub file: PathBuf,
-    /// Where the runtime mounted or extracted it (`$APPDIR`).
-    pub dir: PathBuf,
-}
-
 /// Whether the user can create files next to `bundle` (needed for the renames) and owns it
 /// (needed to remove the old version). The probe file never goes inside the bundle.
 pub(crate) fn can_replace(bundle: &Path) -> bool {

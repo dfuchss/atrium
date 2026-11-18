@@ -3,7 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::location::{self, InstallLocation, RunningAppImage};
+use fs_util::appimage::{AppImageEnv, RunningAppImage};
+
+use crate::location::{self, InstallLocation};
 pub(crate) use crate::native::single_file::{
     NO_DOWNLOAD_REASON, helper_executable, prepare_update, processes_running_from, relaunch,
 };
@@ -24,57 +26,15 @@ pub fn asset_name_for_arch(arch: &str) -> Option<&'static str> {
     }
 }
 
-/// What the `AppImage` runtime tells the running app about itself.
-struct AppImageEnv {
-    /// The running executable, inside the mounted (or extracted) `AppImage`.
-    executable: PathBuf,
-    /// `$APPIMAGE`: the `AppImage` file that was started.
-    appimage: Option<PathBuf>,
-    /// `$APPDIR` without symlinks (like `executable`): where the runtime mounted or extracted
-    /// it.
-    appdir: Option<PathBuf>,
-}
-
-impl AppImageEnv {
-    fn from_env() -> std::io::Result<AppImageEnv> {
-        let var = |name: &str| {
-            std::env::var_os(name)
-                .filter(|value| !value.is_empty())
-                .map(PathBuf::from)
-        };
-        Ok(AppImageEnv {
-            executable: std::env::current_exe()?,
-            appimage: var("APPIMAGE"),
-            appdir: var("APPDIR").and_then(|dir| std::fs::canonicalize(dir).ok()),
-        })
-    }
-}
-
 /// Where the running executable is installed, and whether it may replace itself.
 pub fn install_location(debug_build: bool) -> InstallLocation {
     location::locate(debug_build, AppImageEnv::from_env(), resolve)
 }
 
-/// The `AppImage` this process runs from, if it does. The executable has to lie below
-/// `$APPDIR`, so an `APPIMAGE` variable inherited by another program does not count.
-fn running_from(env: &AppImageEnv) -> Option<RunningAppImage> {
-    let (file, dir) = (env.appimage.as_ref()?, env.appdir.as_ref()?);
-    env.executable.starts_with(dir).then(|| RunningAppImage {
-        file: file.clone(),
-        dir: dir.clone(),
-    })
-}
-
-/// The `AppImage` Atrium runs from, or `None` (a source build, or the file is gone).
-pub fn running_appimage() -> Option<RunningAppImage> {
-    running_from(&AppImageEnv::from_env().ok()?)
-        .filter(|running| running.file.is_absolute() && running.file.is_file())
-}
-
 /// Only an `AppImage` updates itself, in place, and only when `can_replace(appimage)` says the
 /// user may rename and remove it.
 fn resolve(env: &AppImageEnv, can_replace: &dyn Fn(&Path) -> bool) -> Result<PathBuf, String> {
-    let Some(RunningAppImage { file: appimage, .. }) = running_from(env) else {
+    let Some(RunningAppImage { file: appimage, .. }) = env.running() else {
         return Err("Atrium is not running as an AppImage".into());
     };
     if !appimage.is_absolute() || !appimage.is_file() {

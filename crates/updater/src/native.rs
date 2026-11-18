@@ -3,8 +3,7 @@
 //!
 //! - Release and installation: [`asset_name_for_arch`] names the release file for this
 //!   machine, [`install_location`] decides whether the running installation may replace itself
-//!   and [`manual_only_text`] explains to the user why it may not; [`running_appimage`] (not on
-//!   Windows) names the `AppImage` Atrium runs from (never on macOS).
+//!   and [`manual_only_text`] explains to the user why it may not.
 //! - Staging: [`prepare_update`] turns the verified download into `<install>.new-update`.
 //! - Swap helper: [`helper_executable`] is started when the app exits; it waits with
 //!   [`process_alive`], refuses while [`processes_running_from`] finds another running copy,

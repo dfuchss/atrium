@@ -54,6 +54,25 @@ fn owns(_probe: &File, bundle: &Path) -> bool {
     bundle.exists()
 }
 
+/// Where the running installation is: `env` is what the platform found out about the running
+/// program, `resolve` decides from it whether it may replace itself (given `can_replace`) and
+/// returns the installation, or why it only announces updates.
+pub(crate) fn locate<E>(
+    debug_build: bool,
+    env: std::io::Result<E>,
+    resolve: impl FnOnce(&E, &dyn Fn(&Path) -> bool) -> Result<PathBuf, String>,
+) -> InstallLocation {
+    let manual = |reason: String| InstallLocation::ManualOnly { reason };
+    match env {
+        Err(error) => manual(format!("cannot locate Atrium: {error}")),
+        Ok(_) if debug_build => manual("this is a development build".into()),
+        Ok(env) => match resolve(&env, &can_replace) {
+            Ok(bundle) => InstallLocation::SelfUpdatable { bundle },
+            Err(reason) => manual(reason),
+        },
+    }
+}
+
 impl InstallLocation {
     /// Why updates are only announced; None for an installation that replaces itself.
     pub fn manual_reason(&self) -> Option<&str> {
@@ -76,5 +95,30 @@ mod tests {
         assert!(can_replace(&bundle));
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
         assert!(!can_replace(&dir.path().join("missing/Atrium.app")));
+    }
+
+    #[test]
+    fn locating_stops_before_the_platform_for_a_missing_executable_or_a_development_build() {
+        let unreachable = |(): &(), _: &dyn Fn(&Path) -> bool| -> Result<PathBuf, String> {
+            panic!("the platform must not be asked")
+        };
+        let failed = locate(false, Err(std::io::Error::other("gone")), unreachable);
+        assert_eq!(failed.manual_reason(), Some("cannot locate Atrium: gone"));
+        let development = locate(true, Ok(()), unreachable);
+        assert_eq!(
+            development.manual_reason(),
+            Some("this is a development build")
+        );
+    }
+
+    #[test]
+    fn locating_reports_what_the_platform_decides() {
+        let bundle = PathBuf::from("/Applications/Atrium.app");
+        assert_eq!(
+            locate(false, Ok(()), |(), _| Ok(bundle.clone())),
+            InstallLocation::SelfUpdatable { bundle }
+        );
+        let manual = locate(false, Ok(()), |(), _| Err("not here".into()));
+        assert_eq!(manual.manual_reason(), Some("not here"));
     }
 }

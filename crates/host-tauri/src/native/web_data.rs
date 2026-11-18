@@ -118,10 +118,7 @@ fn list_store_dirs(root: &Path) -> io::Result<Vec<[u8; 16]>> {
 /// Deletes the web data folder of `store_id` in `root`; one that is already gone counts as
 /// deleted.
 fn remove_store_dir(root: &Path, store_id: [u8; 16]) -> io::Result<()> {
-    match std::fs::remove_dir_all(store_dir(root, store_id)) {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-        result => result,
-    }
+    fs_util::remove_if_present(&store_dir(root, store_id))
 }
 
 #[cfg(test)]

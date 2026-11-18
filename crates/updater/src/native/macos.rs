@@ -8,9 +8,8 @@ mod quarantine;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::location::{InstallLocation, RunningAppImage, can_replace};
-use crate::staging::remove_if_present;
-use crate::swap::{new_update_path, partial_update_path};
+use crate::location::{self, InstallLocation, RunningAppImage};
+use crate::staging::place_next_to_install;
 use crate::version::Version;
 
 /// The helper opens the swapped bundle again.
@@ -31,12 +30,11 @@ pub fn asset_name_for_arch(arch: &str) -> Option<&'static str> {
 /// Where the running executable is installed, and whether it may replace itself.
 pub fn install_location(debug_build: bool) -> InstallLocation {
     let home = std::env::var_os("HOME").map(PathBuf::from);
-    match std::env::current_exe() {
-        Ok(executable) => resolve(&executable, home.as_deref(), debug_build, &can_replace),
-        Err(error) => InstallLocation::ManualOnly {
-            reason: format!("cannot locate Atrium: {error}"),
-        },
-    }
+    location::locate(
+        debug_build,
+        std::env::current_exe(),
+        |executable, can_replace| resolve(executable, home.as_deref(), can_replace),
+    )
 }
 
 /// An app bundle is not an `AppImage`.
@@ -51,32 +49,25 @@ pub fn running_appimage() -> Option<RunningAppImage> {
 fn resolve(
     executable: &Path,
     home: Option<&Path>,
-    debug_build: bool,
     can_replace: &dyn Fn(&Path) -> bool,
-) -> InstallLocation {
-    let manual = |reason: &str| InstallLocation::ManualOnly {
-        reason: reason.to_string(),
-    };
-    if debug_build {
-        return manual("this is a development build");
-    }
+) -> Result<PathBuf, String> {
     let Some(bundle) = bundle_of(executable) else {
-        return manual("Atrium is not running from an app bundle");
+        return Err("Atrium is not running from an app bundle".into());
     };
     if bundle.to_string_lossy().contains("/AppTranslocation/") {
-        return manual("macOS runs Atrium from a temporary location; move it to Applications");
+        return Err("macOS runs Atrium from a temporary location; move it to Applications".into());
     }
     let in_applications = bundle.parent().is_some_and(|parent| {
         parent == Path::new("/Applications")
             || home.is_some_and(|home| parent == home.join("Applications"))
     });
     if !in_applications {
-        return manual("Atrium is not installed in the Applications folder");
+        return Err("Atrium is not installed in the Applications folder".into());
     }
     if !can_replace(&bundle) {
-        return manual("the Applications folder or Atrium.app is not writable for you");
+        return Err("the Applications folder or Atrium.app is not writable for you".into());
     }
-    InstallLocation::SelfUpdatable { bundle }
+    Ok(bundle)
 }
 
 /// `<bundle>.app` of `<bundle>.app/Contents/MacOS/<executable>`.
@@ -110,35 +101,21 @@ pub(crate) fn prepare_update(
     let bundle = bundle::find_bundle(&extracted)?;
     bundle::verify(&bundle, version)?;
     quarantine::remove_quarantine(&bundle)?;
-    let staged = place_next_to_install(&bundle, install)?;
+    let staged = place_next_to_install(&bundle, install, copy_bundle)?;
     let _ = std::fs::remove_dir_all(&extracted);
     Ok(staged)
 }
 
-/// Moves the checked bundle to `<install>.new-update`, replacing a leftover. Across volumes
-/// it is copied with `ditto` to a `.partial` sibling first, so a broken copy never looks
-/// complete; the copy is cleared of the quarantine `ditto` may have set again.
-fn place_next_to_install(bundle: &Path, install: &Path) -> Result<PathBuf, String> {
-    let target = new_update_path(install);
-    let partial = partial_update_path(install);
-    remove_if_present(&partial)?;
-    remove_if_present(&target)?;
-    if std::fs::rename(bundle, &target).is_ok() {
-        return Ok(target);
-    }
-    let copied = Command::new("/usr/bin/ditto")
+/// Copies the bundle with `ditto` (which may set the quarantine again, so it is cleared).
+fn copy_bundle(bundle: &Path, to: &Path) -> std::io::Result<()> {
+    let status = Command::new("/usr/bin/ditto")
         .arg(bundle)
-        .arg(&partial)
-        .status()
-        .is_ok_and(|status| status.success());
-    if copied
-        && quarantine::remove_quarantine(&partial).is_ok()
-        && std::fs::rename(&partial, &target).is_ok()
-    {
-        return Ok(target);
+        .arg(to)
+        .status()?;
+    if !status.success() {
+        return Err(std::io::Error::other(format!("ditto failed: {status}")));
     }
-    let _ = remove_if_present(&partial);
-    Err("cannot place the update next to the installation".into())
+    quarantine::remove_quarantine(to).map_err(std::io::Error::other)
 }
 
 /// The helper is the app's own (installed, already trusted) executable.
@@ -203,6 +180,7 @@ pub(crate) mod tests {
     use super::*;
     pub(crate) use crate::native::macos::bundle::BUNDLE_IDENTIFIER;
     use crate::native::macos::bundle::tests::fake_bundle;
+    use crate::swap::new_update_path;
 
     /// The release asset the flow tests use.
     pub(crate) const ASSET: &str = "atrium-macos-arm64.zip";
@@ -259,11 +237,10 @@ pub(crate) mod tests {
         assert_eq!(asset_name_for_arch("riscv64"), None);
     }
 
-    fn resolve_for(executable: &str, debug: bool, replaceable: bool) -> InstallLocation {
+    fn resolve_for(executable: &str, replaceable: bool) -> Result<PathBuf, String> {
         resolve(
             Path::new(executable),
             Some(Path::new("/Users/test")),
-            debug,
             &|_| replaceable,
         )
     }
@@ -280,12 +257,7 @@ pub(crate) mod tests {
                 "/Users/test/Applications/Atrium.app",
             ),
         ] {
-            assert_eq!(
-                resolve_for(executable, false, true),
-                InstallLocation::SelfUpdatable {
-                    bundle: bundle.into()
-                }
-            );
+            assert_eq!(resolve_for(executable, true), Ok(bundle.into()));
         }
     }
 
@@ -293,57 +265,39 @@ pub(crate) mod tests {
     fn everything_else_only_notifies() {
         let cases = [
             (
-                "/Applications/Atrium.app/Contents/MacOS/atrium",
-                true,
-                true,
-                "development",
-            ),
-            (
                 "/Users/test/src/atrium/target/release/atrium",
-                false,
                 true,
                 "app bundle",
             ),
             (
                 "/private/var/folders/x/AppTranslocation/1/d/Atrium.app/Contents/MacOS/atrium",
-                false,
                 true,
                 "temporary",
             ),
             (
                 "/Users/test/Downloads/Atrium.app/Contents/MacOS/atrium",
-                false,
                 true,
                 "Applications",
             ),
             (
                 "/Volumes/Atrium/Atrium.app/Contents/MacOS/atrium",
-                false,
                 true,
                 "Applications",
             ),
             (
                 "/Applications/Tools/Atrium.app/Contents/MacOS/atrium",
-                false,
                 true,
                 "Applications",
             ),
             (
                 "/Applications/Atrium.app/Contents/MacOS/atrium",
                 false,
-                false,
                 "writable",
             ),
         ];
-        for (executable, debug, replaceable, expected) in cases {
-            let location = resolve_for(executable, debug, replaceable);
-            assert!(
-                location
-                    .manual_reason()
-                    .unwrap_or_default()
-                    .contains(expected),
-                "{executable}: {location:?}"
-            );
+        for (executable, replaceable, expected) in cases {
+            let reason = resolve_for(executable, replaceable).unwrap_err();
+            assert!(reason.contains(expected), "{executable}: {reason}");
         }
     }
 

@@ -4,28 +4,24 @@
 //! at startup. Where there is nothing to offer (macOS, a source build on Linux) the state is
 //! `None`. They also list the installed browsers for links.
 
-use std::sync::Arc;
-
-use protocol::{BrowserChoice, DesktopEntryState};
-use tauri::{AppHandle, State};
-
-/// The host log, for an icon announcement that failed (Linux) or a changed shortcut
-/// (Windows).
-pub(crate) struct DesktopLog(pub(crate) Arc<dyn Fn(&str) + Send + Sync>);
-
-#[expect(
+#![expect(
     clippy::needless_pass_by_value,
     reason = "Tauri commands receive their arguments by value"
 )]
+
+use protocol::{BrowserChoice, DesktopEntryState};
+use tauri::{AppHandle, State};
+use updater::LogSink;
+
+/// The host log, for an icon announcement that failed (Linux) or a changed shortcut
+/// (Windows).
+pub(crate) struct DesktopLog(pub(crate) LogSink);
+
 #[tauri::command]
 pub(crate) fn get_desktop_entry(app: AppHandle) -> Result<Option<DesktopEntryState>, String> {
     platform::state(&app)
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 #[tauri::command]
 pub(crate) fn install_desktop_entry(
     app: AppHandle,
@@ -34,10 +30,6 @@ pub(crate) fn install_desktop_entry(
     platform::install(&app, &log)
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 #[tauri::command]
 pub(crate) fn uninstall_desktop_entry(
     app: AppHandle,

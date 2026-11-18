@@ -1,13 +1,12 @@
 //! Linux: the release is an `AppImage` that replaces the running one in place (in any folder the
 //! user may write to, the file name is kept); the user opens Atrium again after the swap.
 
-use std::fs::Permissions;
-use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 
-use crate::location::{InstallLocation, RunningAppImage, can_replace};
-use crate::staging::{EXECUTABLE_MODE, place_next_to_install};
-use crate::version::Version;
+use crate::location::{self, InstallLocation, RunningAppImage};
+pub(crate) use crate::native::single_file::{
+    NO_DOWNLOAD_REASON, helper_executable, prepare_update, processes_running_from, relaunch,
+};
 
 /// The user opens Atrium again after the swap.
 pub(crate) const RELAUNCHES_AFTER_SWAP: bool = false;
@@ -53,12 +52,7 @@ impl AppImageEnv {
 
 /// Where the running executable is installed, and whether it may replace itself.
 pub fn install_location(debug_build: bool) -> InstallLocation {
-    match AppImageEnv::from_env() {
-        Ok(env) => resolve(&env, debug_build, &can_replace),
-        Err(error) => InstallLocation::ManualOnly {
-            reason: format!("cannot locate Atrium: {error}"),
-        },
-    }
+    location::locate(debug_build, AppImageEnv::from_env(), resolve)
 }
 
 /// The `AppImage` this process runs from, if it does. The executable has to lie below
@@ -79,58 +73,25 @@ pub fn running_appimage() -> Option<RunningAppImage> {
 
 /// Only an `AppImage` updates itself, in place, and only when `can_replace(appimage)` says the
 /// user may rename and remove it.
-fn resolve(
-    env: &AppImageEnv,
-    debug_build: bool,
-    can_replace: &dyn Fn(&Path) -> bool,
-) -> InstallLocation {
-    let manual = |reason: String| InstallLocation::ManualOnly { reason };
-    if debug_build {
-        return manual("this is a development build".into());
-    }
+fn resolve(env: &AppImageEnv, can_replace: &dyn Fn(&Path) -> bool) -> Result<PathBuf, String> {
     let Some(RunningAppImage { file: appimage, .. }) = running_from(env) else {
-        return manual("Atrium is not running as an AppImage".into());
+        return Err("Atrium is not running as an AppImage".into());
     };
     if !appimage.is_absolute() || !appimage.is_file() {
-        return manual(format!(
+        return Err(format!(
             "the AppImage cannot be found at {}",
             appimage.display()
         ));
     }
     if !can_replace(&appimage) {
-        return manual("the folder of the AppImage is not writable for you".into());
+        return Err("the folder of the AppImage is not writable for you".into());
     }
-    InstallLocation::SelfUpdatable { bundle: appimage }
+    Ok(appimage)
 }
-
-/// Why a release without the file for this machine is only announced.
-pub(crate) const NO_DOWNLOAD_REASON: &str = "the release has no download for this computer";
 
 /// The sentence the About tab shows when updates have to be installed by hand.
 pub(crate) fn manual_only_text(reason: &str) -> String {
     format!("Atrium installs updates itself only when it runs as an AppImage, but {reason}.")
-}
-
-/// Moves the verified download next to the install (`<install>.new-update`, executable), which
-/// it returns. Identity and version come from `SHA256SUMS` and the tag.
-pub(crate) fn prepare_update(
-    downloaded: &Path,
-    _version: Version,
-    install: &Path,
-) -> Result<PathBuf, String> {
-    std::fs::set_permissions(downloaded, Permissions::from_mode(EXECUTABLE_MODE))
-        .map_err(|error| format!("cannot make the update executable: {error}"))?;
-    place_next_to_install(downloaded, install)
-}
-
-/// The helper is started through the `AppImage` (`install`): the running executable lives in
-/// the `AppImage`'s mount, which goes away when the app exits.
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "the platforms share this signature; macOS can fail"
-)]
-pub(crate) fn helper_executable(install: &Path) -> std::io::Result<PathBuf> {
-    Ok(install.to_path_buf())
 }
 
 /// Whether `/proc/<pid>/stat` exists and the process is no zombie (`Z`) or dead (`X`).
@@ -146,31 +107,19 @@ fn process_state(stat: &str) -> Option<char> {
     after_name.trim_start().chars().next()
 }
 
-/// Always empty: renaming the `AppImage` while another instance runs from it is safe on Linux;
-/// that instance keeps the old version until it restarts.
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "the platforms share this signature; macOS can fail"
-)]
-pub(crate) fn processes_running_from(_install: &Path) -> Result<Vec<u32>, String> {
-    Ok(Vec::new())
-}
-
-/// Nothing to do: the user opens Atrium again after the swap.
-pub(crate) fn relaunch(_install: &Path) {}
-
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::fs::Permissions;
+    use std::os::unix::fs::PermissionsExt as _;
+
     use super::*;
+    pub(crate) use crate::native::single_file::fakes::{fake_asset, fake_staged, verify_staged};
+    use crate::staging::EXECUTABLE_MODE;
     use crate::swap::{new_update_path, partial_update_path};
+    use crate::version::Version;
 
     /// The release asset the flow tests use.
     pub(crate) const ASSET: &str = "atrium-linux-x86_64.AppImage";
-
-    /// The release asset of Atrium in `version`: a file holding the version.
-    pub(crate) fn fake_asset(_dir: &Path, version: &str) -> Vec<u8> {
-        version.as_bytes().to_vec()
-    }
 
     /// An executable `Atrium.AppImage` in version 0.1.0 in `<dir>/Applications`; returns its
     /// path.
@@ -181,20 +130,6 @@ pub(crate) mod tests {
         std::fs::write(&install, fake_asset(dir, "0.1.0")).unwrap();
         std::fs::set_permissions(&install, Permissions::from_mode(EXECUTABLE_MODE)).unwrap();
         install
-    }
-
-    /// Stages the `AppImage` of `version` next to `install`.
-    pub(crate) fn fake_staged(dir: &Path, install: &Path, version: &str) {
-        let staged = new_update_path(install);
-        std::fs::write(&staged, fake_asset(dir, version)).unwrap();
-        std::fs::set_permissions(&staged, Permissions::from_mode(EXECUTABLE_MODE)).unwrap();
-    }
-
-    /// Fails unless `path` is the executable `AppImage` of `version`.
-    pub(crate) fn verify_staged(path: &Path, version: &str) {
-        let mode = std::fs::metadata(path).unwrap().permissions().mode();
-        assert_eq!(mode & 0o777, EXECUTABLE_MODE, "{}", path.display());
-        assert_eq!(std::fs::read(path).unwrap(), fake_asset(path, version));
     }
 
     #[test]
@@ -223,10 +158,7 @@ pub(crate) mod tests {
         let dir = tempfile::tempdir().unwrap();
         let install = fake_install(dir.path());
         let env = env(Some(&install), Some("/tmp/.mount_atriumAbC"));
-        assert_eq!(
-            resolve(&env, false, &|_| true),
-            InstallLocation::SelfUpdatable { bundle: install }
-        );
+        assert_eq!(resolve(&env, &|_| true), Ok(install));
     }
 
     #[test]
@@ -237,34 +169,24 @@ pub(crate) mod tests {
         let missing = dir.path().join("Applications/Gone.AppImage");
         let relative = Path::new("Atrium.AppImage");
         let cases = [
-            (env(Some(&install), mount), true, true, "development"),
-            (env(None, mount), false, true, "not running as an AppImage"),
+            (env(None, mount), true, "not running as an AppImage"),
             (
                 env(Some(&install), None),
-                false,
                 true,
                 "not running as an AppImage",
             ),
             (
                 env(Some(&install), Some("/tmp/.mount_other")),
-                false,
                 true,
                 "not running as an AppImage",
             ),
-            (env(Some(&missing), mount), false, true, "cannot be found"),
-            (env(Some(relative), mount), false, true, "cannot be found"),
-            (env(Some(&install), mount), false, false, "not writable"),
+            (env(Some(&missing), mount), true, "cannot be found"),
+            (env(Some(relative), mount), true, "cannot be found"),
+            (env(Some(&install), mount), false, "not writable"),
         ];
-        for (env, debug, replaceable, expected) in cases {
-            let location = resolve(&env, debug, &|_| replaceable);
-            assert!(
-                location
-                    .manual_reason()
-                    .unwrap_or_default()
-                    .contains(expected),
-                "{:?}: {location:?}",
-                env.appimage
-            );
+        for (env, replaceable, expected) in cases {
+            let reason = resolve(&env, &|_| replaceable).unwrap_err();
+            assert!(reason.contains(expected), "{:?}: {reason}", env.appimage);
         }
     }
 

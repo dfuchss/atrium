@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use protocol::{UpdateCommand, UpdateState, UpdateStatus};
 
@@ -13,9 +13,10 @@ use crate::native;
 use crate::release::{RELEASES_PAGE, Release};
 use crate::source::ReleaseSource;
 use crate::staging::{StageRequest, remove_if_present, stage};
-use crate::store::{SwapResult, UpdaterFiles, UpdaterSettings, write_private};
+use crate::store::{SwapResult, UpdaterFiles, UpdaterSettings};
 use crate::swap::{new_update_path, old_update_path, partial_update_path};
 use crate::version::Version;
+use fs_util::now_ms;
 
 /// Time between automatic checks.
 const CHECK_INTERVAL_MS: u64 = 6 * 60 * 60 * 1000;
@@ -109,14 +110,6 @@ fn ready_or(staged: Option<Version>, fallback: UpdateState) -> UpdateState {
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since_epoch| {
-            u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
-        })
 }
 
 struct Shared {
@@ -247,8 +240,7 @@ impl Updater {
                     version: plan.version,
                     message: format!("the update helper did not start: {error}"),
                 };
-                let json = serde_json::to_string(&result).unwrap_or_default();
-                let _ = write_private(&UpdaterFiles::result_file(&plan.updates_dir), &json);
+                let _ = UpdaterFiles::write_swap_result(&plan.updates_dir, &result);
                 false
             }
         }

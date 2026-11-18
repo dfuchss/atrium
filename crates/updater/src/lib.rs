@@ -24,7 +24,9 @@ mod swap;
 mod version;
 
 pub use location::{InstallLocation, RunningAppImage};
-pub use native::{asset_name_for_arch, install_location, running_appimage};
+#[cfg(not(windows))]
+pub use native::running_appimage;
+pub use native::{asset_name_for_arch, install_location};
 pub use service::{LogSink, StatusSink, Updater, UpdaterAction, UpdaterConfig};
 pub use source::{DirectorySource, Download, GitHubSource, ReleaseSource};
 pub use version::Version;

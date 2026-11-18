@@ -6,6 +6,30 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write as _};
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Wall clock in ms since the Unix epoch (0 before it).
+pub fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since_epoch| {
+            u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
+        })
+}
+
+/// Removes the file or folder tree at `path` (a symlink itself, not what it points to); a path
+/// that is already gone counts as removed.
+pub fn remove_if_present(path: &Path) -> io::Result<()> {
+    let removed = match path.symlink_metadata() {
+        Ok(meta) if meta.is_dir() => std::fs::remove_dir_all(path),
+        Ok(_) => std::fs::remove_file(path),
+        Err(error) => Err(error),
+    };
+    match removed {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
+    }
+}
 
 /// Writes `bytes` to `path` with the permission bits `mode`, whatever the umask is, through the
 /// temporary file `.<name>.tmp` next to it: a reader never sees half of it, and a crash leaves
@@ -92,6 +116,19 @@ mod tests {
     use super::*;
 
     const MODE: u32 = 0o640;
+
+    #[test]
+    fn removes_files_and_trees_and_accepts_missing_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        remove_if_present(&dir.path().join("missing")).unwrap();
+        let file = dir.path().join("file");
+        std::fs::write(&file, "x").unwrap();
+        remove_if_present(&file).unwrap();
+        assert!(!file.exists());
+        std::fs::create_dir_all(dir.path().join("tree/sub")).unwrap();
+        remove_if_present(&dir.path().join("tree")).unwrap();
+        assert!(!dir.path().join("tree").exists());
+    }
 
     #[cfg(unix)]
     fn mode(path: &Path) -> u32 {

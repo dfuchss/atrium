@@ -7,98 +7,38 @@
 mod desktop;
 #[cfg(not(windows))]
 mod desktop_entry;
+mod dev_hooks;
+mod main_window;
+mod service_files;
+mod snapshot_cache;
 #[cfg(windows)]
 mod start_menu;
 mod updates;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use domain::ports::{Platform, Store};
 use domain::runtime::{Ports, StartupLoad, apply};
 use domain::{Catalog, Core, Effect, Input, Persisted};
+use fs_util::now_ms;
 use host_tauri::{Feed, TauriHost};
-use protocol::{AppInfo, AppSettings, OperatingSystem, Snapshot, UiCommand};
+use protocol::{AppInfo, OperatingSystem, Snapshot, UiCommand};
 use store_fs::FsStore;
-use tauri::window::WindowBuilder;
-use tauri::{
-    App, AppHandle, LogicalSize, Manager, RunEvent, State, Theme, WebviewUrl, Window, WindowEvent,
-    Wry,
-};
+use tauri::{App, AppHandle, Manager, RunEvent, State, Wry};
 use tauri_plugin_autostart::MacosLauncher;
 
-mod service_files;
-
-const MAIN_WINDOW: &str = "main";
-
-/// Development hooks, read from environment variables in debug builds only ("Debug
-/// options" in the wiki). Used to run a second, isolated instance with demo data, e.g. for screenshots.
-#[derive(Default)]
-struct DevHooks {
-    /// `ATRIUM_CONFIG_DIR`: config folder (store, services folder, log) instead of the app's.
-    config_dir: Option<PathBuf>,
-    /// `ATRIUM_ALWAYS_ON_TOP=1`: keep the main window on top (occluded windows are not painted).
-    always_on_top: bool,
-    /// `ATRIUM_WINDOW_POSITION=<x>,<y>`: main window position in logical px (global screen
-    /// coordinates, the main display starts at 0,0), e.g. to pick a Retina display.
-    position: Option<(f64, f64)>,
-    /// Contents of the file named by `ATRIUM_DEV_INIT_SCRIPT`, appended to every service view's
-    /// init script.
-    init_script: Option<String>,
-    /// `ATRIUM_DEV_UI_QUERY`: query string for the sidebar UI, e.g. `dialog=accounts&edit=0`.
-    ui_query: Option<String>,
-    /// `ATRIUM_LOG_TITLES=1`: log page titles (diagnosing unread title patterns).
-    log_titles: bool,
-    /// `ATRIUM_DEV_RELEASE_DIR`: folder with `release.json`, `SHA256SUMS` and the asset that
-    /// stands in for the latest GitHub release; the debug build then updates itself.
-    release_dir: Option<PathBuf>,
-}
-
-impl DevHooks {
-    #[cfg(debug_assertions)]
-    fn from_env() -> DevHooks {
-        let var = |name: &str| std::env::var(name).ok().filter(|value| !value.is_empty());
-        DevHooks {
-            config_dir: var("ATRIUM_CONFIG_DIR").map(Into::into),
-            always_on_top: var("ATRIUM_ALWAYS_ON_TOP").is_some_and(|value| value == "1"),
-            position: var("ATRIUM_WINDOW_POSITION").and_then(|value| {
-                let (x, y) = value.split_once(',')?;
-                Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
-            }),
-            init_script: var("ATRIUM_DEV_INIT_SCRIPT").map(|path| {
-                std::fs::read_to_string(&path)
-                    .unwrap_or_else(|error| panic!("ATRIUM_DEV_INIT_SCRIPT {path}: {error}"))
-            }),
-            ui_query: var("ATRIUM_DEV_UI_QUERY"),
-            log_titles: var("ATRIUM_LOG_TITLES").is_some_and(|value| value == "1"),
-            release_dir: var("ATRIUM_DEV_RELEASE_DIR").map(Into::into),
-        }
-    }
-
-    /// Release builds ignore the environment.
-    #[cfg(not(debug_assertions))]
-    fn from_env() -> DevHooks {
-        DevHooks::default()
-    }
-
-    /// Sidebar UI page, with the query string if one is set.
-    fn ui_url(&self) -> WebviewUrl {
-        match &self.ui_query {
-            Some(query) => {
-                WebviewUrl::App(format!("index.html?{}", query.trim_start_matches('?')).into())
-            }
-            None => WebviewUrl::App("index.html".into()),
-        }
-    }
-}
+use crate::dev_hooks::DevHooks;
+use crate::main_window::{MAIN_WINDOW, build_window_with_sidebar, watch_main_window};
+use crate::snapshot_cache::SnapshotCache;
 
 /// State shared with the Tauri commands.
 struct Shared {
     feed: Feed,
     /// Last snapshot emitted by the core; served to the UI on (re)load.
-    snapshot: Arc<Mutex<Snapshot>>,
+    snapshot: SnapshotCache,
 }
 
 #[tauri::command]
@@ -116,11 +56,7 @@ fn ui_command(state: State<'_, Shared>, command: UiCommand) {
     reason = "Tauri commands receive their arguments by value"
 )]
 fn get_snapshot(state: State<'_, Shared>) -> Snapshot {
-    state
-        .snapshot
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .clone()
+    state.snapshot.get()
 }
 
 /// The saved accounts and settings. If the file cannot be read, the run is read-only: nothing
@@ -158,43 +94,24 @@ fn remove_unused_data_stores(
     store: &FsStore,
     persisted: &Persisted,
     allowed: bool,
-    snapshot_cache: &Arc<Mutex<Snapshot>>,
+    snapshot_cache: &SnapshotCache,
 ) {
     if allowed && store.lists_all_accounts() {
-        host.remove_unused_data_stores(persisted.accounts.clone(), snapshot_cache.clone());
+        host.remove_unused_data_stores(persisted.accounts.clone(), snapshot_cache.shared());
     } else {
         host.log("not removing unused data stores: no complete, intact account list");
     }
 }
 
-/// Wall clock in ms since the Unix epoch (ticks and resumes; a jump > 30 s means the computer
-/// slept).
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since_epoch| {
-            u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
-        })
-}
-
 /// Owns the core; never returns while the channel is open.
-fn run_actor(mut core: Core, inputs: Receiver<Input>, ports: &Ports<'_>, cache: &Mutex<Snapshot>) {
+fn run_actor(mut core: Core, inputs: Receiver<Input>, ports: &Ports<'_>, cache: &SnapshotCache) {
     for input in inputs {
         for effect in core.handle(input) {
             if let Effect::EmitSnapshot(snapshot) = &effect {
-                *cache.lock().unwrap_or_else(PoisonError::into_inner) = snapshot.clone();
+                cache.set(snapshot.clone());
             }
             apply(effect, ports);
         }
-    }
-}
-
-/// Shows, unminimizes and focuses the main window (dock icon click while hidden).
-#[cfg(target_os = "macos")]
-fn show_main_window(app: &AppHandle) {
-    if let Some(window) = app.get_window(MAIN_WINDOW) {
-        // Nothing sensible to do if the window cannot come to the front.
-        let _ = host_tauri::bring_to_front(&window);
     }
 }
 
@@ -219,30 +136,6 @@ fn config_dir(app: &App, dev: &DevHooks, host: &TauriHost<Wry>) -> tauri::Result
         }
         None => app.path().app_config_dir(),
     }
-}
-
-/// On macOS a transparent title bar without a title: it shows the window background (the
-/// sidebar color) instead of a lighter strip. Not Overlay: the content view stays below the
-/// title bar, so the services' top-edge controls keep working.
-fn build_main_window(app: &App, dev: &DevHooks, start_hidden: bool) -> tauri::Result<Window> {
-    let builder = WindowBuilder::new(app, MAIN_WINDOW).title("Atrium");
-    #[cfg(target_os = "macos")]
-    let builder = builder
-        .title_bar_style(tauri::TitleBarStyle::Transparent)
-        .hidden_title(true);
-    let mut builder = builder
-        .inner_size(1280.0, 800.0)
-        .min_inner_size(600.0, 400.0)
-        .visible(!start_hidden)
-        .always_on_top(dev.always_on_top);
-    if let Some((x, y)) = dev.position {
-        builder = builder.position(x, y);
-    }
-    let window = builder.build()?;
-    window.set_background_color(Some(host_tauri::window_background(
-        window.theme().unwrap_or(Theme::Light),
-    )))?;
-    Ok(window)
 }
 
 /// Feeds a tick every second (drives polling, hibernation and sleep detection).
@@ -275,62 +168,11 @@ fn observe_resume(host: &TauriHost<Wry>, feed: Feed) {
     host.observe_resume(move || feed(Input::Resumed { now_ms: now_ms() }));
 }
 
-fn feed_resize(feed: &Feed, size: LogicalSize<f64>) {
-    feed(Input::WindowResized {
-        width: size.width,
-        height: size.height,
-    });
-}
-
-/// Closing the window (red button, Cmd+W) hides it or quits, as the settings say; Quit
-/// (Cmd+Q) is a menu item (see `host_tauri::graceful_quit`).
-fn close_requested(window: &Window, snapshot_cache: &Mutex<Snapshot>) {
-    let to_background = snapshot_cache
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .settings
-        .close_to_background;
-    if to_background {
-        let _ = window.hide();
-    } else {
-        // Keep the window (and its service views) until the pages are unloaded.
-        host_tauri::graceful_quit(window.app_handle());
-    }
-}
-
-/// Window events of the main window only: popup and app windows opened by services are normal
-/// windows that really close.
-fn watch_main_window(window: &Window, feed: Feed, snapshot_cache: Arc<Mutex<Snapshot>>) {
-    let event_window = window.clone();
-    window.on_window_event(move |event| match event {
-        WindowEvent::CloseRequested { api, .. } => {
-            api.prevent_close();
-            close_requested(&event_window, &snapshot_cache);
-        }
-        WindowEvent::ThemeChanged(theme) => {
-            let _ = event_window.set_background_color(Some(host_tauri::window_background(*theme)));
-        }
-        WindowEvent::Resized(size) => {
-            // A Resized event reports the new physical size; the scale factor is unchanged
-            // (ScaleFactorChanged carries its own).
-            if let Ok(scale) = event_window.scale_factor() {
-                feed_resize(&feed, size.to_logical::<f64>(scale));
-            }
-        }
-        WindowEvent::ScaleFactorChanged {
-            scale_factor,
-            new_inner_size,
-            ..
-        } => feed_resize(&feed, new_inner_size.to_logical::<f64>(*scale_factor)),
-        _ => {}
-    });
-}
-
 /// What the actor thread owns besides the core.
 struct ActorEnv {
     host: TauriHost<Wry>,
     store: FsStore,
-    cache: Arc<Mutex<Snapshot>>,
+    cache: SnapshotCache,
     /// Saved data was unreadable: do not persist.
     read_only: bool,
 }
@@ -351,26 +193,6 @@ fn spawn_actor(core: Core, inputs: Receiver<Input>, env: ActorEnv) -> std::io::R
             run_actor(core, inputs, &ports, &env.cache);
         })?;
     Ok(())
-}
-
-/// Creates the main window, docks the sidebar webview at its full height and returns the
-/// window with its logical size.
-fn build_window_with_sidebar(
-    app: &App,
-    dev: &DevHooks,
-    app_settings: &AppSettings,
-) -> tauri::Result<(Window, LogicalSize<f64>)> {
-    let window = build_main_window(app, dev, app_settings.start_hidden)?;
-    let size = window
-        .inner_size()?
-        .to_logical::<f64>(window.scale_factor()?);
-    host_tauri::add_sidebar(
-        &window,
-        dev.ui_url(),
-        app_settings.icon_size.sidebar_width(),
-        size.height,
-    )?;
-    Ok((window, size))
 }
 
 /// The facts of the About section.
@@ -399,7 +221,7 @@ fn setup(
     dev: &DevHooks,
     feed: &Feed,
     inputs: Receiver<Input>,
-    snapshot_cache: &Arc<Mutex<Snapshot>>,
+    snapshot_cache: &SnapshotCache,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let host = create_host(app, dev, feed.clone());
     let version = app.package_info().version.to_string();
@@ -446,9 +268,7 @@ fn setup(
     core.set_log_page_titles(dev.log_titles);
     core.set_new_account_user_agent(host_tauri::new_account_user_agent());
     core.set_app_info(app_info(&host, version, &config_dir, &services_dir));
-    *snapshot_cache
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner) = core.snapshot();
+    snapshot_cache.set(core.snapshot());
 
     // The actor may block in `add_child` until the main thread runs the build, so the main
     // thread (this function, window events, commands) only ever sends to it.
@@ -502,7 +322,7 @@ fn main() {
         // Fails only after the actor is gone (app shutting down).
         let _ = sender.send(input);
     });
-    let snapshot_cache = Arc::new(Mutex::new(Snapshot::default()));
+    let snapshot_cache = SnapshotCache::default();
     let (menu_feed, setup_feed, setup_cache) = (feed.clone(), feed.clone(), snapshot_cache.clone());
     let crash_feed = feed.clone();
 
@@ -541,7 +361,7 @@ fn main() {
     app.run(|app, event| match event {
         // Dock icon click: bring a hidden (closed to background / started hidden) window back.
         #[cfg(target_os = "macos")]
-        RunEvent::Reopen { .. } => show_main_window(app),
+        RunEvent::Reopen { .. } => main_window::show_main_window(app),
         // "Restart/Quit and update": the helper swaps the bundle once this process is gone.
         RunEvent::Exit => updates::launch_pending_helper(app),
         // Any other exit request (e.g. the last window went away) unloads the pages first; the
@@ -557,7 +377,40 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use serde_json::Value;
+
+    /// Tauri binds a command by the name of its function, the UI calls it by the protocol
+    /// constant: renaming one without the other must fail here, not at runtime.
+    #[test]
+    fn commands_are_named_like_their_protocol_constants() {
+        macro_rules! handlers {
+            ($($handler:path => $constant:ident),* $(,)?) => {[$({
+                let _ = $handler;
+                (stringify!($handler), protocol::$constant)
+            }),*]};
+        }
+        let commands = handlers!(
+            ui_command => CMD_UI_COMMAND,
+            get_snapshot => CMD_GET_SNAPSHOT,
+            service_files::list_service_files => CMD_LIST_SERVICE_FILES,
+            service_files::read_service_file => CMD_READ_SERVICE_FILE,
+            service_files::new_service_template => CMD_NEW_SERVICE_TEMPLATE,
+            service_files::validate_service => CMD_VALIDATE_SERVICE,
+            service_files::save_service_file => CMD_SAVE_SERVICE_FILE,
+            service_files::delete_service_file => CMD_DELETE_SERVICE_FILE,
+            service_files::set_service_file_enabled => CMD_SET_SERVICE_FILE_ENABLED,
+            desktop::get_desktop_entry => CMD_GET_DESKTOP_ENTRY,
+            desktop::install_desktop_entry => CMD_INSTALL_DESKTOP_ENTRY,
+            desktop::uninstall_desktop_entry => CMD_UNINSTALL_DESKTOP_ENTRY,
+            desktop::list_browsers => CMD_LIST_BROWSERS,
+            updates::update_command => CMD_UPDATE_COMMAND,
+            updates::get_update_status => CMD_GET_UPDATE_STATUS,
+        );
+        for (path, constant) in commands {
+            assert_eq!(path.rsplit("::").next().unwrap().trim(), constant);
+        }
+    }
 
     /// Service webviews are children of the main window, so a window pattern in the UI
     /// capability would grant them IPC as soon as only their origin stood in the way.

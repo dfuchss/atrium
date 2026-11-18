@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::RateLimiter;
+pub(crate) use fs_util::now_ms;
 use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
 
@@ -127,15 +128,6 @@ pub(crate) fn spawn_logged(name: &str, logger: &Logger, job: impl FnOnce() + Sen
     if let Err(error) = std::thread::Builder::new().name(name.into()).spawn(job) {
         logger.log(&format!("cannot start thread {name}: {error}"));
     }
-}
-
-/// Wall clock in ms since the Unix epoch.
-pub(crate) fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since_epoch| {
-            u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
-        })
 }
 
 /// `YYYY-MM-DD HH:MM:SS.mmmZ` (UTC) without a date crate.

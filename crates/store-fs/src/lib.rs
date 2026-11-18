@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::Persisted;
@@ -9,15 +10,25 @@ use domain::ports::{PortError, PortResult, Store};
 
 pub struct FsStore {
     dir: PathBuf,
+    /// What [`Store::load`] set aside as corrupt, until [`FsStore::take_quarantined`].
+    quarantined: Mutex<Option<String>>,
 }
 
 impl FsStore {
     pub fn new(dir: impl Into<PathBuf>) -> FsStore {
-        FsStore { dir: dir.into() }
+        FsStore {
+            dir: dir.into(),
+            quarantined: Mutex::default(),
+        }
     }
 
     fn file(&self) -> PathBuf {
         self.dir.join(ACCOUNTS_FILE)
+    }
+
+    /// Why and where `load` set the accounts file aside as corrupt (it then loads as empty), once.
+    pub fn take_quarantined(&self) -> Option<String> {
+        fs_util::lock_ignoring_poison(&self.quarantined).take()
     }
 
     /// True if the accounts file exists and no earlier version was set aside as corrupt: only
@@ -59,19 +70,26 @@ impl Store for FsStore {
             }
             Err(error) => return Err(port_error(&format!("read {ACCOUNTS_FILE}"), error)),
         };
-        if let Ok(persisted) = serde_json::from_slice(&bytes) {
-            Ok(persisted)
-        } else {
-            // Keep the unreadable file for inspection and start empty.
-            let seconds = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_or(0, |since_epoch| since_epoch.as_secs());
-            let target = self.dir.join(format!("{}{seconds}", corrupt_file_prefix()));
-            fs::rename(&path, &target).map_err(|error| {
-                port_error(&format!("quarantine corrupt {ACCOUNTS_FILE}"), error)
-            })?;
-            Ok(Persisted::default())
-        }
+        let parse_error = match serde_json::from_slice(&bytes) {
+            Ok(persisted) => return Ok(persisted),
+            Err(error) => error,
+        };
+        // Keep the unreadable file for inspection and start empty.
+        let seconds = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |since_epoch| since_epoch.as_secs());
+        let target = self.dir.join(format!("{}{seconds}", corrupt_file_prefix()));
+        fs::rename(&path, &target).map_err(|error| {
+            port_error(
+                &format!("quarantine corrupt {ACCOUNTS_FILE} ({parse_error})"),
+                error,
+            )
+        })?;
+        *fs_util::lock_ignoring_poison(&self.quarantined) = Some(format!(
+            "corrupt {ACCOUNTS_FILE} ({parse_error}) moved to {}",
+            target.display()
+        ));
+        Ok(Persisted::default())
     }
 
     fn save(&self, data: &Persisted) -> PortResult {
@@ -166,6 +184,11 @@ mod tests {
         fs::write(d.path().join(ACCOUNTS_FILE), "{nope").unwrap();
         let s = FsStore::new(d.path());
         assert_eq!(s.load().unwrap(), Persisted::default());
+        assert!(
+            s.take_quarantined()
+                .is_some_and(|note| note.contains("corrupt"))
+        );
+        assert_eq!(s.take_quarantined(), None);
         assert!(!d.path().join(ACCOUNTS_FILE).exists());
         let found = fs::read_dir(d.path()).unwrap().any(|e| {
             e.unwrap()

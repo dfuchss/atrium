@@ -60,9 +60,13 @@ fn get_snapshot(state: State<'_, Shared>) -> Snapshot {
 }
 
 /// The saved accounts and settings. If the file cannot be read, the run is read-only: nothing
-/// is saved (the file may still hold the real accounts) and the user is told once.
-fn load_persisted(store: &dyn Store, log: &dyn Platform) -> StartupLoad {
+/// is saved (the file may still hold the real accounts) and the user is told once. A corrupt
+/// file the store set aside is logged.
+fn load_persisted(store: &FsStore, log: &dyn Platform) -> StartupLoad {
     let load = StartupLoad::from_store(store.load());
+    if let Some(quarantined) = store.take_quarantined() {
+        log.log(&format!("starting without accounts: {quarantined}"));
+    }
     if let StartupLoad::Unreadable(error) = &load {
         log.log(&format!(
             "cannot read accounts, running read-only and not saving: {error}"

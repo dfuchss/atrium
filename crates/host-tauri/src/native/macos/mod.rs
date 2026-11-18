@@ -168,7 +168,7 @@ impl Shortcuts {
         Shortcuts
     }
 
-    #[expect(clippy::unused_self, reason = "same methods as on Linux")]
+    #[expect(clippy::unused_self, reason = "same methods as on Linux and Windows")]
     #[expect(
         clippy::unnecessary_wraps,
         reason = "same signature as on Linux, where adding the shortcuts can fail"
@@ -182,7 +182,7 @@ impl Shortcuts {
         Ok(())
     }
 
-    #[expect(clippy::unused_self, reason = "same methods as on Linux")]
+    #[expect(clippy::unused_self, reason = "same methods as on Linux and Windows")]
     pub(crate) fn set_accounts(&self, _model: &MenuModel) {}
 }
 

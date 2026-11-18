@@ -38,6 +38,7 @@ mod resume;
 mod shortcuts;
 mod theme;
 
+pub(crate) use crate::window_shortcuts::Shortcuts;
 pub(crate) use browsers::{installed_browsers, open_url_with};
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
 pub(crate) use resume::observe_resume;

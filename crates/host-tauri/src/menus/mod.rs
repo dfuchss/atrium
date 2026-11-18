@@ -12,10 +12,7 @@ use protocol::UiCommand;
 use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
 
-#[cfg(target_os = "macos")]
 use crate::native::Shortcuts;
-#[cfg(not(target_os = "macos"))]
-use crate::window_shortcuts::Shortcuts;
 use crate::{Feed, bring_to_front, graceful_quit, native};
 pub(crate) use account_menu::popup_account_menu;
 use account_menu::{ID_ACCOUNT_MENU, account_menu_input};

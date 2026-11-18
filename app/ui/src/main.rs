@@ -116,7 +116,9 @@ fn App() -> impl IntoView {
     let edit_request = Memo::new(move |_| snapshot.with(|snapshot| snapshot.edit_request));
     Effect::new(move || {
         if let Some(request) = edit_request.get() {
-            ui_state.tab.set(Tab::Accounts);
+            if ui_state.tab.get_untracked() != Tab::Accounts {
+                ui_state.tab.set(Tab::Accounts);
+            }
             ui_state.edit_account.set(Some(request.account));
         }
     });

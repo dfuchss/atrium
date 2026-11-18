@@ -1,4 +1,7 @@
-//! File-based [`domain::ports::Store`]: one JSON file (`ACCOUNTS_FILE`) in a directory.
+//! File-based [`domain::ports::Store`]: one JSON file (`ACCOUNTS_FILE`) in a directory, and the
+//! user's service definition files ([`services`]).
+
+pub mod services;
 
 use std::fs;
 use std::path::PathBuf;

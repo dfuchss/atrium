@@ -242,12 +242,12 @@ fn setup(
     let persisted = load.into_persisted();
     let sweep_allowed = !read_only && dev.config_dir.is_none();
     remove_unused_data_stores(&host, &store, &persisted, sweep_allowed, snapshot_cache);
-    let services_dir = config_dir.join("services");
+    let services_dir = store_fs::services::dir(&config_dir);
     app.manage(service_files::ServiceFiles {
         dir: services_dir.clone(),
         feed: feed.clone(),
     });
-    let (user_defs, user_errors) = host_tauri::services::read_user_services(&services_dir);
+    let (user_defs, user_errors) = store_fs::services::read_user_services(&services_dir);
     host.log(&format!(
         "config {}, {} accounts, {} user services, {} service errors",
         config_dir.display(),

@@ -4,13 +4,14 @@ use domain::ports::{Platform, PortError, PortResult};
 use domain::{AccountMenu, DockBadge, MenuModel, SimpleIconResult, redact_url};
 use fs_util::lock_ignoring_poison;
 use protocol::{AppSettings, Theme};
+use store_fs::services;
 use tauri::{Manager, Runtime};
 use tauri_plugin_autostart::AutoLaunchManager;
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
 use crate::logger::spawn_logged;
-use crate::{Input, TauriHost, bring_to_front, icons, menus, native, port_err, services};
+use crate::{Input, TauriHost, bring_to_front, icons, menus, native, port_err};
 
 fn describe_simple_icon(result: &SimpleIconResult) -> String {
     match result {

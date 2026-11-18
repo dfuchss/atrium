@@ -10,8 +10,9 @@
 use std::path::PathBuf;
 
 use domain::Input;
-use host_tauri::{Feed, services};
+use host_tauri::Feed;
 use protocol::{ServiceFile, ServiceProblem, UiCommand};
+use store_fs::services;
 use tauri::State;
 
 /// The services folder and the channel into the core.

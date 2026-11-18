@@ -1851,6 +1851,7 @@ dependencies = [
  "gtk",
  "platform-ffi",
  "protocol",
+ "store-fs",
  "tauri",
  "tauri-plugin-autostart",
  "tauri-plugin-notification",

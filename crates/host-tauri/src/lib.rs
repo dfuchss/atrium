@@ -32,7 +32,6 @@ mod notifications;
 mod page_hooks;
 mod platform;
 mod quit;
-pub mod services;
 mod webviews;
 #[cfg(not(target_os = "macos"))]
 mod window_shortcuts;
@@ -264,7 +263,7 @@ impl<R: Runtime> TauriHost<R> {
             Some(dir) => dir.clone(),
             None => self.app.path().app_config_dir().map_err(port_err)?,
         };
-        Ok(config_dir.join("services"))
+        Ok(store_fs::services::dir(&config_dir))
     }
 
     fn window(&self) -> PortResult<Window<R>> {

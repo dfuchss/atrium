@@ -24,10 +24,24 @@ const ADDED_NOTE_DURATION: Duration = Duration::from_secs(3);
 pub(super) fn AccountsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     let ui = expect_context::<UiState>();
     // Which account is being edited; its draft lives inside `EditForm`.
-    let initial_edit = ui.edit_index.get_untracked().and_then(|index| {
-        snapshot.with_untracked(|snapshot| snapshot.accounts.get(index).map(|account| account.id))
-    });
+    let initial_edit = ui
+        .edit_index
+        .get_untracked()
+        .and_then(|index| {
+            snapshot
+                .with_untracked(|snapshot| snapshot.accounts.get(index).map(|account| account.id))
+        })
+        .or_else(|| {
+            let request = snapshot.with_untracked(|snapshot| snapshot.edit_request)?;
+            (ui.edit_seen.get_untracked() != Some(request.seq)).then(|| {
+                ui.edit_seen.set(Some(request.seq));
+                request.account
+            })
+        });
     ui.edit_index.set(None);
+    if let Some(id) = initial_edit {
+        scroll_to_id(account_dom_id(id));
+    }
     let editing: RwSignal<Option<Uuid>> = RwSignal::new(initial_edit);
     Effect::new(move || {
         if let Some(id) = ui.edit_account.get() {
@@ -124,7 +138,7 @@ fn AddAccountForm(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
             <Row label="Service">
                 <select
                     id="add-service"
-                    prop:value=move || current().map_or_default(|service| service.id)
+                    prop:value=move || current().map(|service| service.id).unwrap_or_default()
                     on:change=move |event| {
                         let value = event_target_value(&event);
                         if value == CUSTOM_OPTION {
@@ -146,7 +160,7 @@ fn AddAccountForm(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                 </select>
             </Row>
             <Row label="Label">
-                <TextField id="add-label" value=label plain=true placeholder=Signal::derive(move || Some(current().map_or_default(|service| service.name))) />
+                <TextField id="add-label" value=label plain=true placeholder=Signal::derive(move || Some(current().map(|service| service.name).unwrap_or_default())) />
             </Row>
             {move || current().and_then(|service| service.instance_label).map(|instance_label| view! {
                 <Row label=instance_field_label(instance_label)>

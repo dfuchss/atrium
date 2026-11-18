@@ -89,6 +89,8 @@ pub(crate) struct UiState {
     /// Account whose edit form opens on the accounts tab (account menu "Settings…"; consumed
     /// once).
     pub(crate) edit_account: RwSignal<Option<Uuid>>,
+    /// `seq` of the last edit request the accounts tab opened on mount.
+    pub(crate) edit_seen: RwSignal<Option<u32>>,
 }
 
 pub(crate) fn open_dialog(tab: Tab, focus_add: bool) {

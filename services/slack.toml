@@ -7,6 +7,16 @@ internal_hosts = ["slack.com", "*.slack.com", "*.slack-edge.com"]
 allow_media = true
 
 [unread]
-# Slack: "(3) Slack | ..." or "* Slack | ..." for unread without mentions (to verify in S2)
-title_regex = '^\((\d+)\)'
-title_indirect_regex = '^\*'
+# Slack's title counts mentions and direct messages ("dev (Channel) - Team - 2 new items -
+# Slack") but says nothing about other unread channels: those are bold in the sidebar
+# (p-channel_sidebar__channel--unread), and muted ones also carry --muted. No sidebar rendered
+# yet (loading, sign-in) means no value, so the title rule applies.
+poll = """(() => {
+  if (!document.querySelector('.p-channel_sidebar__channel')) return;
+  const direct = parseInt(document.title.match(/(\\d+) new items?/)?.[1]) || 0;
+  const unread = document.querySelector(
+    '.p-channel_sidebar__channel--unread:not(.p-channel_sidebar__channel--muted)');
+  return { direct, indirect: !direct && !!unread };
+})()"""
+# Fallback: the count from the title
+title_regex = '(\d+) new items?'

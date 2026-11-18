@@ -57,7 +57,6 @@ Below them, *Service definition files* lists the TOML files of the services fold
 | Put inactive services to sleep after | 5, 15, 30, 60 or 120 minutes, or *Never*. Sleeping services free memory but show no notifications or unread counts until you open them again. |
 | After waking from sleep | *Check, reload if stuck* reloads only the services that stop responding after a wake, *Reload* reloads all, *Do nothing*. When this applies differs per platform: [macOS](macOS#desktop-integration), [Linux](Linux#desktop-integration), [Windows](Windows#desktop-integration). |
 | Desktop integration | Linux and Windows only: install, update or remove the launcher entry ([Linux](Linux#desktop-integration)) or Start menu shortcut ([Windows](Windows#desktop-integration)). |
-| Export and import | *Export settings* saves the settings, the added services and the custom services to a file in your Downloads folder. Logins are not included. *Import* asks for a file and overwrites all settings. It removes all current services with their logins. Atrium checks the file first; an invalid file changes nothing. |
 
 ### Notifications
 
@@ -72,6 +71,10 @@ Called *Launcher badge* on Linux and *Taskbar badge* on Windows. *Show*: *Unread
 ### Links
 
 *New-window links* go to the *System browser* or an *App window* that shares the account's login; accounts can override it. Sign-in popups always stay in the app, so OAuth and SSO keep working. *Browser* picks the browser: on macOS the name of an installed application (e.g. Firefox), on Linux and Windows one of the installed browsers that Atrium lists. Without a choice, links open in the system default browser.
+
+### Export and import
+
+*Export settings* saves the settings, the added services and the custom services to a file at a location you choose. Logins are not included. *Import* asks for a file and overwrites all settings. It removes all current services with their logins. Atrium checks the file first; an invalid file changes nothing.
 
 ### About
 

@@ -20,6 +20,7 @@ use crate::widgets::Toggle;
 use accounts::AccountsTab;
 use app_tabs::{AboutTab, DockTab, GeneralTab, LinksTab, NotificationsTab};
 use custom_services::CustomServicesTab;
+use transfer::TransferSection;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tab {
@@ -29,17 +30,19 @@ pub(crate) enum Tab {
     Notifications,
     Dock,
     Links,
+    Transfer,
     About,
 }
 
 impl Tab {
-    const ALL: [Tab; 7] = [
+    const ALL: [Tab; 8] = [
         Tab::Accounts,
         Tab::Custom,
         Tab::General,
         Tab::Notifications,
         Tab::Dock,
         Tab::Links,
+        Tab::Transfer,
         Tab::About,
     ];
 
@@ -51,6 +54,7 @@ impl Tab {
             "dock" => Tab::Dock,
             "links" => Tab::Links,
             "custom" => Tab::Custom,
+            "transfer" => Tab::Transfer,
             "about" => Tab::About,
             _ => return None,
         })
@@ -64,6 +68,7 @@ impl Tab {
             Tab::Notifications => "Notifications",
             Tab::Dock => texts.badge_tab,
             Tab::Links => "Links",
+            Tab::Transfer => "Export and import",
             Tab::About => "About",
         }
     }
@@ -116,6 +121,7 @@ pub(crate) fn SettingsDialog(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     Tab::Notifications => view! { <NotificationsTab snapshot=snapshot /> }.into_any(),
                     Tab::Dock => view! { <DockTab snapshot=snapshot /> }.into_any(),
                     Tab::Links => view! { <LinksTab snapshot=snapshot /> }.into_any(),
+                    Tab::Transfer => view! { <TransferSection /> }.into_any(),
                     Tab::About => view! { <AboutTab snapshot=snapshot /> }.into_any(),
                 }}
             </main>

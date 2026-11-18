@@ -47,6 +47,7 @@ url = "2"
 uuid = { version = "1", features = ["serde"] }
 tauri = { version = "=2.12.5", features = ["unstable"] }
 tauri-build = "2.7"
+tauri-plugin-dialog = "2.8.4"
 tauri-plugin-notification = "2.8.1"
 tauri-plugin-opener = "2.7.3"
 tempfile = "3"

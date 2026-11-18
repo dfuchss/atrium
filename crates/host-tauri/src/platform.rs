@@ -90,22 +90,33 @@ impl<R: Runtime> Platform for TauriHost<R> {
     }
 
     fn export_settings(&self, json: &str) -> PortResult {
-        use std::io::Write as _;
-        let dir = self.app.path().download_dir().map_err(port_err)?;
-        let seconds = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs());
-        let path = dir.join(format!("atrium-settings-{seconds}.json"));
-        // `create_new`: an earlier export is never overwritten.
-        std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .and_then(|mut file| file.write_all(json.as_bytes()))
-            .map_err(port_err)?;
-        self.logger
-            .log(&format!("exported settings to {}", path.display()));
-        self.app.opener().reveal_item_in_dir(&path).map_err(port_err)
+        use tauri_plugin_dialog::DialogExt as _;
+        let (app, logger, json) = (self.app.clone(), self.logger.clone(), json.to_string());
+        // The dialog blocks until the user answers, so it must not run on the main thread.
+        let started = spawn_logged("export", &self.logger, move || {
+            let Some(chosen) = app
+                .dialog()
+                .file()
+                .set_file_name("atrium-settings.json")
+                .add_filter("Atrium settings", &["json"])
+                .blocking_save_file()
+            else {
+                return;
+            };
+            let result = chosen
+                .into_path()
+                .map_err(port_err)
+                .and_then(|path| std::fs::write(&path, json).map(|()| path).map_err(port_err));
+            match result {
+                Ok(path) => logger.log(&format!("exported settings to {}", path.display())),
+                Err(error) => logger.log(&format!("export settings failed: {error:?}")),
+            }
+        });
+        if started {
+            Ok(())
+        } else {
+            Err(port_err("cannot start the export"))
+        }
     }
 
     fn load_services(&self) -> PortResult {

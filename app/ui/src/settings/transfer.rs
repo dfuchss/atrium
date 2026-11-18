@@ -24,7 +24,11 @@ fn read_export(
     };
     let loaded_reader = reader.clone();
     let on_load = Closure::once_into_js(move || {
-        match loaded_reader.result().ok().and_then(|text| text.as_string()) {
+        match loaded_reader
+            .result()
+            .ok()
+            .and_then(|text| text.as_string())
+        {
             Some(text) if !text.trim().is_empty() => pending.set(Some(text)),
             _ => error.set(Some("The file is empty.".into())),
         }
@@ -49,7 +53,7 @@ pub(super) fn TransferSection() -> impl IntoView {
     view! {
         <h2>"Export and import"</h2>
         <div class="form">
-            <Row label="Export" hint="Saves the settings, the added services and the custom services to a file in your Downloads folder. Logins are not included.">
+            <Row label="Export" hint="Saves the settings, the added services and the custom services to a file. You choose where to save it. Logins are not included.">
                 <button class="btn" type="button" on:click=move |_| send_command(UiCommand::ExportSettings)>"Export settings\u{2026}"</button>
             </Row>
             <Row label="Import" hint="Warning: importing overwrites all settings and removes all current services with their logins. The file is checked first; an invalid file changes nothing.">

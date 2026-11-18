@@ -343,6 +343,7 @@ fn builder_with_plugins(dev: &DevHooks) -> tauri::Builder<Wry> {
         host_tauri::guard_single_instance(builder, MAIN_WINDOW)
     };
     builder
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::init(

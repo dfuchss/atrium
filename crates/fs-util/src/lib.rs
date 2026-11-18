@@ -1,4 +1,4 @@
-//! File operations shared by Atrium's crates.
+//! File operations and the mutex lock shared by Atrium's crates.
 //!
 //! Permission bits (`mode`) exist on Unix only. On Windows they are ignored: Atrium's files lie
 //! in the user's profile, whose folders pass on an access list that leaves other users out.
@@ -6,7 +6,14 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write as _};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Locks `mutex` even if a thread panicked while holding it, so one panic does not take every
+/// later caller down with it.
+pub fn lock_ignoring_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 /// Wall clock in ms since the Unix epoch (0 before it).
 pub fn now_ms() -> u64 {

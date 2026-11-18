@@ -2,10 +2,11 @@
 //! and windows are gone, with retries while `WebKit` still holds the store, and at startup for
 //! stores no account owns any more.
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use domain::{Account, unused_store_ids};
+use fs_util::lock_ignoring_poison;
 use protocol::Snapshot;
 use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
@@ -105,7 +106,7 @@ fn store_in_use<'a>(
 }
 
 fn account_ids(snapshot: &Mutex<Snapshot>) -> Vec<Uuid> {
-    let snapshot = snapshot.lock().unwrap_or_else(PoisonError::into_inner);
+    let snapshot = lock_ignoring_poison(snapshot);
     snapshot.accounts.iter().map(|view| view.id).collect()
 }
 

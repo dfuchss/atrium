@@ -1,6 +1,6 @@
 //! User-defined services: validation, colors and ids.
 
-use protocol::{CustomService, INSTANCE_PLACEHOLDER};
+use protocol::{CustomService, INSTANCE_PLACEHOLDER, custom_service_base_id};
 
 use super::parse::is_hex_color;
 
@@ -8,8 +8,6 @@ use super::parse::is_hex_color;
 pub(super) const DEFAULT_TITLE_REGEX: &str = r"^\((\d+)\)";
 /// Sidebar color of custom services without an own color.
 const DEFAULT_CUSTOM_COLOR: &str = "#607D8B";
-/// Id prefix of user-defined services.
-const CUSTOM_PREFIX: &str = "custom-";
 
 /// Validates and normalizes a user-defined service (trimmed fields, `instance_label` only when the
 /// URL has `{instance}`). The URL must be http(s) once `{instance}` is replaced by "example"; the title
@@ -63,21 +61,9 @@ fn is_web_url_template(url: &str) -> bool {
     })
 }
 
-/// `custom-<slug of name>`, unique among `taken`.
+/// [`custom_service_base_id`] of `name`, unique among `taken`.
 pub(crate) fn custom_service_id(name: &str, taken: impl Fn(&str) -> bool) -> String {
-    let mut slug = String::new();
-    for character in name.trim().to_lowercase().chars() {
-        if character.is_ascii_alphanumeric() {
-            slug.push(character);
-        } else if !slug.ends_with('-') && !slug.is_empty() {
-            slug.push('-');
-        }
-    }
-    let slug = slug.trim_end_matches('-');
-    let base = format!(
-        "{CUSTOM_PREFIX}{}",
-        if slug.is_empty() { "service" } else { slug }
-    );
+    let base = custom_service_base_id(name);
     if !taken(&base) {
         return base;
     }
@@ -155,7 +141,6 @@ mod tests {
     #[test]
     fn custom_ids() {
         assert_eq!(custom_service_id(" My Chat! ", |_| false), "custom-my-chat");
-        assert_eq!(custom_service_id("ÄÖ", |_| false), "custom-service");
         let taken = ["custom-a", "custom-a-2"];
         assert_eq!(
             custom_service_id("a", |id| taken.contains(&id)),

@@ -2,9 +2,10 @@
 //! how they are built, and their titles.
 
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use domain::{WindowQuota, WindowRefusal, host_matches_any, redact_url, window_title};
+use fs_util::lock_ignoring_poison;
 use tauri::webview::{NewWindowFeatures, NewWindowResponse, PageLoadEvent, PageLoadPayload};
 use tauri::{Runtime, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::Uuid;
@@ -72,11 +73,7 @@ impl<R: Runtime> LinkPolicy<R> {
     /// refusal otherwise.
     pub(super) fn admit_window(&self, shown_url: &str, open_now: usize) -> bool {
         let account = self.spec.account;
-        let admitted = self
-            .popup_quota
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .admit(account, open_now, now_ms());
+        let admitted = lock_ignoring_poison(&self.popup_quota).admit(account, open_now, now_ms());
         let Err(refusal) = admitted else {
             return true;
         };
@@ -218,18 +215,12 @@ impl<R: Runtime> PopupTitle<R> {
         if let Ok(page) = window.url() {
             let _ = window.set_title(&self.policy.window_title_for(&title, &page));
         }
-        *self
-            .page_title
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner) = title;
+        *lock_ignoring_poison(&self.page_title) = title;
     }
 
     /// A new page starts without the previous page's title; its own follows as title change.
     fn page_loading(&self, window: &WebviewWindow<R>, payload: &PageLoadPayload<'_>) {
-        let mut page_title = self
-            .page_title
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let mut page_title = lock_ignoring_poison(&self.page_title);
         if let PageLoadEvent::Started = payload.event() {
             page_title.clear();
         }

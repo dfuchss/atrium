@@ -6,10 +6,11 @@
 use std::fs::OpenOptions;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::RateLimiter;
+use fs_util::lock_ignoring_poison;
 pub(crate) use fs_util::now_ms;
 use tauri::{AppHandle, Manager, Runtime};
 use uuid::Uuid;
@@ -45,10 +46,7 @@ impl LogFile {
     }
 
     fn append(&self, line: &str) {
-        let _serialized = self
-            .write_lock
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner);
+        let _serialized = lock_ignoring_poison(&self.write_lock);
         if std::fs::metadata(&self.path).is_ok_and(|meta| meta.len() >= self.rotate_bytes) {
             let _ = std::fs::rename(&self.path, self.path.with_file_name(ROTATED_LOG_FILE_NAME));
         }
@@ -112,11 +110,7 @@ impl Logger {
 
     /// Logs a navigation line of `account` unless it exceeded its navigation line budget.
     pub(crate) fn log_navigation(&self, account: Uuid, message: &str) {
-        let allowed = self
-            .navigation_limit
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .allow(account, now_ms());
+        let allowed = lock_ignoring_poison(&self.navigation_limit).allow(account, now_ms());
         if allowed {
             self.log(message);
         }

@@ -26,12 +26,13 @@ mod undecided;
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use domain::{
     Input, NewWindowGate, NewWindowRoute, ViewPolicy, ViewSpec, new_window_gate, new_window_route,
     redact_url,
 };
+use fs_util::lock_ignoring_poison;
 use tauri::webview::{NewWindowFeatures, NewWindowResponse};
 use tauri::{AppHandle, Runtime, Url};
 use uuid::Uuid;
@@ -47,9 +48,7 @@ pub(crate) type ViewPolicies = Arc<Mutex<HashMap<Uuid, ViewPolicy>>>;
 
 /// Current policy of `account` (the default one if it has none yet).
 pub(crate) fn policy_of(policies: &ViewPolicies, account: Uuid) -> ViewPolicy {
-    policies
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
+    lock_ignoring_poison(policies)
         .get(&account)
         .cloned()
         .unwrap_or_default()

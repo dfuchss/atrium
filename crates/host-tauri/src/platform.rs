@@ -1,9 +1,8 @@
 //! OS integration: dock badge, browser, login item, services folder, icons, menus and log.
 
-use std::sync::PoisonError;
-
 use domain::ports::{Platform, PortError, PortResult};
 use domain::{AccountMenu, DockBadge, MenuModel, SimpleIconResult, redact_url};
+use fs_util::lock_ignoring_poison;
 use protocol::{AppSettings, Theme};
 use tauri::{Manager, Runtime};
 use tauri_plugin_autostart::AutoLaunchManager;
@@ -142,9 +141,7 @@ impl<R: Runtime> Platform for TauriHost<R> {
     }
 
     fn set_menus(&self, model: &MenuModel) -> PortResult {
-        self.menus
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
+        lock_ignoring_poison(&self.menus)
             .apply(&self.app, &self.window_label, &self.feed, model)
             .map_err(port_err)
     }

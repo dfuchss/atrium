@@ -1,10 +1,11 @@
 //! Service views: one child webview per account in the main window, with its native hooks.
 
-use std::sync::{Arc, PoisonError, mpsc};
+use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 use domain::ports::{PortError, PortResult, WebviewHost};
 use domain::{Bounds, ViewPolicy, ViewSpec, redact_url};
+use fs_util::lock_ignoring_poison;
 use protocol::UI_WEBVIEW;
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::webview::PageLoadEvent;
@@ -222,10 +223,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
     }
 
     fn set_view_policy(&self, account: Uuid, policy: ViewPolicy) -> PortResult {
-        self.policies
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .insert(account, policy);
+        lock_ignoring_poison(&self.policies).insert(account, policy);
         Ok(())
     }
 

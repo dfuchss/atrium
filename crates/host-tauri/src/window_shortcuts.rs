@@ -3,9 +3,10 @@
 //! routed to the same menu item ids, and Close. The platform maps them to its keys and runs
 //! them with [`ShortcutActions`].
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use domain::MenuModel;
+use fs_util::lock_ignoring_poison;
 use tauri::{AppHandle, Manager, Runtime};
 
 use crate::menus::{
@@ -59,15 +60,11 @@ impl ShortcutAccounts {
             .take(ACCOUNT_SHORTCUTS)
             .map(account_item_id)
             .collect();
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = ids;
+        *lock_ignoring_poison(&self.0) = ids;
     }
 
     fn item_id(&self, index: usize) -> Option<String> {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .get(index)
-            .cloned()
+        lock_ignoring_poison(&self.0).get(index).cloned()
     }
 }
 

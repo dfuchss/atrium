@@ -17,8 +17,9 @@
 
 mod policy;
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
+use fs_util::lock_ignoring_poison;
 use platform_ffi::{DialogAnswer, DialogHandler, DialogKind, DialogRequest, Presentation};
 use protocol::Snapshot;
 use tauri::{AppHandle, Runtime};
@@ -72,11 +73,7 @@ impl TauriDialogHandler {
 impl DialogHandler for TauriDialogHandler {
     fn present(&self, request: &DialogRequest) -> Presentation {
         let account = request.webview_tag.as_deref().and_then(account_of_label);
-        let decision = self
-            .policy
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .present(account, request, now_ms());
+        let decision = lock_ignoring_poison(&self.policy).present(account, request, now_ms());
         let described = TauriDialogHandler::describe(request);
         match decision {
             Ok(text) => {
@@ -93,10 +90,7 @@ impl DialogHandler for TauriDialogHandler {
 
     fn answered(&self, request: &DialogRequest, answer: &DialogAnswer, suppress_further: bool) {
         let account = request.webview_tag.as_deref().and_then(account_of_label);
-        self.policy
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .answered(account, suppress_further);
+        lock_ignoring_poison(&self.policy).answered(account, suppress_further);
         let further = if suppress_further {
             ", no further dialogs until the next page load"
         } else {
@@ -136,17 +130,11 @@ impl Dialogs {
 
     /// The view of `account` loaded a page: earlier dialogs and a suppression no longer count.
     pub(crate) fn page_loaded(&self, account: Uuid) {
-        self.policy
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .page_loaded(account);
+        lock_ignoring_poison(&self.policy).page_loaded(account);
     }
 
     /// Takes the account names for the dialog titles from `snapshot`.
     pub(crate) fn set_names(&self, snapshot: &Snapshot) {
-        self.policy
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .set_names(account_names(snapshot));
+        lock_ignoring_poison(&self.policy).set_names(account_names(snapshot));
     }
 }

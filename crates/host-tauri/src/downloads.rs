@@ -4,9 +4,10 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use domain::{Input, redact_url};
+use fs_util::lock_ignoring_poison;
 use tauri::webview::DownloadEvent;
 use tauri::{AppHandle, Manager, Runtime, Url, Webview};
 use uuid::Uuid;
@@ -68,10 +69,7 @@ pub(crate) fn download_hook<R: Runtime>(
                 "[{account}] download {shown_url} -> {}",
                 destination.display()
             ));
-            pending
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .insert(url, name);
+            lock_ignoring_poison(&pending).insert(url, name);
             true
         }
         DownloadEvent::Finished { url, success, .. } => {
@@ -79,10 +77,7 @@ pub(crate) fn download_hook<R: Runtime>(
                 "[{account}] download finished {} ok={success}",
                 redact_url(url.as_str())
             ));
-            let name = pending
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .remove(&url);
+            let name = lock_ignoring_poison(&pending).remove(&url);
             if let (true, Some(file_name)) = (success, name) {
                 feed(Input::DownloadFinished { account, file_name });
             }

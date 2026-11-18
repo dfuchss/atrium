@@ -13,8 +13,9 @@
 //! page that asked waits for the answer anyway.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
+use fs_util::lock_ignoring_poison;
 use platform_ffi::{DialogAnswer, DialogHandler, DialogKind, ShownDialog};
 use protocol::{SCRIPT_DIALOG_QUERY, ScriptDialog, ScriptDialogAnswer, ScriptDialogKind};
 use tauri::plugin::TauriPlugin;
@@ -48,7 +49,7 @@ struct OpenDialogs(Mutex<HashMap<u64, OpenDialog>>);
 
 impl OpenDialogs {
     fn with<T>(&self, access: impl FnOnce(&mut HashMap<u64, OpenDialog>) -> T) -> T {
-        access(&mut self.0.lock().unwrap_or_else(PoisonError::into_inner))
+        access(&mut lock_ignoring_poison(&self.0))
     }
 }
 

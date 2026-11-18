@@ -7,8 +7,8 @@ use protocol::UpdateState;
 
 use super::{
     CheckDecision, HelperPlan, InstallLocation, Release, StageRequest, Updater, UpdaterAction,
-    Version, decide, locked, native, new_update_path, now_ms, old_update_path, partial_update_path,
-    ready_or, remove_if_present, stage,
+    Version, decide, lock_ignoring_poison, native, new_update_path, now_ms, old_update_path,
+    partial_update_path, ready_or, remove_if_present, stage,
 };
 
 impl Updater {
@@ -31,7 +31,7 @@ impl Updater {
         let release = Release::parse(&self.shared.source.latest_release()?)?;
         self.change_settings(|settings| settings.last_check_ms = now_ms());
         if let Some(release) = &release {
-            locked(&self.shared.page_url).clone_from(&release.page_url);
+            lock_ignoring_poison(&self.shared.page_url).clone_from(&release.page_url);
         }
         let decision = decide(
             current,
@@ -114,7 +114,7 @@ impl Updater {
             });
             return UpdaterAction::None;
         }
-        *locked(&self.shared.pending) = Some(HelperPlan {
+        *lock_ignoring_poison(&self.shared.pending) = Some(HelperPlan {
             app_pid: std::process::id(),
             install: bundle.clone(),
             updates_dir: self.shared.files.updates_dir(),
@@ -129,7 +129,7 @@ impl Updater {
     /// check lock, so a "Check now" right after the start neither has its download removed nor
     /// its staged update taken for a leftover.
     pub(crate) fn clean_up_after_previous_run(&self) {
-        let _checking = locked(&self.shared.checking);
+        let _checking = lock_ignoring_poison(&self.shared.checking);
         self.report_previous_swap();
         let updates_dir = self.shared.files.updates_dir();
         if let Ok(entries) = std::fs::read_dir(&updates_dir) {
@@ -141,7 +141,7 @@ impl Updater {
             self.set_staged(None);
             return;
         };
-        let staged_version = locked(&self.shared.settings)
+        let staged_version = lock_ignoring_poison(&self.shared.settings)
             .staged_version
             .as_deref()
             .and_then(Version::parse);

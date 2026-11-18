@@ -1,7 +1,8 @@
 //! The last snapshot the core emitted, shared between the actor and the Tauri side.
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
+use fs_util::lock_ignoring_poison;
 use protocol::Snapshot;
 
 #[derive(Clone, Default)]
@@ -9,14 +10,11 @@ pub(crate) struct SnapshotCache(Arc<Mutex<Snapshot>>);
 
 impl SnapshotCache {
     pub(crate) fn get(&self) -> Snapshot {
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .clone()
+        lock_ignoring_poison(&self.0).clone()
     }
 
     pub(crate) fn set(&self, snapshot: Snapshot) {
-        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = snapshot;
+        *lock_ignoring_poison(&self.0) = snapshot;
     }
 
     /// The shared cell, for the host's sweep of unused data stores.

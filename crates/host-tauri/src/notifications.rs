@@ -1,10 +1,10 @@
 //! Native notifications and the routing of their clicks back to the page that sent them.
 
 use std::collections::HashMap;
-use std::sync::PoisonError;
 
 use domain::NotificationReq;
 use domain::ports::{Notifier, PortResult};
+use fs_util::lock_ignoring_poison;
 use tauri::Runtime;
 use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
@@ -52,10 +52,7 @@ impl<R: Runtime> TauriHost<R> {
             else {
                 return;
             };
-            let target = notifications
-                .lock()
-                .unwrap_or_else(PoisonError::into_inner)
-                .target(native_id);
+            let target = lock_ignoring_poison(&notifications).target(native_id);
             if let Some((account, shim_id)) = target {
                 feed(Input::NotificationClicked { account, shim_id });
             }
@@ -70,11 +67,8 @@ impl<R: Runtime> TauriHost<R> {
 
 impl<R: Runtime> Notifier for TauriHost<R> {
     fn notify(&self, request: &NotificationReq) -> PortResult {
-        let native_id = self
-            .notifications
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .track(request.account, request.shim_id);
+        let native_id =
+            lock_ignoring_poison(&self.notifications).track(request.account, request.shim_id);
         let mut builder = self
             .app
             .notification()

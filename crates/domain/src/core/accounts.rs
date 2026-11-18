@@ -42,7 +42,7 @@ impl Core {
 
     /// The enabled accounts to load at startup and those that start asleep. The active
     /// account is always loaded: the user is looking at it.
-    fn split_startup_accounts(&self) -> (Vec<Uuid>, Vec<Uuid>) {
+    pub(super) fn split_startup_accounts(&self) -> (Vec<Uuid>, Vec<Uuid>) {
         let (asleep, to_load): (Vec<&Account>, Vec<&Account>) = self
             .persisted
             .accounts

@@ -4,6 +4,7 @@ use protocol::{AccountSettings, AppSettings, CustomService};
 use serde::{Deserialize, Serialize};
 
 use super::{Core, Effect, log_effects};
+use crate::model::Account;
 
 const FORMAT: &str = "atrium-settings";
 const VERSION: u32 = 1;
@@ -54,8 +55,9 @@ impl Core {
     }
 
     /// Replaces the settings, the custom services and all accounts (with their logins) by the
-    /// content of `json`. A file that cannot be read changes nothing; accounts of unknown
-    /// services or with invalid settings are skipped (logged).
+    /// content of `json`. The file is validated completely first: a file that cannot be read,
+    /// with an invalid custom service or with invalid account settings changes nothing.
+    /// Accounts of unknown services are skipped (logged).
     pub(super) fn import_settings(&mut self, json: &str) -> Vec<Effect> {
         if json.len() > MAX_IMPORT_BYTES {
             return self.rejected("import settings: file too large".into());
@@ -70,60 +72,119 @@ impl Core {
                 file.format, file.version
             ));
         }
-        let mut effects = vec![];
-        let old: Vec<_> = self.persisted.accounts.iter().map(|a| a.id).collect();
-        for account_id in old {
-            effects.extend(self.remove_account(account_id));
-        }
-        let custom = valid_custom_services(&file.custom_services, &mut effects);
-        self.persisted.custom_services = custom;
-        effects.extend(log_effects(self.rebuild_catalog()));
-        effects.extend(self.update_settings(file.settings));
-        let mut imported = 0;
-        for entry in file.accounts {
-            let before = self.persisted.accounts.len();
-            effects.extend(self.add_account(
+        let custom = match valid_custom_services(&file.custom_services) {
+            Ok(custom) => custom,
+            Err(error) => return self.rejected(format!("import settings: {error}")),
+        };
+        let problems = self.registry.rebuild(&custom);
+        let mut skipped = vec![];
+        let accounts = match self.imported_accounts(file.accounts, &mut skipped) {
+            Ok(accounts) if problems.is_empty() => accounts,
+            result => {
+                self.registry.rebuild(&self.persisted.custom_services);
+                let error = problems
+                    .into_iter()
+                    .next()
+                    .or_else(|| result.err())
+                    .unwrap_or_default();
+                return self.rejected(format!("import settings: {error}"));
+            }
+        };
+        self.replace_all(file.settings, custom, accounts, skipped)
+    }
+
+    /// The accounts of the file with normalised settings, in the catalog that is already
+    /// rebuilt; accounts of unknown services are left out (logged to `skipped`).
+    fn imported_accounts(
+        &mut self,
+        entries: Vec<FileAccount>,
+        skipped: &mut Vec<String>,
+    ) -> Result<Vec<Account>, String> {
+        let mut accounts = vec![];
+        for entry in entries {
+            if self.registry.get(&entry.service).is_none() {
+                skipped.push(format!(
+                    "import settings: skipped account of unknown service {}",
+                    entry.service
+                ));
+                continue;
+            }
+            let mut account = Account::new(
+                (self.new_account_id)(),
                 &entry.service,
                 &entry.settings.label,
-                entry.settings.instance.as_deref(),
-            ));
-            let Some(account_id) = self
-                .persisted
-                .accounts
-                .get(before)
-                .map(|account| account.id)
-            else {
-                continue;
-            };
-            effects.extend(self.update_account(account_id, entry.settings));
-            imported += 1;
+                None,
+            );
+            let (settings, problems) =
+                self.normalized_account_settings(&account, entry.settings)
+                    .map_err(|error| format!("account of {}: {error}", entry.service))?;
+            skipped.extend(
+                problems
+                    .into_iter()
+                    .map(|problem| format!("import settings: {}: {problem}", entry.service)),
+            );
+            account.apply_settings(settings);
+            accounts.push(account);
+        }
+        Ok(accounts)
+    }
+
+    /// Applies the validated import in one step: persists and emits only the final state, and
+    /// creates the views of the new accounts with their final settings.
+    fn replace_all(
+        &mut self,
+        settings: AppSettings,
+        custom: Vec<CustomService>,
+        accounts: Vec<Account>,
+        skipped: Vec<String>,
+    ) -> Vec<Effect> {
+        let mut effects = log_effects(skipped);
+        for account in std::mem::take(&mut self.persisted.accounts) {
+            self.unread.forget(account.id);
+            self.last_activity_ms.remove(&account.id);
+            self.favicon_attempts.remove(&account.id);
+            effects.extend(self.unload_view(account.id));
+            effects.push(Effect::DeleteProfile {
+                store_id: account.store_id(),
+            });
+        }
+        let imported = accounts.len();
+        self.persisted.accounts = accounts;
+        self.persisted.custom_services = custom;
+        self.active = self.nearest_enabled_account(0, None);
+        let mut applied = self.update_settings(settings);
+        applied.retain(|effect| !matches!(effect, Effect::Persist(_) | Effect::EmitSnapshot(_)));
+        effects.extend(applied);
+        if self.started {
+            let (to_load, _asleep) = self.split_startup_accounts();
+            for account_id in to_load {
+                let visible = self.is_visible(account_id);
+                effects.extend(self.load_view(account_id, visible));
+            }
+            effects.extend(self.fetch_missing_simple_icons());
         }
         effects.push(Effect::Log(format!(
             "imported settings: {imported} account(s)"
         )));
         effects.push(self.persist());
+        effects.extend(self.dock_badge());
         effects.push(self.emit());
         effects
     }
 }
 
-/// The custom services that pass validation and have a unique id; the others are logged.
-fn valid_custom_services(
-    services: &[CustomService],
-    effects: &mut Vec<Effect>,
-) -> Vec<CustomService> {
+/// The custom services after validation; an invalid or duplicate one is an error.
+fn valid_custom_services(services: &[CustomService]) -> Result<Vec<CustomService>, String> {
     let mut custom: Vec<CustomService> = vec![];
     for service in services {
-        match crate::catalog::normalize_custom(service) {
-            Ok(service) if !service.id.is_empty() && custom.iter().all(|c| c.id != service.id) => {
-                custom.push(service);
-            }
-            Ok(service) => effects.push(Effect::Log(format!(
-                "import settings: skipped custom service {:?} (missing or duplicate id)",
+        let service = crate::catalog::normalize_custom(service)?;
+        if service.id.is_empty() || custom.iter().any(|c| c.id == service.id) {
+            return Err(format!(
+                "custom service {:?} has a missing or duplicate id",
                 service.name
-            ))),
-            Err(error) => effects.push(Effect::Log(format!("import settings: {error}"))),
+            ));
         }
+        custom.push(service);
     }
-    custom
+    Ok(custom)
 }

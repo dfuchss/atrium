@@ -103,3 +103,48 @@ fn accounts_of_unknown_services_are_skipped() {
     assert_eq!(snapshot.accounts.len(), 1);
     assert_eq!(snapshot.accounts[0].settings.label, "S");
 }
+
+fn assert_unchanged(effects: &[Effect], core: &Core, json: &str) {
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::DeleteProfile { .. } | Effect::Persist(_))),
+        "{json}"
+    );
+    assert_eq!(
+        last_snapshot(effects).accounts.len(),
+        core.persisted.accounts.len()
+    );
+}
+
+#[test]
+fn invalid_custom_service_or_account_changes_nothing() {
+    let (mut core, _) = started(vec![account(1, "slack", "A")]);
+    for json in [
+        r##"{"format":"atrium-settings","version":1,"custom_services":[
+            {"id":"","name":"Bad","url":"not a url","color":"#123456"}],
+            "accounts":[{"service":"slack","label":"S"}]}"##,
+        r##"{"format":"atrium-settings","version":1,"custom_services":[
+            {"id":"","name":"Bad","url":"https://x.example.org/","color":"#123456","title_regex":"("}]}"##,
+        r#"{"format":"atrium-settings","version":1,
+            "accounts":[{"service":"slack","label":"S"},{"service":"mastodon","label":"M","instance":"a b"}]}"#,
+    ] {
+        let effects = core.handle(Input::Ui(UiCommand::ImportSettings { json: json.into() }));
+        assert_unchanged(&effects, &core, json);
+    }
+    assert_eq!(core.persisted.custom_services.len(), 0);
+}
+
+#[test]
+fn import_persists_and_emits_once_and_creates_disabled_accounts_without_view() {
+    let json = r#"{"format":"atrium-settings","version":1,"accounts":[
+        {"service":"slack","label":"A","enabled":true},
+        {"service":"slack","label":"B","enabled":false},
+        {"service":"discord","label":"C"}]}"#;
+    let (mut core, _) = started(vec![account(7, "mastodon", "Old")]);
+    let effects = core.handle(Input::Ui(UiCommand::ImportSettings { json: json.into() }));
+    let count = |f: fn(&Effect) -> bool| effects.iter().filter(|e| f(e)).count();
+    assert_eq!(count(|e| matches!(e, Effect::Persist(_))), 1);
+    assert_eq!(count(|e| matches!(e, Effect::EmitSnapshot(_))), 1);
+    assert_eq!(count(|e| matches!(e, Effect::CreateView { .. })), 2);
+}

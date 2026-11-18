@@ -180,7 +180,8 @@ fn symlinks_below(root: &Path) -> std::io::Result<Vec<PathBuf>> {
 pub(crate) fn extract(zip: &Path, target: &Path) -> Result<(), String> {
     let bytes = std::fs::read(zip).map_err(|error| format!("cannot read the archive: {error}"))?;
     check_entries(&list_entries(&bytes)?)?;
-    std::fs::create_dir_all(target).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(target)
+        .map_err(|error| format!("cannot create {}: {error}", target.display()))?;
     let output = Command::new("/usr/bin/ditto")
         .arg("-x")
         .arg("-k")
@@ -199,8 +200,9 @@ pub(crate) fn extract(zip: &Path, target: &Path) -> Result<(), String> {
 
 /// Refuses any symbolic link below `root` that leads outside of it.
 fn check_links(root: &Path) -> Result<(), String> {
-    let root = std::fs::canonicalize(root).map_err(|error| error.to_string())?;
-    let links = symlinks_below(&root).map_err(|error| error.to_string())?;
+    let failed = |error| format!("cannot look for links below {}: {error}", root.display());
+    let root = std::fs::canonicalize(root).map_err(failed)?;
+    let links = symlinks_below(&root).map_err(failed)?;
     match links.iter().find(|link| !link_stays_inside(&root, link)) {
         Some(link) => Err(format!(
             "refusing symbolic link {} that leaves the archive",

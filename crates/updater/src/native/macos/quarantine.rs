@@ -19,10 +19,9 @@ pub(crate) fn remove_quarantine(root: &Path) -> Result<(), String> {
             .map_err(|error| format!("cannot inspect {}: {error}", path.display()))?
             .is_dir();
         if is_dir {
-            let entries = std::fs::read_dir(&path)
-                .map_err(|error| format!("cannot list {}: {error}", path.display()))?;
-            for entry in entries {
-                pending.push(entry.map_err(|error| error.to_string())?.path());
+            let failed = |error| format!("cannot list {}: {error}", path.display());
+            for entry in std::fs::read_dir(&path).map_err(failed)? {
+                pending.push(entry.map_err(failed)?.path());
             }
         }
     }

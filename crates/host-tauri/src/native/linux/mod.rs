@@ -69,8 +69,8 @@ pub(crate) fn set_app_id(identifier: &str) {
 /// Tells the running KDE programs (Plasma's app menu, `KWin`) that icons were added or removed:
 /// they read the icon folders once and do not see a size folder created later. Elsewhere nobody
 /// listens; GTK notices new icons by itself.
-pub(crate) fn announce_new_icons() -> Result<(), String> {
-    emit_icon_changed().map_err(|error| error.to_string())
+pub(crate) fn announce_new_icons() -> std::io::Result<()> {
+    emit_icon_changed().map_err(std::io::Error::other)
 }
 
 fn emit_icon_changed() -> zbus::Result<()> {

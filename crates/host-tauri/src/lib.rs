@@ -160,8 +160,8 @@ pub fn guard_single_instance<R: Runtime>(
 }
 
 /// Tells the desktop that Atrium added or removed icons of its desktop entry (Linux: KDE does
-/// not notice new icon size folders by itself); the error, if any, as text for the log.
-pub fn announce_new_icons() -> Result<(), String> {
+/// not notice new icon size folders by itself); a failure is only worth logging.
+pub fn announce_new_icons() -> std::io::Result<()> {
     native::announce_new_icons()
 }
 

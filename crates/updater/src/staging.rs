@@ -11,7 +11,7 @@ use sha2::{Digest as _, Sha256};
 
 use crate::native;
 use crate::release::{Release, SHA256SUMS, parse_sha256sums};
-use crate::source::ReleaseSource;
+use crate::source::{Download, ReleaseSource};
 
 const MAX_SUMS_BYTES: u64 = 64 * 1024;
 const MAX_ASSET_BYTES: u64 = 512 * 1024 * 1024;
@@ -41,7 +41,8 @@ pub(crate) fn stage(
 
     let dir = request.updates_dir.join(release.version.tag());
     remove_if_present(&dir)?;
-    std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("cannot create {}: {error}", dir.display()))?;
     let downloaded = dir.join(request.asset_name);
     let actual = download(source, asset_url, &downloaded, on_progress)?;
     if !actual.eq_ignore_ascii_case(&expected) {
@@ -85,21 +86,28 @@ fn download(
 ) -> Result<String, String> {
     let mut download = source.open(url, MAX_ASSET_BYTES)?;
     let partial = target.with_extension("part");
-    let mut file = File::create(&partial).map_err(|error| error.to_string())?;
+    save_hashed(&mut download, &partial, on_progress)
+        .and_then(|digest| std::fs::rename(&partial, target).map(|()| digest))
+        .map_err(|error| format!("download to {} failed: {error}", target.display()))
+}
+
+/// Writes `download` to the new file `to`, synced, and returns the SHA-256 hex digest.
+fn save_hashed(
+    download: &mut Download,
+    to: &Path,
+    on_progress: &mut dyn FnMut(Option<u8>),
+) -> std::io::Result<String> {
+    let mut file = File::create(to)?;
     let mut digest = Sha256::new();
     let mut buffer = vec![0; BUFFER_BYTES];
     let (mut received, mut reported) = (0u64, None);
     on_progress(percent(0, download.length));
     loop {
-        let count = download
-            .reader
-            .read(&mut buffer)
-            .map_err(|error| format!("download failed: {error}"))?;
+        let count = download.reader.read(&mut buffer)?;
         if count == 0 {
             break;
         }
-        file.write_all(&buffer[..count])
-            .map_err(|error| error.to_string())?;
+        file.write_all(&buffer[..count])?;
         digest.update(&buffer[..count]);
         received += count as u64;
         let progress = percent(received, download.length);
@@ -108,8 +116,7 @@ fn download(
             on_progress(progress);
         }
     }
-    file.sync_all().map_err(|error| error.to_string())?;
-    std::fs::rename(&partial, target).map_err(|error| error.to_string())?;
+    file.sync_all()?;
     Ok(hex(&digest.finalize()))
 }
 

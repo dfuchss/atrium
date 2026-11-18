@@ -115,7 +115,7 @@ fn _platform_interface<R: Runtime, M: Manager<R>>() {
     let _: fn(&AppHandle<R>, &str, &str) -> tauri::Result<()> = show_warning;
     let _: fn(&Logger, fn()) = observe_resume;
     let _: fn(Builder<R>, &'static str) -> Builder<R> = guard_single_instance;
-    let _: fn() -> Result<(), String> = announce_new_icons;
+    let _: fn() -> std::io::Result<()> = announce_new_icons;
     let _: &str = NOTIFICATION_SOUND;
     let _: (&[u8], bool, bool) = (TRAY_ICON, TRAY_ICON_IS_TEMPLATE, TRAY_MENU_REPLACEABLE);
     // The keyboard shortcuts: carried by the app menu if there is one, else mapped to keys.

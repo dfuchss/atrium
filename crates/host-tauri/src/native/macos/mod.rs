@@ -29,7 +29,7 @@ pub(crate) fn set_app_id(_identifier: &str) {}
 
 /// Nothing to announce: Atrium installs no icons on macOS.
 #[expect(clippy::unnecessary_wraps, reason = "same signature as on Linux")]
-pub(crate) fn announce_new_icons() -> Result<(), String> {
+pub(crate) fn announce_new_icons() -> std::io::Result<()> {
     Ok(())
 }
 

@@ -234,7 +234,7 @@ fn setup(
     feed: &Feed,
     inputs: Receiver<Input>,
     snapshot_cache: &SnapshotCache,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> tauri::Result<()> {
     let host = create_host(app, dev, feed.clone());
     let version = app.package_info().version.to_string();
     host.log(&format!("---- Atrium {version} starting ----"));
@@ -367,7 +367,7 @@ fn main() {
     // A view whose web content process died is reloaded through the core.
     let builder = host_tauri::register_crash_hook(builder, &crash_feed);
     let app = builder
-        .setup(move |app| setup(app, &dev, &setup_feed, inputs, &setup_cache))
+        .setup(move |app| Ok(setup(app, &dev, &setup_feed, inputs, &setup_cache)?))
         .build(context)
         .expect("error while building Atrium");
     app.run(|app, event| match event {

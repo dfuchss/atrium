@@ -66,7 +66,7 @@ Below them, *Service definition files* lists the TOML files of the services fold
 
 ### Dock badge
 
-Called *Launcher badge* on Linux and *Taskbar badge* on Windows. *Show*: *Unread count and dot* (a dot when only indirect unread exists), *Unread count only* or *Off*. Accounts can be left out in their settings.
+Called *Launcher badge* on Linux and *Taskbar badge* on Windows. *Show*: *Unread count and dot* (a dot when only indirect unread exists), *Unread count only* or *Off*. Services can override the mode in their own settings, or be left out with *Off*.
 
 ### Links
 

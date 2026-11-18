@@ -122,7 +122,7 @@ pub(super) fn DockTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     view! {
         <h2>{platform_texts::texts().badge_tab}</h2>
         <div class="form">
-            <Row label="Show" hint="Accounts can be excluded individually in their settings (Accounts tab).">
+            <Row label="Show" hint="Services can override this in their own settings (Accounts tab).">
                 {DockBadgeMode::ALL.map(|mode| mode_option(mode, dock_badge_label(mode)))}
             </Row>
         </div>

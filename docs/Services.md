@@ -16,11 +16,13 @@ The built-in services are defined in [`services/`](https://github.com/<<REPO>>/t
 
 "Title `(n)`" means a page title that starts with the count in brackets, e.g. `(3) WhatsApp`. "Camera and microphone" is the service's default; each account can change it, and it is granted only while the page shows one of the service's own hosts.
 
+Unread has two levels. Urgent unread (mentions, direct messages) shows in red, as a count or a dot (see [Usage](Usage#general)). Normal unread (new messages in a channel) shows as a white dot without a count, or nothing with *Urgent only*. Discord and Slack report both levels. Element counts every message it notifies about as urgent, with mentions and ordinary messages together, so *Urgent only* also shows ordinary Element messages; only Element's dots show as normal unread. The other services report one count only; Atrium shows it as urgent.
+
 Every built-in service presents the user agent of a desktop WebKit browser (the `webkit` preset); on Windows, new accounts present Chrome's instead (see [Windows](Windows)). The user agent can be changed per account.
 
 ## Notes per service
 
-- **Element:** the Home button's badge counts messages, while the title counts rooms. With *Show all rooms in Home* off, Home counts only rooms outside any space; Atrium then adds the badges of the top-level spaces you joined, and the count is at least the title's room count. Dots on Home or a space show as an indirect unread dot. At page start, Atrium removes Element's single-instance session lock from the page's storage: an account has only one Element page, so a lock found then is stale, left behind when Atrium was quit without unloading the page.
+- **Element:** Atrium does not tell mentions from ordinary messages in Element's numeric badges, so the whole count is urgent. The Home button's badge counts messages, while the title counts rooms. With *Show all rooms in Home* off, Home counts only rooms outside any space; Atrium then adds the badges of the top-level spaces you joined, and the count is at least the title's room count. Dots on Home or a space show as an indirect unread dot. At page start, Atrium removes Element's single-instance session lock from the page's storage: an account has only one Element page, so a lock found then is stale, left behind when Atrium was quit without unloading the page.
 - **Microsoft Teams** rejects the web view's default user agent and needs the one of a desktop browser. Its own hosts also cover the Microsoft sign-in, Office, SharePoint and Live hosts.
 - **Bluesky, Slack and Teams:** the title formats are taken from the sites and not yet verified in every case; if the count stays empty, a debug build logs the titles with `ATRIUM_LOG_TITLES` (see [Debug options](Debug-Options)).
 

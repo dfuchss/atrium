@@ -168,7 +168,7 @@ mod tests {
                 && app.browser.as_deref() == Some("Firefox")
         );
         assert_eq!(app.link_target, protocol::LinkTarget::SystemBrowser);
-        assert!(app.show_tray);
+        assert!(app.show_tray && app.badge_when_muted);
         assert_eq!(app.after_wake, protocol::AfterWake::Check);
         assert!(p.custom_services.is_empty());
         assert!(

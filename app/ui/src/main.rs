@@ -61,6 +61,7 @@ fn initial_ui_state() -> (UiState, bool) {
         edit_index: RwSignal::new(query_param("edit").and_then(|index| index.parse().ok())),
         add_custom: RwSignal::new(query_param("addcustom").is_some_and(|value| value != "0")),
         edit_service: RwSignal::new(query_param("editservice").filter(|name| !name.is_empty())),
+        edit_account: RwSignal::new(None),
     };
     (state, dialog.is_some())
 }
@@ -107,6 +108,12 @@ fn App() -> impl IntoView {
     // Only notifies when the dialog flag actually flips, not on every snapshot.
     let dialog_open = Memo::new(move |_| snapshot.with(|snapshot| snapshot.dialog_open));
     let variables = Memo::new(move |_| snapshot.with(layout_variables));
+    Effect::new(move || {
+        if let Some(id) = snapshot.with(|snapshot| snapshot.edit_account) {
+            ui_state.tab.set(Tab::Accounts);
+            ui_state.edit_account.set(Some(id));
+        }
+    });
     view! {
         <div class=move || root_class(&snapshot.get()) style=move || variables.get()>
             <Sidebar snapshot=snapshot />

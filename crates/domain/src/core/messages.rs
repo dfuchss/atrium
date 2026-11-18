@@ -113,6 +113,30 @@ pub enum MenuAction {
     ToggleDnd,
 }
 
+/// Commands of the menu on an account's sidebar icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccountMenuAction {
+    Sleep,
+    WakeUp,
+    Settings,
+    EnableNotifications,
+    DisableNotifications,
+    Reload,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AccountMenuItem {
+    pub action: AccountMenuAction,
+    pub enabled: bool,
+}
+
+/// The menu on an account's sidebar icon, items in display order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountMenu {
+    pub account: Uuid,
+    pub items: Vec<AccountMenuItem>,
+}
+
 /// One enabled account as shown in the app menu ("Accounts") and the tray menu.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MenuAccount {
@@ -143,6 +167,11 @@ pub enum Input {
     Ui(UiCommand),
     /// Native app/tray menu command.
     Menu(MenuAction),
+    /// Item of an account's menu ([`Effect::ShowAccountMenu`]).
+    AccountMenu {
+        account: Uuid,
+        action: AccountMenuAction,
+    },
     /// Native title-changed hook of the account's view.
     TitleChanged {
         account: Uuid,
@@ -303,6 +332,9 @@ pub enum Effect {
     SetDockBadge(DockBadge),
     /// Rebuild/update the app menu and tray from the model.
     UpdateMenus(MenuModel),
+    /// Pop up the account's menu at the mouse pointer; a click comes back as
+    /// [`Input::AccountMenu`].
+    ShowAccountMenu(AccountMenu),
     /// Open `url` in `browser` (application name, e.g. "Firefox"), or the system default.
     /// Only http(s)/mailto URLs (see [`crate::security::opener_url_allowed`]).
     OpenExternal {

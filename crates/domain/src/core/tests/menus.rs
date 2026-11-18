@@ -160,3 +160,156 @@ fn menus_follow_accounts_unread_and_settings() {
         "nothing before start"
     );
 }
+
+fn account_menu(core: &mut Core, n: u128) -> Vec<(AccountMenuAction, bool)> {
+    match core
+        .handle(Input::Ui(UiCommand::ShowAccountMenu { account: id(n) }))
+        .as_slice()
+    {
+        [Effect::ShowAccountMenu(menu)] => {
+            assert_eq!(menu.account, id(n));
+            menu.items
+                .iter()
+                .map(|item| (item.action, item.enabled))
+                .collect()
+        }
+        effects => panic!("no account menu: {effects:?}"),
+    }
+}
+
+#[test]
+fn account_menu_items_follow_the_account_state() {
+    use AccountMenuAction::{DisableNotifications, Reload, Settings, Sleep, WakeUp};
+    let mut disabled = account(3, "slack", "C");
+    disabled.enabled = false;
+    let (mut core, _) = started(vec![
+        account(1, "slack", "A"),
+        account(2, "slack", "B"),
+        disabled,
+    ]);
+    assert_eq!(
+        account_menu(&mut core, 1),
+        [
+            (Sleep, false),
+            (Settings, true),
+            (DisableNotifications, true),
+            (Reload, true)
+        ],
+        "the shown account stays awake"
+    );
+    assert_eq!(
+        account_menu(&mut core, 2),
+        [
+            (Sleep, true),
+            (Settings, true),
+            (DisableNotifications, true),
+            (Reload, true)
+        ]
+    );
+    assert_eq!(
+        account_menu(&mut core, 3),
+        [
+            (WakeUp, false),
+            (Settings, true),
+            (DisableNotifications, true),
+            (Reload, false)
+        ]
+    );
+    core.handle(Input::Ui(UiCommand::Hibernate { account: id(2) }));
+    assert_eq!(
+        account_menu(&mut core, 2),
+        [
+            (WakeUp, true),
+            (Settings, true),
+            (DisableNotifications, true),
+            (Reload, false)
+        ]
+    );
+    assert!(matches!(
+        core.handle(Input::Ui(UiCommand::ShowAccountMenu { account: id(9) }))
+            .as_slice(),
+        [Effect::Log(_)]
+    ));
+}
+
+#[test]
+fn account_menu_switches_notifications() {
+    let (mut core, _) = started(vec![account(1, "slack", "A")]);
+    let menu = |action| Input::AccountMenu {
+        account: id(1),
+        action,
+    };
+    let effects = core.handle(menu(AccountMenuAction::DisableNotifications));
+    assert!(last_snapshot(&effects).accounts[0].settings.muted);
+    assert!(
+        effects.iter().any(
+            |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].muted)
+        )
+    );
+    assert_eq!(
+        account_menu(&mut core, 1)[2],
+        (AccountMenuAction::EnableNotifications, true)
+    );
+    let effects = core.handle(menu(AccountMenuAction::EnableNotifications));
+    assert!(!last_snapshot(&effects).accounts[0].settings.muted);
+}
+
+#[test]
+fn account_menu_sleep_and_wake_up() {
+    let (mut core, _) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
+    let menu = |action| Input::AccountMenu {
+        account: id(2),
+        action,
+    };
+    let effects = core.handle(menu(AccountMenuAction::Sleep));
+    assert_eq!(destroys(&effects), vec![id(2)]);
+    assert!(last_snapshot(&effects).accounts[1].hibernated);
+
+    let effects = core.handle(menu(AccountMenuAction::WakeUp));
+    let created = views(&effects);
+    assert_eq!(created.len(), 1);
+    assert_eq!(created[0].0.account, id(2));
+    assert!(!created[0].1, "woken in the background");
+    let snapshot = last_snapshot(&effects);
+    assert!(!snapshot.accounts[1].hibernated);
+    assert_eq!(snapshot.active, Some(id(1)));
+
+    assert_eq!(
+        logs(&core.handle(menu(AccountMenuAction::WakeUp))),
+        vec![format!("wake up: account {} is disabled or awake", id(2))]
+    );
+    update_account(&mut core, 2, |settings| settings.enabled = false);
+    assert!(views(&core.handle(menu(AccountMenuAction::WakeUp))).is_empty());
+}
+
+#[test]
+fn account_menu_settings_and_reload() {
+    let (mut core, _) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
+    let effects = core.handle(Input::AccountMenu {
+        account: id(2),
+        action: AccountMenuAction::Settings,
+    });
+    let snapshot = last_snapshot(&effects);
+    assert!(snapshot.dialog_open);
+    assert_eq!(snapshot.edit_account, Some(id(2)));
+    let effects = core.handle(Input::Ui(UiCommand::SetDialog { open: false }));
+    assert_eq!(
+        last_snapshot(&effects).edit_account,
+        None,
+        "asked only once"
+    );
+
+    let effects = core.handle(Input::AccountMenu {
+        account: id(2),
+        action: AccountMenuAction::Reload,
+    });
+    assert!(has(&effects, &Effect::Reload(id(2))));
+    assert!(matches!(
+        core.handle(Input::AccountMenu {
+            account: id(9),
+            action: AccountMenuAction::Settings,
+        })
+        .as_slice(),
+        [Effect::Log(_)]
+    ));
+}

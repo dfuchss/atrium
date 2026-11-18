@@ -391,6 +391,18 @@ fn finished_download_notifies_without_page_click() {
     assert!(notifies(&downloaded(&mut core)).is_empty());
 }
 
+#[test]
+fn finished_download_of_muted_account_is_silent() {
+    let mut a = account(1, "slack", "KIT");
+    a.muted = true;
+    let (mut core, _) = started(vec![a]);
+    let effects = core.handle(Input::DownloadFinished {
+        account: id(1),
+        file_name: "report.pdf".into(),
+    });
+    assert!(notifies(&effects).is_empty());
+}
+
 /// Poll result with `count` notifications titled `title` and bodied `body`.
 fn poll_with(count: usize, title: &str, body: &str) -> String {
     let queue: Vec<serde_json::Value> = (1..=count)

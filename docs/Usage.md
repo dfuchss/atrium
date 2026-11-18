@@ -6,6 +6,8 @@ To install Atrium, see [macOS](macOS#install), [Linux](Linux#install) or [Window
 
 **Add accounts** with the **+** button at the bottom of the sidebar: choose the service, a label and, for services such as Element or Mastodon, the instance (the server host). The settings dialog stays open, so you can add several in a row. Drag icons in the sidebar to reorder them, or use *Move up* / *Move down* in the account list.
 
+**Right-click** a service icon in the sidebar for its menu: *Sleep* or *Wake Up*, *Settings…*, *Enable Notifications* or *Disable Notifications*, and *Reload*. The service on screen cannot be put to sleep.
+
 Each account in Settings → Accounts has these actions: *Edit*, *Reload*, *Remove* (asks to confirm and deletes the account's web data), *Open in browser*, *Back*, *Forward*, *Sleep now* (unloads the view to save memory) and *Clear website data…* (logs you out of the service).
 
 ## Settings
@@ -47,6 +49,7 @@ Below them, *Service definition files* lists the TOML files of the services fold
 | Setting | What it does |
 |---|---|
 | Sidebar icon size | Small, medium or large icons; the sidebar width follows. |
+| Sidebar badges | *Count*, *Dot* or *Urgent only*. Mentions and direct messages show red, with their number or as a dot; other unread messages show a white dot. *Urgent only* shows the red number and hides the white dot. |
 | Appearance | *Auto*, *Light* or *Dark*. Auto follows the system; service pages follow if they support it. |
 | Launch at login | Start Atrium when you log in. |
 | Start hidden | Start without showing the window. |
@@ -58,7 +61,7 @@ Below them, *Service definition files* lists the TOML files of the services fold
 
 ### Notifications
 
-*Do not disturb* suppresses all notifications. *Message preview* shows the message text (otherwise only "New message"), *Play sound* plays the notification sound.
+*Do not disturb* suppresses all notifications. *Message preview* shows the message text (otherwise only "New message"), *Play sound* plays the notification sound. *Badge when muted* keeps or hides the sidebar badge of accounts with notifications off.
 
 ### Dock badge
 

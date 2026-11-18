@@ -329,6 +329,17 @@ mod tests {
     }
 
     #[test]
+    fn muted_account_shows_badge_only_if_kept_when_muted() {
+        let mut account = Account::new(Uuid::from_u128(1), "slack", "S", None);
+        assert!(account.settings().shows_badge(false));
+        account.muted = true;
+        assert!(account.settings().shows_badge(true));
+        assert!(!account.settings().shows_badge(false));
+        account.show_badge = false;
+        assert!(!account.settings().shows_badge(true));
+    }
+
+    #[test]
     fn apply_settings_round_trips_and_drops_stale_glyph() {
         let mut account = Account::new(Uuid::from_u128(1), "slack", "Work", None);
         account.simple_icon = Some("slack".into());

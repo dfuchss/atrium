@@ -10,6 +10,7 @@ mod service_files;
 
 use leptos::prelude::*;
 use protocol::{AppSettings, Snapshot, UiCommand};
+use uuid::Uuid;
 
 use crate::commands::{send_command, update_settings};
 use crate::platform_texts::{self, Texts};
@@ -78,6 +79,9 @@ pub(crate) struct UiState {
     /// Screenshot aid (`?editservice=<file>`): service definition file opened in the editor
     /// initially (consumed once).
     pub(crate) edit_service: RwSignal<Option<String>>,
+    /// Account whose edit form opens on the accounts tab (account menu "Settings…"; consumed
+    /// once).
+    pub(crate) edit_account: RwSignal<Option<Uuid>>,
 }
 
 pub(crate) fn open_dialog(tab: Tab, focus_add: bool) {

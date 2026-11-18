@@ -31,8 +31,8 @@ use crate::throttle::RateLimiter;
 
 pub use icons::{normalize_slug, simple_icon_url};
 pub use messages::{
-    Bounds, DockBadge, Effect, Input, MenuAccount, MenuAction, MenuModel, NotificationReq,
-    SimpleIconResult, ViewPolicy, ViewSpec,
+    AccountMenu, AccountMenuAction, AccountMenuItem, Bounds, DockBadge, Effect, Input, MenuAccount,
+    MenuAction, MenuModel, NotificationReq, SimpleIconResult, ViewPolicy, ViewSpec,
 };
 pub use scripts::ICON_SCRIPT;
 pub use settings::ZOOM_STEPS;
@@ -61,6 +61,8 @@ pub struct Core {
     user_agent_platform: String,
     active: Option<Uuid>,
     dialog_open: bool,
+    /// [`protocol::Snapshot::edit_account`] of the snapshot being emitted.
+    edit_account: Option<Uuid>,
     window: WindowSize,
     started: bool,
     unread: UnreadTracker,
@@ -123,6 +125,7 @@ impl Core {
             user_agent_platform,
             active,
             dialog_open: false,
+            edit_account: None,
             window: WindowSize::default(),
             started: false,
             unread: UnreadTracker::default(),
@@ -174,6 +177,7 @@ impl Core {
             Input::Started { width, height } => self.started(WindowSize { width, height }),
             Input::Ui(command) => self.ui(command),
             Input::Menu(action) => self.menu(action),
+            Input::AccountMenu { account, action } => self.account_menu(account, action),
             Input::TitleChanged { account, title } => self.title_changed(account, &title),
             Input::PollResult { account, raw } => {
                 let alive = self.wake_check_answered(account, &raw);
@@ -235,6 +239,7 @@ impl Core {
             UiCommand::OpenInBrowser { account } => self.open_in_browser(account),
             UiCommand::ClearData { account } => self.clear_data(account),
             UiCommand::Hibernate { account } => self.hibernate(account),
+            UiCommand::ShowAccountMenu { account } => self.show_account_menu(account),
             UiCommand::RefreshIcon { account } => self.refresh_icon(account),
             UiCommand::AddCustomService { service } => self.add_custom_service(&service),
             UiCommand::UpdateCustomService { service } => self.update_custom_service(&service),

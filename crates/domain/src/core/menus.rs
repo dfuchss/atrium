@@ -1,9 +1,12 @@
-//! Native app and tray menus: their commands and their content.
+//! Native app, tray and account menus: their commands and their content.
 
 use uuid::Uuid;
 
 use super::settings::ZOOM_STEPS;
-use super::{Core, DockBadge, Effect, MenuAccount, MenuAction, MenuModel};
+use super::{
+    AccountMenu, AccountMenuAction, AccountMenuItem, Core, DockBadge, Effect, MenuAccount,
+    MenuAction, MenuModel,
+};
 
 /// Tolerance when looking for the next zoom step, so 0.67 counts as the 0.67 step.
 const ZOOM_STEP_TOLERANCE: f64 = 1e-3;
@@ -22,6 +25,78 @@ impl Core {
             (MenuAction::ZoomOut, Some(active)) => self.step_zoom(active, zoom_out_step),
             (MenuAction::ZoomReset, Some(active)) => self.set_zoom(active, 1.0),
         }
+    }
+
+    /// The menu of an account's sidebar icon: Sleep for a loaded background account (the
+    /// shown one stays awake), otherwise Wake Up for an enabled one; the notification item
+    /// switches the account's mute.
+    pub(super) fn show_account_menu(&self, account_id: Uuid) -> Vec<Effect> {
+        let Some(account) = self.account(account_id) else {
+            return vec![Self::unknown(account_id)];
+        };
+        let loaded = self.is_loaded(account_id);
+        let item = |action, enabled| AccountMenuItem { action, enabled };
+        let first = if loaded {
+            item(AccountMenuAction::Sleep, self.active != Some(account_id))
+        } else {
+            item(AccountMenuAction::WakeUp, account.enabled)
+        };
+        let notifications = if account.muted {
+            AccountMenuAction::EnableNotifications
+        } else {
+            AccountMenuAction::DisableNotifications
+        };
+        vec![Effect::ShowAccountMenu(AccountMenu {
+            account: account_id,
+            items: vec![
+                first,
+                item(AccountMenuAction::Settings, true),
+                item(notifications, true),
+                item(AccountMenuAction::Reload, loaded),
+            ],
+        })]
+    }
+
+    pub(super) fn account_menu(
+        &mut self,
+        account_id: Uuid,
+        action: AccountMenuAction,
+    ) -> Vec<Effect> {
+        match action {
+            AccountMenuAction::Sleep => self.hibernate(account_id),
+            AccountMenuAction::WakeUp => self.wake_up(account_id),
+            AccountMenuAction::Settings => self.open_account_settings(account_id),
+            AccountMenuAction::EnableNotifications => self.set_muted(account_id, false),
+            AccountMenuAction::DisableNotifications => self.set_muted(account_id, true),
+            AccountMenuAction::Reload => self.reload(account_id),
+        }
+    }
+
+    /// Loads a sleeping account's view in the background; selecting it is still up to the user.
+    fn wake_up(&mut self, account_id: Uuid) -> Vec<Effect> {
+        let Some(account) = self.account(account_id) else {
+            return vec![Self::unknown(account_id)];
+        };
+        if !account.enabled || self.is_loaded(account_id) {
+            return vec![Effect::Log(format!(
+                "wake up: account {account_id} is disabled or awake"
+            ))];
+        }
+        let mut effects = self.load_view(account_id, self.is_visible(account_id));
+        self.record_activity(account_id);
+        effects.push(self.emit());
+        effects
+    }
+
+    /// Opens the settings dialog with the account's settings.
+    fn open_account_settings(&mut self, account_id: Uuid) -> Vec<Effect> {
+        if !self.has_account(account_id) {
+            return vec![Self::unknown(account_id)];
+        }
+        self.edit_account = Some(account_id);
+        let effects = self.set_dialog(true);
+        self.edit_account = None;
+        effects
     }
 
     /// Applies the zoom step `next` picks for the current zoom; none at the end of the scale.

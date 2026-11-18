@@ -1,7 +1,9 @@
 //! Tabs of the app-wide settings: general, notifications, badge, links and about.
 
 use leptos::prelude::*;
-use protocol::{AfterWake, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand};
+use protocol::{
+    AfterWake, BadgeStyle, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand,
+};
 
 use super::app_toggle;
 use super::browser_row::BrowserRow;
@@ -38,6 +40,7 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
                     {size_button(IconSize::Large, "Large")}
                 </div>
             </Row>
+            <BadgeRow snapshot=snapshot />
             <Row label="Appearance" hint=texts.theme_hint>
                 <div class="btn-group seg">
                     {theme_button(Theme::Auto, "Auto")}
@@ -68,6 +71,25 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
 }
 
 #[component]
+fn BadgeRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
+    let badge = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_style));
+    let badge_button = move |value: BadgeStyle, label: &'static str| {
+        view! {
+            <button class="btn" class:on=move || badge.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.badge_style = value)>{label}</button>
+        }
+    };
+    view! {
+        <Row label="Sidebar badges" hint="Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
+            <div class="btn-group seg">
+                {badge_button(BadgeStyle::Count, "Count")}
+                {badge_button(BadgeStyle::Dot, "Dot")}
+                {badge_button(BadgeStyle::UrgentOnly, "Urgent only")}
+            </div>
+        </Row>
+    }
+}
+
+#[component]
 pub(super) fn NotificationsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     view! {
         <h2>"Notifications"</h2>
@@ -75,6 +97,7 @@ pub(super) fn NotificationsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView 
             {app_toggle(snapshot, "Do not disturb", "Suppress all notifications.", |settings| settings.dnd, |settings, enabled| settings.dnd = enabled)}
             {app_toggle(snapshot, "Message preview", "Otherwise only \u{201C}New message\u{201D} is shown.", |settings| settings.notification_preview, |settings, enabled| settings.notification_preview = enabled)}
             {app_toggle(snapshot, "Play sound", "", |settings| settings.notification_sound, |settings, enabled| settings.notification_sound = enabled)}
+            {app_toggle(snapshot, "Badge when muted", "Keep the unread badge on the sidebar icon of accounts whose notifications are off.", |settings| settings.badge_when_muted, |settings, enabled| settings.badge_when_muted = enabled)}
         </div>
     }
 }

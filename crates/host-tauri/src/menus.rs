@@ -1,8 +1,9 @@
 //! Native app menu (with the shortcuts) and the tray (menu bar) icon, both derived from the
-//! core's [`MenuModel`]. Menu events of both arrive at one global handler, which turns them
-//! into [`Input`]s with [`menu_command`].
+//! core's [`MenuModel`], and the menu of an account's sidebar icon ([`AccountMenu`]). Menu
+//! events of all of them arrive at one global handler, which turns them into [`Input`]s with
+//! [`menu_command`].
 
-use domain::{Input, MenuAccount, MenuAction, MenuModel};
+use domain::{AccountMenu, AccountMenuAction, Input, MenuAccount, MenuAction, MenuModel};
 use protocol::UiCommand;
 use tauri::image::Image;
 use tauri::menu::{
@@ -10,7 +11,7 @@ use tauri::menu::{
     MenuItemBuilder, Submenu, SubmenuBuilder,
 };
 use tauri::tray::{TrayIcon, TrayIconBuilder};
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{AppHandle, Manager, Runtime, Window};
 use uuid::Uuid;
 
 use crate::{Feed, bring_to_front, graceful_quit, native};
@@ -31,6 +32,25 @@ const ID_OPEN_BROWSER: &str = "open-in-browser";
 const ID_QUIT: &str = "quit";
 /// Prefix of the account items (app menu "Accounts" and tray), followed by the account id.
 const ID_ACCOUNT: &str = "account:";
+/// Prefix of the account menu items, followed by `<action>:<account id>`.
+const ID_ACCOUNT_MENU: &str = "account-menu:";
+/// Id part and text of each account menu item.
+const ACCOUNT_MENU_ITEMS: [(AccountMenuAction, &str, &str); 6] = [
+    (AccountMenuAction::Sleep, "sleep", "Sleep"),
+    (AccountMenuAction::WakeUp, "wake-up", "Wake Up"),
+    (AccountMenuAction::Settings, "settings", "Settings…"),
+    (
+        AccountMenuAction::EnableNotifications,
+        "enable-notifications",
+        "Enable Notifications",
+    ),
+    (
+        AccountMenuAction::DisableNotifications,
+        "disable-notifications",
+        "Disable Notifications",
+    ),
+    (AccountMenuAction::Reload, "reload", "Reload"),
+];
 const TRAY_ID: &str = "atrium-tray";
 /// Accounts 1 to 9 get the shortcuts Cmd+1 to Cmd+9 (Ctrl elsewhere).
 pub(crate) const ACCOUNT_SHORTCUTS: usize = 9;
@@ -115,6 +135,10 @@ fn menu_command(id: &str) -> Option<MenuCommand> {
         ID_ZOOM_OUT => menu(MenuAction::ZoomOut),
         ID_ZOOM_RESET => menu(MenuAction::ZoomReset),
         ID_OPEN_BROWSER => menu(MenuAction::OpenInBrowser),
+        _ if id.starts_with(ID_ACCOUNT_MENU) => MenuCommand {
+            show_window: false,
+            input: Some(account_menu_input(id)?),
+        },
         _ => {
             let account = Uuid::parse_str(id.strip_prefix(ID_ACCOUNT)?).ok()?;
             MenuCommand {
@@ -123,6 +147,52 @@ fn menu_command(id: &str) -> Option<MenuCommand> {
             }
         }
     })
+}
+
+fn account_menu_input(id: &str) -> Option<Input> {
+    let (key, account) = id.strip_prefix(ID_ACCOUNT_MENU)?.split_once(':')?;
+    let &(action, _, _) = ACCOUNT_MENU_ITEMS
+        .iter()
+        .find(|(_, item, _)| *item == key)?;
+    Some(Input::AccountMenu {
+        account: Uuid::parse_str(account).ok()?,
+        action,
+    })
+}
+
+fn account_menu_item_id(account: Uuid, action: AccountMenuAction) -> String {
+    let key = ACCOUNT_MENU_ITEMS
+        .iter()
+        .find(|(item, _, _)| *item == action)
+        .map_or("", |&(_, key, _)| key);
+    format!("{ID_ACCOUNT_MENU}{key}:{account}")
+}
+
+fn account_menu_text(action: AccountMenuAction) -> &'static str {
+    ACCOUNT_MENU_ITEMS
+        .iter()
+        .find(|(item, _, _)| *item == action)
+        .map_or("", |&(_, _, text)| text)
+}
+
+/// Pops up `menu` at the mouse pointer over `window` (main thread).
+pub(crate) fn popup_account_menu<R: Runtime>(
+    app: &AppHandle<R>,
+    window: &Window<R>,
+    menu: &AccountMenu,
+) -> tauri::Result<()> {
+    let mut builder = MenuBuilder::new(app);
+    for item in &menu.items {
+        builder = builder.item(
+            &MenuItemBuilder::with_id(
+                account_menu_item_id(menu.account, item.action),
+                account_menu_text(item.action),
+            )
+            .enabled(item.enabled)
+            .build(app)?,
+        );
+    }
+    window.popup_menu(&builder.build()?)
 }
 
 /// Handles a click on an item of the app menu or the tray menu (main thread): quits for the
@@ -539,10 +609,31 @@ mod tests {
             })
         );
         assert_eq!(menu_command("account:nope"), None);
+        assert_eq!(menu_command("account-menu:sleep:nope"), None);
+        assert_eq!(menu_command(&format!("account-menu:nap:{id}")), None);
         assert_eq!(
             menu_command(ID_QUIT),
             None,
             "quit is handled by graceful_quit"
+        );
+    }
+
+    #[test]
+    fn account_menu_ids_map_to_inputs() {
+        let account = Uuid::from_u128(7);
+        for (action, _, text) in ACCOUNT_MENU_ITEMS {
+            assert_eq!(
+                menu_command(&account_menu_item_id(account, action)),
+                Some(MenuCommand {
+                    show_window: false,
+                    input: Some(Input::AccountMenu { account, action })
+                })
+            );
+            assert_eq!(account_menu_text(action), text);
+        }
+        assert_eq!(
+            account_menu_item_id(account, AccountMenuAction::WakeUp),
+            format!("account-menu:wake-up:{account}")
         );
     }
 

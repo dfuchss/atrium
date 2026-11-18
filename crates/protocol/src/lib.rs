@@ -136,6 +136,11 @@ pub enum UiCommand {
     Hibernate {
         account: Uuid,
     },
+    /// Right-click on the account's sidebar icon: show its native menu (sleep or wake up,
+    /// settings, notifications on or off, reload).
+    ShowAccountMenu {
+        account: Uuid,
+    },
     /// Fetch the site's favicon again.
     RefreshIcon {
         account: Uuid,
@@ -187,6 +192,9 @@ pub struct Snapshot {
     /// The user-defined services (also contained in `services`, with `custom: true`).
     pub custom_services: Vec<CustomService>,
     pub dialog_open: bool,
+    /// The account whose settings the dialog opens with (account menu "Settings…"); set only
+    /// in the snapshot that asks for it.
+    pub edit_account: Option<Uuid>,
     pub settings: AppSettings,
     pub app: AppInfo,
     /// Problems of the last load of `<config>/services/*.toml` (startup or reload).
@@ -214,6 +222,9 @@ pub struct AppSettings {
     /// Show the message text in notifications; otherwise only "New message".
     pub notification_preview: bool,
     pub notification_sound: bool,
+    /// Keep the sidebar unread badge of muted accounts (their unread never counts in the dock
+    /// badge).
+    pub badge_when_muted: bool,
     pub dock_badge: DockBadgeMode,
     pub launch_at_login: bool,
     /// Start with the window hidden (useful together with `launch_at_login`).
@@ -233,6 +244,8 @@ pub struct AppSettings {
     pub after_wake: AfterWake,
     /// Size of the sidebar icons (and thereby the sidebar width).
     pub icon_size: IconSize,
+    /// How the sidebar icons show unread.
+    pub badge_style: BadgeStyle,
     /// Put background accounts to sleep (unload their view) after this many minutes without
     /// being shown; None = never. Accounts can override it (`AccountSettings::hibernate_after_min`).
     /// Sleeping accounts get no notifications or unread updates until they are opened again.
@@ -247,6 +260,7 @@ impl Default for AppSettings {
             dnd: false,
             notification_preview: true,
             notification_sound: true,
+            badge_when_muted: true,
             dock_badge: DockBadgeMode::All,
             launch_at_login: false,
             start_hidden: false,
@@ -256,6 +270,7 @@ impl Default for AppSettings {
             show_tray: true,
             after_wake: AfterWake::Check,
             icon_size: IconSize::Small,
+            badge_style: BadgeStyle::Count,
             hibernate_after_min: None,
             theme: Theme::Auto,
         }
@@ -306,6 +321,42 @@ pub enum DockBadgeMode {
     /// Only the count; indirect unread shows nothing.
     CountOnly,
     Off,
+}
+
+/// Sidebar unread badges. Urgent unread (mentions, direct messages) is red; normal unread
+/// (new messages in a subscribed channel) is a white dot and has no count.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BadgeStyle {
+    /// A red badge with the urgent count.
+    #[default]
+    Count,
+    /// A red dot for urgent unread.
+    Dot,
+    /// A red badge with the urgent count; normal unread shows nothing.
+    UrgentOnly,
+}
+
+impl BadgeStyle {
+    /// The badge for `urgent` unread ([`AccountView::unread`]) and `normal` unread
+    /// ([`AccountView::indirect`]); urgent unread hides the normal dot.
+    pub fn badge(self, urgent: u32, normal: bool) -> Badge {
+        match (urgent, self) {
+            (0, BadgeStyle::Count | BadgeStyle::Dot) if normal => Badge::NormalDot,
+            (0, _) => Badge::None,
+            (count, BadgeStyle::Count | BadgeStyle::UrgentOnly) => Badge::Count(count),
+            (_, BadgeStyle::Dot) => Badge::UrgentDot,
+        }
+    }
+}
+
+/// What a sidebar icon shows, see [`BadgeStyle::badge`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Badge {
+    None,
+    Count(u32),
+    UrgentDot,
+    NormalDot,
 }
 
 /// Where a link that wants a new window is opened. Sign-in popups (window.open with an explicit
@@ -371,6 +422,14 @@ pub struct AccountSettings {
     /// whatever the link target. Normalised by the core on update.
     #[serde(default)]
     pub app_hosts: Vec<String>,
+}
+
+impl AccountSettings {
+    /// The sidebar icon shows the unread badge (`AppSettings::badge_when_muted` for muted accounts).
+    #[must_use]
+    pub fn shows_badge(&self, badge_when_muted: bool) -> bool {
+        self.show_badge && (!self.muted || badge_when_muted)
+    }
 }
 
 fn yes() -> bool {
@@ -463,4 +522,22 @@ pub struct ServiceInfo {
     pub url: String,
     pub title_regex: Option<String>,
     pub user_agent: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn badge_shows_urgent_over_normal_unread() {
+        assert_eq!(BadgeStyle::Count.badge(0, false), Badge::None);
+        assert_eq!(BadgeStyle::Count.badge(0, true), Badge::NormalDot);
+        assert_eq!(BadgeStyle::Count.badge(3, true), Badge::Count(3));
+        assert_eq!(BadgeStyle::Dot.badge(0, false), Badge::None);
+        assert_eq!(BadgeStyle::Dot.badge(0, true), Badge::NormalDot);
+        assert_eq!(BadgeStyle::Dot.badge(3, true), Badge::UrgentDot);
+        assert_eq!(BadgeStyle::UrgentOnly.badge(0, false), Badge::None);
+        assert_eq!(BadgeStyle::UrgentOnly.badge(0, true), Badge::None);
+        assert_eq!(BadgeStyle::UrgentOnly.badge(3, true), Badge::Count(3));
+    }
 }

@@ -29,6 +29,7 @@ fn snapshot_carries_settings_app_info_and_account_settings() {
         show_badge: false,
         badge_style: None,
         in_dock_badge: true,
+        dock_badge: None,
         user_agent: None,
         enabled: true,
         link_target: None,

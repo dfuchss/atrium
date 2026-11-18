@@ -1,7 +1,9 @@
 //! Inline edit form of one account.
 
 use leptos::prelude::*;
-use protocol::{AccountSettings, AccountView, AfterWake, BadgeStyle, LinkTarget, UiCommand};
+use protocol::{
+    AccountSettings, AccountView, AfterWake, BadgeStyle, DockBadgeMode, LinkTarget, UiCommand,
+};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::Closure;
@@ -78,6 +80,8 @@ struct AccountDraft {
     /// "" (global setting) or a `BadgeStyle` name.
     badge_style: RwSignal<String>,
     in_dock_badge: RwSignal<bool>,
+    /// "" (global setting) or a `DockBadgeMode` name.
+    dock_badge: RwSignal<String>,
     enabled: RwSignal<bool>,
     start_asleep: RwSignal<bool>,
     /// "" (global setting), "system" or "app".
@@ -110,6 +114,11 @@ impl AccountDraft {
                     .map_or_default(|style| style.name().to_string()),
             ),
             in_dock_badge: RwSignal::new(settings.in_dock_badge),
+            dock_badge: RwSignal::new(
+                settings
+                    .dock_badge
+                    .map_or_default(|mode| mode.name().to_string()),
+            ),
             enabled: RwSignal::new(settings.enabled),
             start_asleep: RwSignal::new(settings.start_asleep),
             link_target: RwSignal::new(match settings.link_target {
@@ -160,6 +169,7 @@ impl AccountDraft {
             show_badge: self.show_badge.get_untracked(),
             badge_style: BadgeStyle::from_name(&self.badge_style.get_untracked()),
             in_dock_badge: self.in_dock_badge.get_untracked(),
+            dock_badge: DockBadgeMode::from_name(&self.dock_badge.get_untracked()),
             user_agent: self.user_agent.value(UNSET_USER_AGENT),
             enabled: self.enabled.get_untracked(),
             link_target: match self.link_target.get_untracked() {
@@ -206,6 +216,7 @@ pub(super) fn EditForm(
     global_hibernate: Option<u32>,
     global_after_wake: AfterWake,
     global_badge_style: BadgeStyle,
+    global_dock_badge: DockBadgeMode,
 ) -> impl IntoView {
     let id = account.id;
     let loaded = !account.hibernated;
@@ -241,6 +252,12 @@ pub(super) fn EditForm(
                 </select>
             </Row>
             <Toggle label=platform_texts::texts().account_badge_toggle checked=draft.in_dock_badge on_change=move |enabled| draft.in_dock_badge.set(enabled) />
+            <Row label=platform_texts::texts().badge_tab hint="Overrides the global setting of this badge for this account.">
+                <select prop:value=move || draft.dock_badge.get() on:change=move |event| draft.dock_badge.set(event_target_value(&event))>
+                    <option value="">{format!("Use global setting ({})", dock_badge_label(global_dock_badge))}</option>
+                    {DockBadgeMode::ALL.map(|mode| view! { <option value=mode.name()>{dock_badge_label(mode)}</option> })}
+                </select>
+            </Row>
             <Row label="Open links in">
                 <select prop:value=move || draft.link_target.get() on:change=move |event| draft.link_target.set(match event_target_value(&event).as_str() {
                     "system" => "system",
@@ -256,6 +273,14 @@ pub(super) fn EditForm(
             <BehaviourRows draft=draft media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake account=id loaded=loaded />
             <FormActions disabled=false on_cancel=move |()| editing.set(None) />
         </form>
+    }
+}
+
+fn dock_badge_label(mode: DockBadgeMode) -> &'static str {
+    match mode {
+        DockBadgeMode::All => "Unread count and dot",
+        DockBadgeMode::CountOnly => "Unread count only",
+        DockBadgeMode::Off => "Off",
     }
 }
 

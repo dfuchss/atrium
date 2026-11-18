@@ -14,6 +14,7 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 #### All platforms
 
 - Each service can override the sidebar badge style (*Count*, *Dot*, *Urgent only*) in its settings; *Use global setting* keeps the default
+- Each service can override the *Dock badge* setting (*Unread count and dot*, *Unread count only*, *Off*) in its settings; *Use global setting* keeps the default
 - The *Export and import* tab saves (to a location you choose) and restores the settings, the added services and the custom services; import asks for confirmation and overwrites everything, including the current logins
 
 ### Changed

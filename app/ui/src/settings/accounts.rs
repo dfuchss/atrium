@@ -210,6 +210,7 @@ fn AccountRow(
             let global_hibernate = snapshot.with_untracked(|snapshot| snapshot.settings.hibernate_after_min);
             let global_after_wake = snapshot.with_untracked(|snapshot| snapshot.settings.after_wake);
             let global_badge_style = snapshot.with_untracked(|snapshot| snapshot.settings.badge_style);
+            let global_dock_badge = snapshot.with_untracked(|snapshot| snapshot.settings.dock_badge);
             let media_default = snapshot.with_untracked(|snapshot| snapshot.services.iter().find(|service| service.id == account.service).is_some_and(|service| service.allow_media));
             view! {
                 <div class="acct-item" class:open=is_editing id=account_dom_id(id)>
@@ -229,7 +230,7 @@ fn AccountRow(
                         <ConfirmButton label="Remove" confirm_label="Confirm remove" on_confirm=move |()| send_command(UiCommand::RemoveAccount { account: id }) />
                     </div>
                     <AccountActions id=id enabled=account.settings.enabled />
-                    {move || is_editing().then(|| view! { <EditForm account=edited.clone() editing=editing media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake global_badge_style=global_badge_style /> })}
+                    {move || is_editing().then(|| view! { <EditForm account=edited.clone() editing=editing media_default=media_default global_hibernate=global_hibernate global_after_wake=global_after_wake global_badge_style=global_badge_style global_dock_badge=global_dock_badge /> })}
                 </div>
             }
         })}

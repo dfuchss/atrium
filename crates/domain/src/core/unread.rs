@@ -267,18 +267,24 @@ impl Core {
     pub(super) fn badge(&self) -> DockBadge {
         let mut count = 0u32;
         let mut dot = false;
+        let global = self.settings().dock_badge;
         for account in self.persisted.accounts.iter().filter(|account| {
             account.settings.in_dock_badge && !account.settings.muted && account.settings.enabled
         }) {
+            let mode = account.settings.effective_dock_badge(global);
+            if mode == DockBadgeMode::Off {
+                continue;
+            }
             let unread = self.unread.of(account.id);
             count = count.saturating_add(unread.direct);
-            dot |= unread.indirect;
+            dot |= unread.indirect && mode == DockBadgeMode::All;
         }
-        match self.settings().dock_badge {
-            DockBadgeMode::Off => DockBadge::None,
-            _ if count > 0 => DockBadge::Count(count),
-            DockBadgeMode::All if dot => DockBadge::Dot,
-            _ => DockBadge::None,
+        if count > 0 {
+            DockBadge::Count(count)
+        } else if dot {
+            DockBadge::Dot
+        } else {
+            DockBadge::None
         }
     }
 

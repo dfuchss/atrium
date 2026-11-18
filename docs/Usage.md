@@ -25,6 +25,7 @@ Open the settings with the gear button or <kbd>⌘</kbd><kbd>,</kbd> (<kbd>Ctrl<
 | Enabled | Disabled accounts keep their login but are not loaded. |
 | Notifications | Off mutes the account: no notifications, and not counted in the badge. |
 | Unread badge | The unread badge on the sidebar icon, with its own style: *Use global setting*, *Count*, *Dot* or *Urgent only*. |
+| Dock badge mode | The global *Dock badge* setting for this account: *Use global setting*, *Unread count and dot*, *Unread count only* or *Off*. |
 | Count in dock badge | Count the account in the Dock badge (*launcher badge* on Linux, *taskbar badge* on Windows). |
 | Open links in | Where links that open a new window go: *Use global setting*, *System browser* or *App window*. |
 | Icon | *Use site icon* or *Refresh site icon*; a [Simple Icons](https://simpleicons.org/) slug (a brand glyph on the service colour); or an image URL or file. Precedence: custom image, Simple Icon, site icon, initials. |

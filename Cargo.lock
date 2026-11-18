@@ -231,6 +231,7 @@ dependencies = [
  "domain",
  "fs-util",
  "host-tauri",
+ "platform-ffi",
  "protocol",
  "serde_json",
  "store-fs",
@@ -242,7 +243,6 @@ dependencies = [
  "tempfile",
  "updater",
  "uuid",
- "webview-dialogs",
 ]
 
 [[package]]
@@ -1849,7 +1849,9 @@ dependencies = [
  "domain",
  "fs-util",
  "gtk",
+ "platform-ffi",
  "protocol",
+ "store-fs",
  "tauri",
  "tauri-plugin-autostart",
  "tauri-plugin-notification",
@@ -1860,7 +1862,6 @@ dependencies = [
  "url",
  "uuid",
  "webkit2gtk",
- "webview-dialogs",
  "windows-registry 0.100.0",
  "zbus 5.19.0",
 ]
@@ -3374,6 +3375,25 @@ name = "pkg-config"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
+
+[[package]]
+name = "platform-ffi"
+version = "0.4.0"
+dependencies = [
+ "block2",
+ "gtk",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
+ "protocol",
+ "tauri",
+ "tempfile",
+ "url",
+ "webkit2gtk",
+ "webview2-com",
+ "windows",
+]
 
 [[package]]
 name = "plist"
@@ -5723,24 +5743,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7265c9301c16a8711c992c2d8da90ee77ef54b1ed51482d6dfeb00dc756b1297"
 dependencies = [
  "rustls-pki-types",
-]
-
-[[package]]
-name = "webview-dialogs"
-version = "0.4.0"
-dependencies = [
- "block2",
- "gtk",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "objc2-web-kit",
- "tauri",
- "tempfile",
- "url",
- "webkit2gtk",
- "webview2-com",
- "windows",
 ]
 
 [[package]]

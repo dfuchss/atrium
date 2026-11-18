@@ -53,7 +53,7 @@ impl Core {
     /// The account's own mode, or the global one.
     fn after_wake(&self, account_id: Uuid) -> AfterWake {
         self.account(account_id)
-            .and_then(|account| account.after_wake)
+            .and_then(|account| account.settings.after_wake)
             .unwrap_or(self.settings().after_wake)
     }
 

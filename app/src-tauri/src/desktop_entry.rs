@@ -8,9 +8,9 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use fs_util::appimage::RunningAppImage;
 use fs_util::write_atomically;
 use protocol::DesktopEntryState;
-use updater::RunningAppImage;
 
 /// The entry of the `AppImage` bundle; `{{exec}}` stands for the quoted path of the file and
 /// `{{icon}}` for the name of the icon.
@@ -59,7 +59,6 @@ impl DesktopDirs {
     }
 }
 
-/// The file name of the installed icons.
 fn icon_file() -> String {
     format!("{ICON_NAME}.png")
 }
@@ -179,12 +178,8 @@ fn write_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 /// Removes the file at `path`, if there is one.
 fn remove_file(path: &Path) -> Result<(), String> {
-    match std::fs::remove_file(path) {
-        Err(error) if error.kind() != io::ErrorKind::NotFound => {
-            Err(format!("cannot remove {}: {error}", path.display()))
-        }
-        _ => Ok(()),
-    }
+    fs_util::remove_if_present(path)
+        .map_err(|error| format!("cannot remove {}: {error}", path.display()))
 }
 
 /// Removes Atrium's entry and its icons of every size.

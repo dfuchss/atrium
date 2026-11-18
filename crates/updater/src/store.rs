@@ -78,6 +78,15 @@ impl UpdaterFiles {
         write_private(&self.data_dir.join(SETTINGS_FILE), &json)
     }
 
+    /// Records the outcome of a swap (or of the helper failing to start) for the next start.
+    pub(crate) fn write_swap_result(
+        updates_dir: &Path,
+        result: &SwapResult,
+    ) -> std::io::Result<()> {
+        let json = serde_json::to_string(result).unwrap_or_default();
+        write_private(&Self::result_file(updates_dir), &json)
+    }
+
     /// Reads and removes the helper's result and log of the previous swap, if any.
     pub(crate) fn take_swap_report(&self) -> Option<(Option<SwapResult>, String)> {
         let updates = self.updates_dir();
@@ -173,11 +182,7 @@ mod tests {
             message: "no".into(),
         };
         let updates = files.updates_dir();
-        write_private(
-            &UpdaterFiles::result_file(&updates),
-            &serde_json::to_string(&result).unwrap(),
-        )
-        .unwrap();
+        UpdaterFiles::write_swap_result(&updates, &result).unwrap();
         std::fs::write(UpdaterFiles::helper_log(&updates), "line\n").unwrap();
         assert_eq!(
             files.take_swap_report(),

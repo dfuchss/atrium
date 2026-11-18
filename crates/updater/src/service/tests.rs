@@ -52,7 +52,6 @@ impl Fixture {
         self.dir.path().join("data")
     }
 
-    /// The release asset of Atrium in `version`.
     fn release_asset(&self, version: &str) -> Vec<u8> {
         fake_asset(self.dir.path(), version)
     }
@@ -139,7 +138,9 @@ fn stages_a_verified_release_next_to_the_install() {
         updater.handle(&UpdateCommand::ApplyUpdate),
         UpdaterAction::Quit
     );
-    let plan = locked(&updater.shared.pending).clone().unwrap();
+    let plan = lock_ignoring_poison(&updater.shared.pending)
+        .clone()
+        .unwrap();
     assert_eq!(plan.install, fixture.install());
     assert_eq!(plan.version, "0.2.0");
     assert_eq!(plan.app_pid, std::process::id());

@@ -8,7 +8,7 @@ use protocol::{
     DesktopEntryState,
 };
 
-use crate::widgets::Row;
+use crate::widgets::{ErrorNote, Row};
 use crate::{platform_texts, query, tauri};
 
 /// What the section shows: the state (`None` while unknown or when there is nothing to offer)
@@ -99,6 +99,6 @@ pub(crate) fn DesktopIntegration() -> impl IntoView {
                 </Row>
             </div>
         </Show>
-        {move || entry.error.get().map(|message| view! { <p class="note update-failure">{message}</p> })}
+        <ErrorNote message=entry.error />
     }
 }

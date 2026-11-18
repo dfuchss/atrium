@@ -1,6 +1,11 @@
 //! Wires the updater into the app: its Tauri commands, the status event to the sidebar UI and
 //! the hand-over to the swap helper when the app exits.
 
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri commands receive their arguments by value"
+)]
+
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -16,10 +21,6 @@ use updater::{
 pub(crate) struct UpdaterState(Updater);
 
 #[tauri::command]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 pub(crate) fn update_command(app: AppHandle, command: UpdateCommand) {
     let Some(state) = app.try_state::<UpdaterState>() else {
         return;
@@ -34,10 +35,6 @@ pub(crate) fn update_command(app: AppHandle, command: UpdateCommand) {
 }
 
 #[tauri::command]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 pub(crate) fn get_update_status(app: AppHandle) -> Option<UpdateStatus> {
     app.try_state::<UpdaterState>()
         .map(|state| state.0.status())

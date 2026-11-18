@@ -1,9 +1,9 @@
 //! The updates section of the About tab; the status also marks the settings button.
 
 use leptos::prelude::*;
-use protocol::{UpdateCommand, UpdateState, UpdateStatus};
+use protocol::{CMD_UPDATE_COMMAND, EVENT_UPDATE_STATUS, UpdateCommand, UpdateState, UpdateStatus};
 
-use crate::widgets::{Row, Toggle};
+use crate::widgets::{ErrorNote, Row, Toggle};
 use crate::{query, tauri};
 
 /// The updater's status, provided as context. `None` while it is unknown or when this build has
@@ -17,7 +17,9 @@ pub(crate) fn connect_updates(set_status: WriteSignal<Option<UpdateStatus>>) {
         set_status.set(Some(UpdateStatus::default()));
         return;
     }
-    tauri::listen_update_status(move |status| set_status.set(Some(status)));
+    tauri::listen(EVENT_UPDATE_STATUS, move |status| {
+        set_status.set(Some(status));
+    });
     leptos::task::spawn_local(async move {
         if let Some(status) = tauri::get_update_status().await {
             set_status.set(Some(status));
@@ -27,7 +29,7 @@ pub(crate) fn connect_updates(set_status: WriteSignal<Option<UpdateStatus>>) {
 
 fn send_update_command(command: UpdateCommand) {
     if query::use_tauri() {
-        leptos::task::spawn_local(tauri::send_update(command));
+        leptos::task::spawn_local(tauri::send(CMD_UPDATE_COMMAND, command));
     }
 }
 
@@ -119,8 +121,8 @@ fn UpdateDetails() -> impl IntoView {
         {move || manual_reason().map(|reason| view! {
             <p class="note">{format!("{reason} Download new versions from the release page.")}</p>
         })}
-        {move || last_failure().map(|failure| view! {
-            <p class="note update-failure">{format!("The last update was not installed ({failure}).")}</p>
-        })}
+        <ErrorNote message=Signal::derive(move || {
+            last_failure().map(|failure| format!("The last update was not installed ({failure})."))
+        }) />
     }
 }

@@ -1,3 +1,4 @@
+use super::super::notifications::HIDDEN_PREVIEW_BODY;
 use super::*;
 
 #[test]
@@ -23,7 +24,7 @@ fn title_unread_and_dock_badge() {
 #[test]
 fn muted_not_in_badge() {
     let mut a = account(1, "discord", "Discord");
-    a.muted = true;
+    a.settings.muted = true;
     let (mut core, _) = started(vec![a]);
     let effects = core.handle(Input::TitleChanged {
         account: id(1),
@@ -61,7 +62,7 @@ fn poll_notifies_with_prefix() {
 #[test]
 fn poll_muted_or_dnd_silent() {
     let mut a = account(1, "slack", "Slack");
-    a.muted = true;
+    a.settings.muted = true;
     let (mut core, _) = started(vec![a, account(2, "slack", "Slack")]);
     let raw = r#"{"n":[{"id":1,"title":"x"}],"u":null}"#.to_string();
     assert!(
@@ -105,10 +106,7 @@ fn core_with_polled_service() -> Core {
         Box::new(|| Uuid::from_u128(999)),
         UA_PLATFORM.into(),
     );
-    core.handle(Input::Started {
-        width: 800.0,
-        height: 600.0,
-    });
+    core.handle(STARTED);
     core
 }
 
@@ -192,8 +190,9 @@ fn a_broken_expression_stays_out_of_the_drain_script() {
     let broken = "1})();document.title='x';(()=>{(";
     let script = scripts::unread_script(broken);
     assert!(
-        script
-            .starts_with("(()=>{const m=window.__msgr;if(!m)return;m.unread=null;try{m.unread=(\n")
+        script.starts_with(
+            "(()=>{const m=window.__atrium;if(!m)return;m.unread=null;try{m.unread=(\n"
+        )
     );
     assert!(script.ends_with("\n)}catch(e){}})()"));
     assert!(!scripts::POLL_SCRIPT.contains(broken));
@@ -209,7 +208,7 @@ fn tick_script_exact_and_unknown_account() {
         effects,
         vec![Effect::Poll {
             account: id(1),
-            script: "(()=>{const m=window.__msgr;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()".into()
+            script: "(()=>{const m=window.__atrium;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()".into()
         }]
     );
     assert!(matches!(
@@ -267,7 +266,7 @@ fn dock_badge_modes() {
 #[test]
 fn dock_badge_respects_in_dock_badge() {
     let mut a = account(1, "discord", "A");
-    a.in_dock_badge = false;
+    a.settings.in_dock_badge = false;
     let (mut core, _) = started(vec![a, account(2, "discord", "B")]);
     let effects = core.handle(Input::TitleChanged {
         account: id(1),
@@ -394,7 +393,7 @@ fn finished_download_notifies_without_page_click() {
 #[test]
 fn finished_download_of_muted_account_is_silent() {
     let mut a = account(1, "slack", "KIT");
-    a.muted = true;
+    a.settings.muted = true;
     let (mut core, _) = started(vec![a]);
     let effects = core.handle(Input::DownloadFinished {
         account: id(1),

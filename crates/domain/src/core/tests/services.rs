@@ -162,7 +162,7 @@ fn custom_services_loaded_from_persisted() {
     let mut good = custom("Good", "https://{instance}.good.io/");
     good.id = "custom-good".into();
     let mut a = account(1, "custom-good", "G");
-    a.instance = Some("kit".into());
+    a.settings.instance = Some("kit".into());
     let persisted = Persisted {
         accounts: vec![a],
         custom_services: vec![bad, good],
@@ -174,10 +174,7 @@ fn custom_services_loaded_from_persisted() {
         Box::new(|| id(5)),
         UA_PLATFORM.into(),
     );
-    let effects = core.handle(Input::Started {
-        width: 800.0,
-        height: 600.0,
-    });
+    let effects = core.handle(STARTED);
     assert!(logs(&effects).iter().any(|l| l.contains("Bad")));
     assert_eq!(views(&effects)[0].0.url.as_str(), "https://kit.good.io/");
     assert_eq!(

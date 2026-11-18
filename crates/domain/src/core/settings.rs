@@ -3,19 +3,21 @@
 use protocol::{AccountSettings, AppSettings};
 use uuid::Uuid;
 
-use super::accounts::{account_label, normalized_instance};
+use super::account_label;
 use super::icons::normalize_slug;
-use super::{Core, Effect, trimmed};
+use super::{Core, Effect};
+use crate::catalog::normalized_instance;
 use crate::model::Account;
+use crate::trimmed;
 
 /// Zoom levels of "Zoom In" / "Zoom Out".
-pub const ZOOM_STEPS: [f64; 10] = [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0];
+pub(super) const ZOOM_STEPS: [f64; 10] = [0.5, 0.67, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0];
 const ZOOM_MIN: f64 = 0.25;
 const ZOOM_MAX: f64 = 5.0;
 
 impl Core {
     pub(super) fn update_settings(&mut self, mut settings: AppSettings) -> Vec<Effect> {
-        settings.browser = trimmed(settings.browser);
+        settings.browser = trimmed(settings.browser.as_deref());
         let previous = std::mem::replace(&mut self.persisted.settings.app, settings);
         let mut effects = vec![
             self.persist(),
@@ -40,7 +42,7 @@ impl Core {
         self.persisted
             .accounts
             .iter()
-            .filter(|account| account.link_target.is_none() && self.is_loaded(account.id))
+            .filter(|account| account.settings.link_target.is_none() && self.is_loaded(account.id))
             .map(|account| Effect::SetViewPolicy {
                 account: account.id,
                 policy: self.view_policy(account),
@@ -58,10 +60,10 @@ impl Core {
         let Some(account) = self.account_mut(account_id) else {
             return vec![Self::unknown(account_id)];
         };
-        if account.zoom == zoom {
+        if account.settings.zoom == zoom {
             return vec![];
         }
-        account.zoom = zoom;
+        account.settings.zoom = zoom;
         let mut effects = vec![];
         if self.is_loaded(account_id) {
             effects.push(Effect::SetZoom {
@@ -88,10 +90,7 @@ impl Core {
         let (settings, problems) = match self.normalized_account_settings(&before, settings) {
             Ok(normalized) => normalized,
             Err(error) => {
-                return vec![
-                    Effect::Log(format!("update account {account_id}: {error}")),
-                    self.emit(),
-                ];
+                return self.rejected(format!("update account {account_id}: {error}"));
             }
         };
         let new_slug = settings.simple_icon.clone();
@@ -105,7 +104,7 @@ impl Core {
                 .map(|problem| Effect::Log(format!("update account {account_id}: {problem}"))),
         );
         if self.started
-            && before.simple_icon != new_slug
+            && before.settings.simple_icon != new_slug
             && let Some(slug) = new_slug
         {
             effects.push(Effect::FetchSimpleIcon {
@@ -127,18 +126,18 @@ impl Core {
         mut settings: AccountSettings,
     ) -> Result<(AccountSettings, Vec<String>), String> {
         let service = self
-            .catalog
+            .registry
             .get(&account.service)
             .ok_or_else(|| format!("unknown service {}", account.service))?;
-        settings.instance = normalized_instance(settings.instance);
+        settings.instance = normalized_instance(settings.instance.as_deref());
         service
             .resolve_url(settings.instance.as_deref())
             .map_err(|error| error.to_string())?;
         let mut problems = vec![];
-        settings.label = account_label(&settings.label, service);
-        settings.user_agent = trimmed(settings.user_agent);
+        settings.label = account_label(&settings.label, &service.name);
+        settings.user_agent = trimmed(settings.user_agent.as_deref());
         settings.custom_css = settings.custom_css.filter(|css| !css.trim().is_empty());
-        settings.custom_icon = trimmed(settings.custom_icon);
+        settings.custom_icon = trimmed(settings.custom_icon.as_deref());
         settings.zoom = sanitize_zoom(settings.zoom);
         settings.simple_icon = normalize_slug(settings.simple_icon.as_deref().unwrap_or(""))
             .unwrap_or_else(|error| {
@@ -165,10 +164,10 @@ impl Core {
         if !self.started {
             return vec![];
         }
-        let needs_new_view = before.instance != after.instance
-            || before.user_agent != after.user_agent
-            || before.custom_css != after.custom_css;
-        match (before.enabled, after.enabled) {
+        let needs_new_view = before.settings.instance != after.settings.instance
+            || before.settings.user_agent != after.settings.user_agent
+            || before.settings.custom_css != after.settings.custom_css;
+        match (before.settings.enabled, after.settings.enabled) {
             (true, false) => self.disable_account(account_id),
             (false, true) => self.enable_account(account_id),
             _ if !self.is_loaded(account_id) => vec![],
@@ -208,10 +207,10 @@ impl Core {
                 policy,
             });
         }
-        if before.zoom != after.zoom {
+        if before.settings.zoom != after.settings.zoom {
             effects.push(Effect::SetZoom {
                 account: after.id,
-                zoom: after.zoom,
+                zoom: after.settings.zoom,
             });
         }
         effects

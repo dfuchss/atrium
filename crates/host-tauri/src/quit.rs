@@ -7,6 +7,7 @@ use protocol::UI_WEBVIEW;
 use tauri::{AppHandle, Manager, Runtime, Url};
 
 use crate::Logger;
+use crate::logger::spawn_logged;
 
 /// Set once [`graceful_quit`] started; the exit it ends with must not start another one.
 static QUITTING: AtomicBool = AtomicBool::new(false);
@@ -37,13 +38,11 @@ pub fn graceful_quit<R: Runtime>(app: &AppHandle<R>) {
         UNLOAD_GRACE
     };
     let exiting = app.clone();
-    let spawned = std::thread::Builder::new()
-        .name("quit".into())
-        .spawn(move || {
-            std::thread::sleep(grace);
-            exiting.exit(0);
-        });
-    if spawned.is_err() {
+    let spawned = spawn_logged("quit", &logger, move || {
+        std::thread::sleep(grace);
+        exiting.exit(0);
+    });
+    if !spawned {
         app.exit(0);
     }
 }

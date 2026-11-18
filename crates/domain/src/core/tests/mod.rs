@@ -2,10 +2,25 @@
 
 use super::snapshot::initials;
 use super::*;
+use crate::catalog::ServiceDef;
 use protocol::{
     AccountSettings, AfterWake, CustomService, DockBadgeMode, IconSize, LinkTarget,
     OperatingSystem, Snapshot, Theme,
 };
+
+/// The payloads of the effects that match `pattern`, in order:
+/// `effects_of!(effects, Effect::Reload(account) => *account)`.
+macro_rules! effects_of {
+    ($effects:expr, $pattern:pat => $payload:expr) => {
+        $effects
+            .iter()
+            .filter_map(|effect| match effect {
+                $pattern => Some($payload),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+}
 
 /// The host's part of the user agent presets in the tests.
 const UA_PLATFORM: &str = "X11; Linux x86_64";
@@ -23,6 +38,13 @@ mod wake;
 
 /// Sidebar width at the default icon size.
 const SIDEBAR: f64 = 56.0;
+const WINDOW_WIDTH: f64 = 1000.0;
+const WINDOW_HEIGHT: f64 = 600.0;
+/// The first input, with the window size of all tests.
+const STARTED: Input = Input::Started {
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+};
 
 fn id(n: u128) -> Uuid {
     Uuid::from_u128(n)
@@ -47,51 +69,21 @@ fn core_with(accounts: Vec<Account>) -> Core {
 
 fn started(accounts: Vec<Account>) -> (Core, Vec<Effect>) {
     let mut core = core_with(accounts);
-    let effects = core.handle(Input::Started {
-        width: 1000.0,
-        height: 600.0,
-    });
+    let effects = core.handle(STARTED);
     (core, effects)
 }
 
 fn badges(effects: &[Effect]) -> Vec<DockBadge> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::SetDockBadge(b) = effect {
-                Some(*b)
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::SetDockBadge(badge) => *badge)
 }
 
 fn notifies(effects: &[Effect]) -> Vec<&NotificationReq> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::Notify(n) = effect {
-                Some(n)
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::Notify(notification) => notification)
 }
 
 fn last_snapshot(effects: &[Effect]) -> Snapshot {
-    effects
-        .iter()
-        .rev()
-        .find_map(|effect| {
-            if let Effect::EmitSnapshot(snapshot) = effect {
-                Some(snapshot.clone())
-            } else {
-                None
-            }
-        })
-        .expect("snapshot")
+    let snapshots = effects_of!(effects, Effect::EmitSnapshot(snapshot) => snapshot);
+    snapshots.last().copied().expect("snapshot").clone()
 }
 
 fn raw_notification(body: &str) -> String {
@@ -99,20 +91,11 @@ fn raw_notification(body: &str) -> String {
 }
 
 fn views(effects: &[Effect]) -> Vec<(&ViewSpec, bool)> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::CreateView { spec, visible, .. } = effect {
-                Some((spec, *visible))
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::CreateView { spec, visible, .. } => (spec, *visible))
 }
 
 fn update_account(core: &mut Core, n: u128, f: impl FnOnce(&mut AccountSettings)) -> Vec<Effect> {
-    let mut settings = core.account(id(n)).unwrap().settings();
+    let mut settings = core.account(id(n)).unwrap().settings.clone();
     f(&mut settings);
     core.handle(Input::Ui(UiCommand::UpdateAccount {
         account: id(n),
@@ -120,61 +103,20 @@ fn update_account(core: &mut Core, n: u128, f: impl FnOnce(&mut AccountSettings)
     }))
 }
 
-// ---- feature batch 2 ----
-fn has(effects: &[Effect], effect: &Effect) -> bool {
-    effects.contains(effect)
-}
-
 fn destroys(effects: &[Effect]) -> Vec<Uuid> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::Destroy(a) = effect {
-                Some(*a)
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::Destroy(account) => *account)
 }
 
 fn polls(effects: &[Effect]) -> Vec<Uuid> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::Poll { account, .. } = effect {
-                Some(*account)
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::Poll { account, .. } => *account)
 }
 
 fn logs(effects: &[Effect]) -> Vec<&str> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::Log(m) = effect {
-                Some(m.as_str())
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::Log(line) => line.as_str())
 }
 
 fn menus(effects: &[Effect]) -> Vec<&MenuModel> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::UpdateMenus(m) = effect {
-                Some(m)
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::UpdateMenus(menus) => menus)
 }
 
 /// Ticks every 10 s from `from` to `to` (inclusive), collecting all effects.
@@ -209,16 +151,7 @@ fn policy_with(link_target: LinkTarget, allow_media: bool) -> ViewPolicy {
 }
 
 fn policies(effects: &[Effect]) -> Vec<(Uuid, ViewPolicy)> {
-    effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::SetViewPolicy { account, policy } = effect {
-                Some((*account, policy.clone()))
-            } else {
-                None
-            }
-        })
-        .collect()
+    effects_of!(effects, Effect::SetViewPolicy { account, policy } => (*account, policy.clone()))
 }
 
 fn set_global_hibernate(core: &mut Core, m: Option<u32>) {
@@ -239,7 +172,6 @@ fn fetched(core: &mut Core, n: u128, slug: &str, r: SimpleIconResult) -> Vec<Eff
     })
 }
 
-// ---- expert mode: user service files ----
 fn user_def(id: &str, url: &str) -> ServiceDef {
     Catalog::parse(
         "t.toml",
@@ -249,13 +181,7 @@ fn user_def(id: &str, url: &str) -> ServiceDef {
 }
 
 fn created(effects: &[Effect]) -> Vec<Uuid> {
-    effects
-        .iter()
-        .filter_map(|effect| match effect {
-            Effect::CreateView { spec, .. } => Some(spec.account),
-            _ => None,
-        })
-        .collect()
+    effects_of!(effects, Effect::CreateView { spec, .. } => spec.account)
 }
 
 fn two_user_accounts() -> Core {
@@ -267,10 +193,7 @@ fn two_user_accounts() -> Core {
         ],
         vec![],
     );
-    let effects = core.handle(Input::Started {
-        width: 1000.0,
-        height: 600.0,
-    });
+    let effects = core.handle(STARTED);
     assert_eq!(created(&effects).len(), 2);
     core
 }

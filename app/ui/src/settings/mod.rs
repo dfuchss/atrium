@@ -7,6 +7,7 @@ mod browser_row;
 mod custom_services;
 mod service_editor;
 mod service_files;
+mod user_agent;
 
 use leptos::prelude::*;
 use protocol::{AppSettings, Snapshot, UiCommand};
@@ -132,5 +133,40 @@ fn app_toggle(
     let value = Memo::new(move |_| snapshot.with(|snapshot| get(&snapshot.settings)));
     view! {
         <Toggle label=label hint=hint checked=value on_change=move |enabled| update_settings(snapshot, |settings| set(settings, enabled)) />
+    }
+}
+
+/// Reads and writes one value of the app settings.
+type Setting<T> = (fn(&AppSettings) -> T, fn(&mut AppSettings, T));
+
+/// Button of a segmented control: shows `label`, is `on` while the setting equals `value`.
+fn setting_segment<T: Clone + PartialEq + Send + Sync + 'static>(
+    snapshot: ReadSignal<Snapshot>,
+    (get, set): Setting<T>,
+    value: T,
+    label: &'static str,
+) -> impl IntoView {
+    let chosen = value.clone();
+    view! {
+        <button class="btn" class:on=move || snapshot.with(|snapshot| get(&snapshot.settings) == chosen)
+            on:click=move |_| update_settings(snapshot, |settings| set(settings, value.clone()))>{label}</button>
+    }
+}
+
+/// Radio button of the group `name`: checked while the setting equals `value`.
+fn setting_radio<T: Clone + PartialEq + Send + Sync + 'static>(
+    snapshot: ReadSignal<Snapshot>,
+    name: &'static str,
+    (get, set): Setting<T>,
+    value: T,
+    label: &'static str,
+) -> impl IntoView {
+    let chosen = value.clone();
+    view! {
+        <label class="radio">
+            <input type="radio" name=name prop:checked=move || snapshot.with(|snapshot| get(&snapshot.settings) == chosen)
+                on:change=move |_| update_settings(snapshot, |settings| set(settings, value.clone())) />
+            <span>{label}</span>
+        </label>
     }
 }

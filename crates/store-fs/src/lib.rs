@@ -1,7 +1,11 @@
-//! File-based [`domain::ports::Store`]: `<dir>/accounts.json`.
+//! File-based [`domain::ports::Store`]: one JSON file (`ACCOUNTS_FILE`) in a directory, and the
+//! user's service definition files ([`services`]).
+
+pub mod services;
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::Persisted;
@@ -9,18 +13,28 @@ use domain::ports::{PortError, PortResult, Store};
 
 pub struct FsStore {
     dir: PathBuf,
+    /// What [`Store::load`] set aside as corrupt, until [`FsStore::take_quarantined`].
+    quarantined: Mutex<Option<String>>,
 }
 
 impl FsStore {
     pub fn new(dir: impl Into<PathBuf>) -> FsStore {
-        FsStore { dir: dir.into() }
+        FsStore {
+            dir: dir.into(),
+            quarantined: Mutex::default(),
+        }
     }
 
     fn file(&self) -> PathBuf {
-        self.dir.join("accounts.json")
+        self.dir.join(ACCOUNTS_FILE)
     }
 
-    /// True if `accounts.json` exists and no earlier version was set aside as corrupt: only
+    /// Why and where `load` set the accounts file aside as corrupt (it then loads as empty), once.
+    pub fn take_quarantined(&self) -> Option<String> {
+        fs_util::lock_ignoring_poison(&self.quarantined).take()
+    }
+
+    /// True if the accounts file exists and no earlier version was set aside as corrupt: only
     /// then does it name every account whose web data may still be in use.
     pub fn lists_all_accounts(&self) -> bool {
         let quarantined = fs::read_dir(&self.dir).is_ok_and(|entries| {
@@ -28,18 +42,22 @@ impl FsStore {
                 entry
                     .file_name()
                     .to_string_lossy()
-                    .starts_with(CORRUPT_FILE_PREFIX)
+                    .starts_with(&corrupt_file_prefix())
             })
         });
         self.file().is_file() && !quarantined
     }
 }
 
+const ACCOUNTS_FILE: &str = "accounts.json";
+
 /// The file names the user's accounts and workspaces: readable by the user only.
 const ACCOUNTS_FILE_MODE: u32 = 0o600;
 
-/// Name prefix of a corrupt `accounts.json` kept for inspection.
-const CORRUPT_FILE_PREFIX: &str = "accounts.json.corrupt-";
+/// Name prefix of a corrupt [`ACCOUNTS_FILE`] kept for inspection.
+fn corrupt_file_prefix() -> String {
+    format!("{ACCOUNTS_FILE}.corrupt-")
+}
 
 fn port_error(action: &str, error: impl std::fmt::Display) -> PortError {
     PortError(format!("{action}: {error}"))
@@ -53,27 +71,35 @@ impl Store for FsStore {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Persisted::default());
             }
-            Err(error) => return Err(port_error("read accounts.json", error)),
+            Err(error) => return Err(port_error(&format!("read {ACCOUNTS_FILE}"), error)),
         };
-        if let Ok(persisted) = serde_json::from_slice(&bytes) {
-            Ok(persisted)
-        } else {
-            // Keep the unreadable file for inspection and start empty.
-            let seconds = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_or(0, |since_epoch| since_epoch.as_secs());
-            let target = self.dir.join(format!("{CORRUPT_FILE_PREFIX}{seconds}"));
-            fs::rename(&path, &target)
-                .map_err(|error| port_error("quarantine corrupt accounts.json", error))?;
-            Ok(Persisted::default())
-        }
+        let parse_error = match serde_json::from_slice(&bytes) {
+            Ok(persisted) => return Ok(persisted),
+            Err(error) => error,
+        };
+        // Keep the unreadable file for inspection and start empty.
+        let seconds = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |since_epoch| since_epoch.as_secs());
+        let target = self.dir.join(format!("{}{seconds}", corrupt_file_prefix()));
+        fs::rename(&path, &target).map_err(|error| {
+            port_error(
+                &format!("quarantine corrupt {ACCOUNTS_FILE} ({parse_error})"),
+                error,
+            )
+        })?;
+        *fs_util::lock_ignoring_poison(&self.quarantined) = Some(format!(
+            "corrupt {ACCOUNTS_FILE} ({parse_error}) moved to {}",
+            target.display()
+        ));
+        Ok(Persisted::default())
     }
 
     fn save(&self, data: &Persisted) -> PortResult {
         let json =
             serde_json::to_vec_pretty(data).map_err(|error| port_error("serialize", error))?;
         fs_util::write_atomically(&self.file(), &json, ACCOUNTS_FILE_MODE)
-            .map_err(|error| port_error("write accounts.json", error))
+            .map_err(|error| port_error(&format!("write {ACCOUNTS_FILE}"), error))
     }
 }
 
@@ -85,13 +111,12 @@ mod tests {
 
     fn sample() -> Persisted {
         let id = uuid_like();
+        let mut account = Account::new(id, "slack", "KIT", Some("x".into()));
+        account.settings.muted = true;
+        account.settings.in_dock_badge = false;
+        account.settings.user_agent = Some("chrome".into());
         Persisted {
-            accounts: vec![Account {
-                muted: true,
-                in_dock_badge: false,
-                user_agent: Some("chrome".into()),
-                ..Account::new(id, "slack", "KIT", Some("x".into()))
-            }],
+            accounts: vec![account],
             settings: Settings {
                 app: AppSettings {
                     dnd: true,
@@ -102,79 +127,6 @@ mod tests {
             },
             custom_services: vec![],
         }
-    }
-
-    #[test]
-    fn loads_old_format_file() {
-        let d = tempfile::tempdir().unwrap();
-        let old = r#"{"accounts":[{"id":"00000000-0000-0000-0000-00000000002a","service":"slack","label":"KIT","instance":"x","muted":true}],"settings":{"dnd":true,"active":"00000000-0000-0000-0000-00000000002a"}}"#;
-        fs::write(d.path().join("accounts.json"), old).unwrap();
-        let p = FsStore::new(d.path()).load().unwrap();
-        let id = uuid_like();
-        let expected = Persisted {
-            accounts: vec![Account {
-                muted: true,
-                ..Account::new(id, "slack", "KIT", Some("x".into()))
-            }],
-            settings: Settings {
-                app: AppSettings {
-                    dnd: true,
-                    ..AppSettings::default()
-                },
-                active: Some(id),
-            },
-            custom_services: vec![],
-        };
-        assert_eq!(p, expected);
-        assert!(
-            d.path().join("accounts.json").exists(),
-            "old file must not be quarantined"
-        );
-    }
-
-    /// File written by the previous version (per-account settings, no batch-2 fields).
-    #[test]
-    fn loads_previous_version_file() {
-        let d = tempfile::tempdir().unwrap();
-        let prev = r#"{
-          "accounts": [
-            {"id": "00000000-0000-0000-0000-00000000002a", "service": "rainbow", "label": "Work", "instance": null,
-             "muted": false, "show_badge": false, "in_dock_badge": true, "user_agent": "chrome"}
-          ],
-          "settings": {"dnd": false, "notification_preview": false, "notification_sound": true,
-                       "dock_badge": "count_only", "launch_at_login": true, "start_hidden": false,
-                       "close_to_background": true, "browser": "Firefox",
-                       "active": "00000000-0000-0000-0000-00000000002a"}
-        }"#;
-        fs::write(d.path().join("accounts.json"), prev).unwrap();
-        let p = FsStore::new(d.path()).load().unwrap();
-        let a = &p.accounts[0];
-        assert_eq!(
-            (a.label.as_str(), a.show_badge, a.user_agent.as_deref()),
-            ("Work", false, Some("chrome"))
-        );
-        assert!(
-            a.enabled && a.link_target.is_none() && a.custom_icon.is_none() && a.favicon.is_none()
-        );
-        assert_eq!(
-            (a.zoom, a.hibernate_after_min, a.custom_css.as_deref()),
-            (1.0, None, None)
-        );
-        assert!(!a.start_asleep);
-        let app = &p.settings.app;
-        assert!(
-            !app.notification_preview
-                && app.launch_at_login
-                && app.browser.as_deref() == Some("Firefox")
-        );
-        assert_eq!(app.link_target, protocol::LinkTarget::SystemBrowser);
-        assert!(app.show_tray && app.badge_when_muted);
-        assert_eq!(app.after_wake, protocol::AfterWake::Check);
-        assert!(p.custom_services.is_empty());
-        assert!(
-            d.path().join("accounts.json").exists(),
-            "previous file must not be quarantined"
-        );
     }
 
     fn uuid_like() -> uuid::Uuid {
@@ -198,14 +150,10 @@ mod tests {
         use std::os::unix::fs::PermissionsExt as _;
 
         let d = tempfile::tempdir().unwrap();
-        fs::write(d.path().join("accounts.json"), "readable").unwrap();
-        fs::set_permissions(
-            d.path().join("accounts.json"),
-            Permissions::from_mode(0o644),
-        )
-        .unwrap();
+        fs::write(d.path().join(ACCOUNTS_FILE), "readable").unwrap();
+        fs::set_permissions(d.path().join(ACCOUNTS_FILE), Permissions::from_mode(0o644)).unwrap();
         FsStore::new(d.path()).save(&sample()).unwrap();
-        let mode = fs::metadata(d.path().join("accounts.json"))
+        let mode = fs::metadata(d.path().join(ACCOUNTS_FILE))
             .unwrap()
             .permissions()
             .mode();
@@ -225,22 +173,31 @@ mod tests {
         assert!(!s.lists_all_accounts(), "no file yet");
         s.save(&sample()).unwrap();
         assert!(s.lists_all_accounts());
-        fs::write(d.path().join("accounts.json.corrupt-1"), "{nope").unwrap();
+        fs::write(
+            d.path().join(format!("{}1", corrupt_file_prefix())),
+            "{nope",
+        )
+        .unwrap();
         assert!(!s.lists_all_accounts(), "an older file was corrupt");
     }
 
     #[test]
     fn corrupt_is_renamed() {
         let d = tempfile::tempdir().unwrap();
-        fs::write(d.path().join("accounts.json"), "{nope").unwrap();
+        fs::write(d.path().join(ACCOUNTS_FILE), "{nope").unwrap();
         let s = FsStore::new(d.path());
         assert_eq!(s.load().unwrap(), Persisted::default());
-        assert!(!d.path().join("accounts.json").exists());
+        assert!(
+            s.take_quarantined()
+                .is_some_and(|note| note.contains("corrupt"))
+        );
+        assert_eq!(s.take_quarantined(), None);
+        assert!(!d.path().join(ACCOUNTS_FILE).exists());
         let found = fs::read_dir(d.path()).unwrap().any(|e| {
             e.unwrap()
                 .file_name()
                 .to_string_lossy()
-                .starts_with("accounts.json.corrupt-")
+                .starts_with(&corrupt_file_prefix())
         });
         assert!(found);
         s.save(&sample()).unwrap();

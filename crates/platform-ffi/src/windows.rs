@@ -27,8 +27,7 @@ pub use process::*;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::fmt;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_SCRIPT_DIALOG_KIND, COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT,
@@ -46,35 +45,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::{BOOL, HSTRING, PWSTR};
 
 use crate::{
-    DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, Presentation, origin_of,
+    DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, HandlerSlot, InstallError,
+    Presentation, origin_of,
 };
-
-#[derive(Debug)]
-pub enum InstallError {
-    AlreadyInstalled,
-    /// [`attach`] was called before [`install`].
-    NotInstalled,
-    /// `WebView2` refused a call.
-    WebView2(windows::core::Error),
-}
-
-impl fmt::Display for InstallError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            InstallError::AlreadyInstalled => write!(formatter, "dialogs are already installed"),
-            InstallError::NotInstalled => write!(formatter, "dialogs are not installed"),
-            InstallError::WebView2(error) => write!(formatter, "WebView2: {error}"),
-        }
-    }
-}
-
-impl std::error::Error for InstallError {}
-
-impl From<windows::core::Error> for InstallError {
-    fn from(error: windows::core::Error) -> InstallError {
-        InstallError::WebView2(error)
-    }
-}
 
 /// A dialog the handler decided to show; whatever shows it answers through [`answer`].
 #[derive(Debug, Clone)]
@@ -97,7 +70,7 @@ struct Installed {
     show: ShowDialog,
 }
 
-static INSTALLED: OnceLock<Installed> = OnceLock::new();
+static INSTALLED: HandlerSlot<Installed> = HandlerSlot::new();
 
 /// A shown dialog's request with `WebView2`'s event, whose deferral keeps the page waiting.
 struct Pending {
@@ -115,15 +88,13 @@ thread_local! {
 /// Sets the handler deciding the dialogs of every webview given to [`attach`] later, and how a
 /// dialog to show is shown.
 pub fn install(handler: Arc<dyn DialogHandler>, show: ShowDialog) -> Result<(), InstallError> {
-    INSTALLED
-        .set(Installed { handler, show })
-        .map_err(|_| InstallError::AlreadyInstalled)
+    INSTALLED.install(Installed { handler, show })
 }
 
 /// Shows the dialogs of the pages in `controller`'s webview as decided by the installed
 /// handler; their [`DialogRequest`]s carry `tag`. Call it on the main thread.
 pub fn attach(controller: &ICoreWebView2Controller, tag: &str) -> Result<(), InstallError> {
-    let installed = INSTALLED.get().ok_or(InstallError::NotInstalled)?;
+    let installed = INSTALLED.installed()?;
     // The handler holds the controller to ask whether the view is visible; wry closes the
     // controller when the webview goes, which ends the view either way.
     let (asking, tag) = (controller.clone(), tag.to_string());

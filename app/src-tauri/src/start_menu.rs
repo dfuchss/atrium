@@ -4,11 +4,10 @@
 //! Windows names Atrium's notifications and taskbar button after it. Uninstall removes the
 //! shortcut only.
 
-use std::io;
 use std::path::{Path, PathBuf};
 
+use platform_ffi::{read_shortcut, write_shortcut};
 use protocol::DesktopEntryState;
-use webview_dialogs::{read_shortcut, write_shortcut};
 
 const SHORTCUT_FILE: &str = "Atrium.lnk";
 /// The Start menu programs folder of the user, below the roaming app data folder.
@@ -71,12 +70,8 @@ pub(crate) fn install(menu: &StartMenu, executable: &Path, app_id: &str) -> Resu
 /// Removes the shortcut, if there is one.
 pub(crate) fn uninstall(menu: &StartMenu) -> Result<(), String> {
     let link = menu.shortcut_path();
-    match std::fs::remove_file(&link) {
-        Err(error) if error.kind() != io::ErrorKind::NotFound => {
-            Err(format!("cannot remove {}: {error}", link.display()))
-        }
-        _ => Ok(()),
-    }
+    fs_util::remove_if_present(&link)
+        .map_err(|error| format!("cannot remove {}: {error}", link.display()))
 }
 
 #[cfg(test)]

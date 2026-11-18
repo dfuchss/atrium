@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 use leptos::prelude::*;
-use protocol::{AccountView, AfterWake};
+use protocol::{AccountView, AfterWake, Snapshot};
+use uuid::Uuid;
 use wasm_bindgen::JsCast;
 
 /// Directive: switch off macOS auto-correction (not a typed attribute in leptos).
@@ -13,6 +14,53 @@ use wasm_bindgen::JsCast;
 )]
 pub(crate) fn no_autocorrect(element: web_sys::Element) {
     let _ = element.set_attribute("autocorrect", "off");
+}
+
+/// Directive of [`TextField`]: switches off auto-correction unless the field is `plain`.
+fn autocorrect_unless_plain(element: web_sys::Element, plain: bool) {
+    if !plain {
+        no_autocorrect(element);
+    }
+}
+
+/// Single-line input bound to `value`. Meant for identifiers, URLs and names: it switches off
+/// auto-capitalization, spell checking, auto-complete and auto-correction; a `plain` field is
+/// ordinary text and only has spell checking off.
+#[component]
+pub(crate) fn TextField(
+    value: RwSignal<String>,
+    /// The `type` of the input.
+    #[prop(default = "text")]
+    kind: &'static str,
+    #[prop(optional)] id: Option<&'static str>,
+    #[prop(optional)] class: Option<&'static str>,
+    #[prop(optional)] list: Option<&'static str>,
+    #[prop(optional, into)] placeholder: MaybeProp<String>,
+    #[prop(optional)] plain: bool,
+    /// Runs when the user leaves the field after changing it.
+    #[prop(optional, into)]
+    on_change: Option<Callback<()>>,
+) -> impl IntoView {
+    view! {
+        <input
+            type=kind
+            id=id
+            class=class
+            list=list
+            placeholder=move || placeholder.get()
+            autocapitalize=(!plain).then_some("off")
+            spellcheck="false"
+            autocomplete=(!plain).then_some("off")
+            prop:value=move || value.get()
+            on:input=move |event| value.set(event_target_value(&event))
+            on:change=move |_| {
+                if let Some(on_change) = on_change {
+                    on_change.run(());
+                }
+            }
+            use:autocorrect_unless_plain=plain
+        />
+    }
 }
 
 /// Focuses the element `id` after the next render.
@@ -34,12 +82,73 @@ pub(crate) fn Icon(svg: &'static str) -> impl IntoView {
     view! { <span class="ico" inner_html=svg></span> }
 }
 
-/// Round icon: the account's image if it has one, else initials on the service color.
+/// The account `id` of the snapshot; `None` once it is gone.
+pub(crate) fn account_by_id(snapshot: ReadSignal<Snapshot>, id: Uuid) -> Memo<Option<AccountView>> {
+    Memo::new(move |_| {
+        snapshot.with(|snapshot| {
+            snapshot
+                .accounts
+                .iter()
+                .find(|account| account.id == id)
+                .cloned()
+        })
+    })
+}
+
+/// What a round icon shows.
+pub(crate) enum IconFace {
+    /// An image that fills the icon.
+    Image(String),
+    /// A glyph image on the service color.
+    Glyph(String),
+    /// Initials on the service color.
+    Initials(String),
+}
+
+/// Round icon showing `face`; `color` is the background of glyphs and initials.
+pub(crate) fn icon_view(face: IconFace, color: &str, small: bool) -> AnyView {
+    let background = format!("background:{color}");
+    match face {
+        IconFace::Image(source) => view! { <span class="icon has-img" class:small=small><img src=source alt="" draggable="false" /></span> }.into_any(),
+        IconFace::Glyph(source) => view! { <span class="icon has-img glyph" class:small=small style=background><img src=source alt="" draggable="false" /></span> }.into_any(),
+        IconFace::Initials(initials) => view! { <span class="icon" class:small=small style=background>{initials}</span> }.into_any(),
+    }
+}
+
+/// Round icon of an account: its image if it has one, else initials on the service color.
 pub(crate) fn account_icon(account: &AccountView, small: bool) -> AnyView {
-    match &account.icon {
-        Some(source) if account.icon_glyph => view! { <span class="icon has-img glyph" class:small=small style=format!("background:{}", account.color)><img src=source.clone() alt="" draggable="false" /></span> }.into_any(),
-        Some(source) => view! { <span class="icon has-img" class:small=small><img src=source.clone() alt="" draggable="false" /></span> }.into_any(),
-        None => view! { <span class="icon" class:small=small style=format!("background:{}", account.color)>{account.initials.clone()}</span> }.into_any(),
+    let face = match account.icon.clone() {
+        Some(source) if account.icon_glyph => IconFace::Glyph(source),
+        Some(source) => IconFace::Image(source),
+        None => IconFace::Initials(account.initials.clone()),
+    };
+    icon_view(face, &account.color, small)
+}
+
+/// Error message in a note; renders nothing while there is none.
+#[component]
+pub(crate) fn ErrorNote(#[prop(into)] message: Signal<Option<String>>) -> impl IntoView {
+    move || {
+        message
+            .get()
+            .map(|message| view! { <div class="note error">{message}</div> })
+    }
+}
+
+/// Save and Cancel buttons of a form row; Save submits the surrounding form.
+#[component]
+pub(crate) fn FormActions(
+    #[prop(default = "Save")] submit_label: &'static str,
+    #[prop(into)] disabled: Signal<bool>,
+    #[prop(into)] on_cancel: Callback<()>,
+) -> impl IntoView {
+    view! {
+        <Row label="">
+            <div class="actions">
+                <button class="btn primary" type="submit" disabled=move || disabled.get()>{submit_label}</button>
+                <button class="btn" type="button" on:click=move |_| on_cancel.run(())>"Cancel"</button>
+            </div>
+        </Row>
     }
 }
 
@@ -156,7 +265,6 @@ pub(crate) fn hibernate_label(minutes: Option<u32>) -> String {
         .map_or_else(|| "Never".to_string(), minutes_label)
 }
 
-/// Label of an after-wake mode.
 pub(crate) fn after_wake_label(mode: AfterWake) -> &'static str {
     match mode {
         AfterWake::Check => "Check, reload if stuck",

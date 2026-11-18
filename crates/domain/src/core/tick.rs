@@ -3,12 +3,10 @@
 
 use uuid::Uuid;
 
-use super::{Core, Effect, scripts};
+use super::{Core, Effect, MS_PER_MINUTE, scripts};
 
 /// A gap between two clock readings longer than this means the computer was asleep.
-pub const SLEEP_GAP_MS: u64 = 30_000;
-
-const MS_PER_MINUTE: u64 = 60_000;
+pub(super) const SLEEP_GAP_MS: u64 = 30_000;
 
 impl Core {
     pub(super) fn tick(&mut self, now_ms: u64) -> Vec<Effect> {
@@ -73,6 +71,7 @@ impl Core {
             let last_activity = *self.last_activity_ms.entry(account.id).or_insert(now_ms);
             // The account's own timeout wins; 0, or none at all, means never.
             let Some(minutes) = account
+                .settings
                 .hibernate_after_min
                 .or(global_minutes)
                 .filter(|&minutes| minutes > 0)
@@ -91,7 +90,7 @@ impl Core {
     fn poll_effects(&self) -> Vec<Effect> {
         let mut effects = vec![];
         for account in &self.persisted.accounts {
-            let Some(service) = self.catalog.get(&account.service) else {
+            let Some(service) = self.registry.get(&account.service) else {
                 continue;
             };
             if !self.is_loaded(account.id) {

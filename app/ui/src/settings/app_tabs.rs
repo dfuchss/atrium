@@ -5,28 +5,42 @@ use protocol::{
     AfterWake, BadgeStyle, DockBadgeMode, IconSize, LinkTarget, Snapshot, Theme, UiCommand,
 };
 
-use super::app_toggle;
 use super::browser_row::BrowserRow;
+use super::{Setting, app_toggle, setting_radio, setting_segment};
 use crate::commands::{send_command, update_settings};
 use crate::desktop::DesktopIntegration;
 use crate::platform_texts;
 use crate::update::UpdateSection;
 use crate::widgets::{HIBERNATE_MINUTES, Row, after_wake_options, minutes_label, number_options};
 
+const ICON_SIZE: Setting<IconSize> = (
+    |settings| settings.icon_size,
+    |settings, value| settings.icon_size = value,
+);
+const THEME: Setting<Theme> = (
+    |settings| settings.theme,
+    |settings, value| settings.theme = value,
+);
+const BADGE_STYLE: Setting<BadgeStyle> = (
+    |settings| settings.badge_style,
+    |settings, value| settings.badge_style = value,
+);
+const DOCK_BADGE: Setting<DockBadgeMode> = (
+    |settings| settings.dock_badge,
+    |settings, value| settings.dock_badge = value,
+);
+const LINK_TARGET: Setting<LinkTarget> = (
+    |settings| settings.link_target,
+    |settings, value| settings.link_target = value,
+);
+
 #[component]
 pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    let size = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.icon_size));
     let size_button = move |value: IconSize, label: &'static str| {
-        view! {
-            <button class="btn" class:on=move || size.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.icon_size = value)>{label}</button>
-        }
+        setting_segment(snapshot, ICON_SIZE, value, label)
     };
-    let theme = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.theme));
-    let theme_button = move |value: Theme, label: &'static str| {
-        view! {
-            <button class="btn" class:on=move || theme.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.theme = value)>{label}</button>
-        }
-    };
+    let theme_button =
+        move |value: Theme, label: &'static str| setting_segment(snapshot, THEME, value, label);
     let texts = platform_texts::texts();
     let hibernate_after = move || snapshot.with(|snapshot| snapshot.settings.hibernate_after_min);
     let after_wake = move || snapshot.with(|snapshot| snapshot.settings.after_wake);
@@ -72,11 +86,8 @@ pub(super) fn GeneralTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
 
 #[component]
 fn BadgeRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    let badge = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.badge_style));
     let badge_button = move |value: BadgeStyle, label: &'static str| {
-        view! {
-            <button class="btn" class:on=move || badge.get() == value on:click=move |_| update_settings(snapshot, |settings| settings.badge_style = value)>{label}</button>
-        }
+        setting_segment(snapshot, BADGE_STYLE, value, label)
     };
     view! {
         <Row label="Sidebar badges" hint="Red: mentions and direct messages, with their number or as a dot. White dot: other unread messages, hidden with Urgent only.">
@@ -104,15 +115,8 @@ pub(super) fn NotificationsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView 
 
 #[component]
 pub(super) fn DockTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    let mode = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.dock_badge));
     let mode_option = move |value: DockBadgeMode, label: &'static str| {
-        view! {
-            <label class="radio">
-                <input type="radio" name="dock-badge" prop:checked=move || mode.get() == value
-                    on:change=move |_| update_settings(snapshot, |settings| settings.dock_badge = value) />
-                <span>{label}</span>
-            </label>
-        }
+        setting_radio(snapshot, "dock-badge", DOCK_BADGE, value, label)
     };
     view! {
         <h2>{platform_texts::texts().badge_tab}</h2>
@@ -128,15 +132,8 @@ pub(super) fn DockTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
 
 #[component]
 pub(super) fn LinksTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
-    let target = Memo::new(move |_| snapshot.with(|snapshot| snapshot.settings.link_target));
     let target_option = move |value: LinkTarget, label: &'static str| {
-        view! {
-            <label class="radio">
-                <input type="radio" name="link-target" prop:checked=move || target.get() == value
-                    on:change=move |_| update_settings(snapshot, |settings| settings.link_target = value) />
-                <span>{label}</span>
-            </label>
-        }
+        setting_radio(snapshot, "link-target", LINK_TARGET, value, label)
     };
     view! {
         <h2>"Links"</h2>

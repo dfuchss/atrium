@@ -1,9 +1,13 @@
 //! URL policies shared by the core and the adapters (pure functions).
 
+use protocol::LinkTarget;
+
+use crate::ViewPolicy;
+
 /// Schemes that may be handed to the OS opener (browser / mail client). Everything else
 /// (`file:`, custom app schemes such as `x-apple.systempreferences:`, `javascript:`...) is
 /// dropped, so a page cannot launch local files or other apps through us.
-pub fn opener_url_allowed(url: &str) -> bool {
+pub(crate) fn opener_url_allowed(url: &str) -> bool {
     url::Url::parse(url.trim()).is_ok_and(|parsed| match parsed.scheme() {
         "http" | "https" => parsed.host_str().is_some(),
         "mailto" => true,
@@ -26,6 +30,61 @@ pub fn nav_allowed(url: &url::Url) -> bool {
             .is_some_and(|host| APP_UI_HOSTS.contains(&host)),
         "about" | "blob" | "data" => true,
         _ => false,
+    }
+}
+
+/// What a new-window request may become before the account's link policy decides.
+#[derive(Debug, PartialEq, Eq)]
+pub enum NewWindowGate {
+    /// `mailto:` goes to the core as an external link (mail app), as in the navigation hook.
+    MailApp,
+    /// Not a page a window may load ([`nav_allowed`]), e.g. Atrium's own UI hosts.
+    Denied,
+    Open,
+}
+
+pub fn new_window_gate(url: &url::Url) -> NewWindowGate {
+    if url.scheme() == "mailto" {
+        NewWindowGate::MailApp
+    } else if nav_allowed(url) {
+        NewWindowGate::Open
+    } else {
+        NewWindowGate::Denied
+    }
+}
+
+/// Where a new-window request that passed the [`NewWindowGate`] goes.
+#[derive(Debug, PartialEq, Eq)]
+pub enum NewWindowRoute<S> {
+    /// An in-app window of the requested size `S`.
+    SignInPopup(S),
+    /// An in-app window, as the URL's host is one of the account's app hosts.
+    AppHost,
+    /// An in-app window, as the account's links open in one ([`LinkTarget::AppWindow`]).
+    AppWindow,
+    /// The system browser ([`LinkTarget::SystemBrowser`]); where the engine tells a requested
+    /// size only once the window is ready to show (Linux), the adapter may still find a sign-in
+    /// popup.
+    SystemBrowser,
+}
+
+/// The route of a request for `url`, with the `size` the page asked for, under `policy`: a
+/// requested size makes a sign-in popup, an app host an app window, anything else follows the
+/// account's link target.
+pub fn new_window_route<S>(
+    url: &url::Url,
+    size: Option<S>,
+    policy: &ViewPolicy,
+) -> NewWindowRoute<S> {
+    if let Some(size) = size {
+        return NewWindowRoute::SignInPopup(size);
+    }
+    if url.host_str().is_some_and(|host| policy.is_app_host(host)) {
+        return NewWindowRoute::AppHost;
+    }
+    match policy.link_target {
+        LinkTarget::SystemBrowser => NewWindowRoute::SystemBrowser,
+        LinkTarget::AppWindow => NewWindowRoute::AppWindow,
     }
 }
 
@@ -131,6 +190,50 @@ mod tests {
         ] {
             assert!(!nav_allowed(&u(bad)), "{bad}");
         }
+    }
+
+    #[test]
+    fn new_windows_send_mail_links_to_the_mail_app_and_deny_the_app_ui() {
+        let gate = |url: &str| new_window_gate(&url::Url::parse(url).unwrap());
+        assert_eq!(gate("mailto:a@b.org"), NewWindowGate::MailApp);
+        assert_eq!(gate("https://example.org/"), NewWindowGate::Open);
+        assert_eq!(gate("about:blank"), NewWindowGate::Open);
+        assert_eq!(gate("http://tauri.localhost/"), NewWindowGate::Denied);
+        assert_eq!(gate("https://ipc.localhost/x"), NewWindowGate::Denied);
+        assert_eq!(gate("file:///C:/Windows/win.ini"), NewWindowGate::Denied);
+        assert_eq!(gate("javascript:alert(1)"), NewWindowGate::Denied);
+    }
+
+    #[test]
+    fn new_windows_go_by_size_then_app_host_then_link_target() {
+        let policy = |link_target| ViewPolicy {
+            link_target,
+            allow_media: false,
+            app_hosts: vec!["*.sso.example".into()],
+        };
+        let route = |url: &str, size: Option<(u32, u32)>, link_target| {
+            new_window_route(&url::Url::parse(url).unwrap(), size, &policy(link_target))
+        };
+        let (link, app_host) = ("https://example.org/", "https://login.sso.example/");
+        for link_target in [LinkTarget::SystemBrowser, LinkTarget::AppWindow] {
+            assert_eq!(
+                route(link, Some((500, 600)), link_target),
+                NewWindowRoute::SignInPopup((500, 600))
+            );
+            assert_eq!(route(app_host, None, link_target), NewWindowRoute::AppHost);
+        }
+        assert_eq!(
+            route(link, None, LinkTarget::SystemBrowser),
+            NewWindowRoute::SystemBrowser
+        );
+        assert_eq!(
+            route(link, None, LinkTarget::AppWindow),
+            NewWindowRoute::AppWindow
+        );
+        assert_eq!(
+            route("about:blank", None, LinkTarget::SystemBrowser),
+            NewWindowRoute::SystemBrowser
+        );
     }
 
     #[test]

@@ -20,7 +20,14 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ### Fixed
 
+#### All platforms
+
 - An account with notifications off no longer notifies you of finished downloads
+- Opening a service definition file from the service list for editing now shows the error when the file cannot be read, instead of doing nothing
+
+#### Linux
+
+- External links open from the AppImage on hosts that are not Ubuntu-like, such as Fedora, instead of failing: Atrium now uses the host's `gio-launch-desktop`
 
 ## 0.4.0
 

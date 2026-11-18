@@ -58,7 +58,8 @@ impl BundleInfo {
 
 /// The only `*.app` folder directly inside `extracted`.
 pub(crate) fn find_bundle(extracted: &Path) -> Result<PathBuf, String> {
-    let entries = std::fs::read_dir(extracted).map_err(|error| error.to_string())?;
+    let entries = std::fs::read_dir(extracted)
+        .map_err(|error| format!("cannot list {}: {error}", extracted.display()))?;
     let bundles: Vec<PathBuf> = entries
         .filter_map(Result::ok)
         .map(|entry| entry.path())

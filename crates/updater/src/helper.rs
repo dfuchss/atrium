@@ -11,7 +11,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use crate::native::{SWAPS_IN_ONE_RENAME, process_alive, processes_running_from, relaunch};
-use crate::store::{SwapResult, UpdaterFiles, open_private, write_private};
+use crate::store::{SwapResult, UpdaterFiles, open_private};
 use crate::swap::{BundleFs, RealFs, SwapOutcome, swap};
 
 /// First argument that turns the app executable into the swap helper.
@@ -153,8 +153,7 @@ pub(crate) fn run(plan: &HelperPlan, io: &HelperIo<'_>) -> SwapResult {
         message: outcome.message(),
     };
     log(&format!("swap to {}: {}", plan.version, result.message));
-    let json = serde_json::to_string(&result).unwrap_or_default();
-    if let Err(error) = write_private(&UpdaterFiles::result_file(&plan.updates_dir), &json) {
+    if let Err(error) = UpdaterFiles::write_swap_result(&plan.updates_dir, &result) {
         log(&format!("cannot write the result: {error}"));
     }
     // Even without a swap: a user who asked for a restart should not be left without Atrium

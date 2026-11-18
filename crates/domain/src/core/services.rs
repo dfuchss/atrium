@@ -3,7 +3,6 @@
 use protocol::CustomService;
 use uuid::Uuid;
 
-use super::unread::TitleRules;
 use super::{Core, Effect, ViewSpec, log_effects};
 use crate::catalog::ServiceDef;
 
@@ -14,33 +13,6 @@ impl Core {
         self.startup_log.extend(errors.iter().cloned());
         // Problems of the custom services are already in the startup log (see `new`).
         self.apply_user_services(defs, errors);
-    }
-
-    /// Replaces the user definitions (a failed file keeps the previous definitions of ids that
-    /// no file defines any more, as the failed file may be the one that defined them) and
-    /// rebuilds the catalog. Returns the problems of the custom services.
-    fn apply_user_services(
-        &mut self,
-        mut defs: Vec<ServiceDef>,
-        errors: Vec<String>,
-    ) -> Vec<String> {
-        if !errors.is_empty() {
-            let kept: Vec<ServiceDef> = self
-                .user_service_defs
-                .iter()
-                .filter(|old| !defs.iter().any(|def| def.id == old.id))
-                .cloned()
-                .collect();
-            defs.extend(kept);
-        }
-        let mut base = self.builtin_catalog.clone();
-        for def in &defs {
-            base.insert(def.clone());
-        }
-        self.user_service_defs = defs;
-        self.base_catalog = base;
-        self.service_errors = errors;
-        self.rebuild_catalog()
     }
 
     /// Reload of the user's files: new catalog and unread rules; accounts whose view would now
@@ -91,23 +63,15 @@ impl Core {
         }
     }
 
-    /// Catalog = base + valid custom services; recompiles the unread rules. Returns problems.
-    pub(super) fn rebuild_catalog(&mut self) -> Vec<String> {
-        let mut catalog = self.base_catalog.clone();
-        let mut problems = vec![];
-        for custom in &self.persisted.custom_services {
-            match ServiceDef::from_custom(custom) {
-                Ok(def) => catalog.insert(def),
-                Err(problem) => problems.push(problem),
-            }
-        }
-        self.title_rules = catalog
-            .services()
-            .iter()
-            .map(|service| (service.id.clone(), TitleRules::compile(service)))
-            .collect();
-        self.catalog = catalog;
-        problems
+    /// Rebuilds the catalog after a change of the custom services; returns their problems.
+    fn rebuild_catalog(&mut self) -> Vec<String> {
+        self.registry.rebuild(&self.persisted.custom_services)
+    }
+
+    /// See [`super::registry::ServiceRegistry::apply_user_services`].
+    fn apply_user_services(&mut self, defs: Vec<ServiceDef>, errors: Vec<String>) -> Vec<String> {
+        self.registry
+            .apply_user_services(defs, errors, &self.persisted.custom_services)
     }
 
     pub(super) fn is_custom(&self, service_id: &str) -> bool {
@@ -124,10 +88,6 @@ impl Core {
             .position(|custom| custom.id == service_id)
     }
 
-    fn custom_service_error(&self, message: String) -> Vec<Effect> {
-        vec![Effect::Log(message), self.emit()]
-    }
-
     /// Persists and emits after a custom service change (the catalog is already rebuilt).
     fn custom_services_changed(&mut self, mut effects: Vec<Effect>) -> Vec<Effect> {
         effects.push(self.persist());
@@ -138,10 +98,10 @@ impl Core {
     pub(super) fn add_custom_service(&mut self, service: &CustomService) -> Vec<Effect> {
         let mut custom = match crate::catalog::normalize_custom(service) {
             Ok(custom) => custom,
-            Err(error) => return self.custom_service_error(format!("add custom service: {error}")),
+            Err(error) => return self.rejected(format!("add custom service: {error}")),
         };
         custom.id = crate::catalog::custom_service_id(&custom.name, |id| {
-            self.base_catalog.get(id).is_some() || self.is_custom(id)
+            self.registry.defines_file_service(id) || self.is_custom(id)
         });
         let id = custom.id.clone();
         self.persisted.custom_services.push(custom);
@@ -153,7 +113,7 @@ impl Core {
     /// Stores the edited service and recreates the views of its accounts.
     pub(super) fn update_custom_service(&mut self, service: &CustomService) -> Vec<Effect> {
         let Some(index) = self.custom_service_index(&service.id) else {
-            return self.custom_service_error(format!(
+            return self.rejected(format!(
                 "update custom service: unknown id {:?}",
                 service.id
             ));
@@ -161,7 +121,7 @@ impl Core {
         let custom = match crate::catalog::normalize_custom(service) {
             Ok(custom) => custom,
             Err(error) => {
-                return self.custom_service_error(format!("update custom service: {error}"));
+                return self.rejected(format!("update custom service: {error}"));
             }
         };
         let id = custom.id.clone();
@@ -183,7 +143,7 @@ impl Core {
     /// Only unused services can be removed.
     pub(super) fn remove_custom_service(&mut self, id: &str) -> Vec<Effect> {
         let Some(index) = self.custom_service_index(id) else {
-            return self.custom_service_error(format!("remove custom service: unknown id {id:?}"));
+            return self.rejected(format!("remove custom service: unknown id {id:?}"));
         };
         let users = self
             .persisted
@@ -192,7 +152,7 @@ impl Core {
             .filter(|account| account.service == id)
             .count();
         if users > 0 {
-            return self.custom_service_error(format!(
+            return self.rejected(format!(
                 "remove custom service {id}: still used by {users} account(s)"
             ));
         }

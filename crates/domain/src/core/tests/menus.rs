@@ -23,7 +23,7 @@ fn zoom_menu_and_settings() {
     let effects = core.handle(Input::Menu(MenuAction::ZoomOut));
     assert_eq!(zoom(&effects), Some(0.9));
     assert!(effects.iter().any(
-        |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].zoom == 0.9)
+        |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].settings.zoom == 0.9)
     ));
     assert_eq!(
         zoom(&core.handle(Input::Menu(MenuAction::ZoomReset))),
@@ -181,7 +181,7 @@ fn account_menu(core: &mut Core, n: u128) -> Vec<(AccountMenuAction, bool)> {
 fn account_menu_items_follow_the_account_state() {
     use AccountMenuAction::{DisableNotifications, Reload, Settings, Sleep, WakeUp};
     let mut disabled = account(3, "slack", "C");
-    disabled.enabled = false;
+    disabled.settings.enabled = false;
     let (mut core, _) = started(vec![
         account(1, "slack", "A"),
         account(2, "slack", "B"),
@@ -243,7 +243,7 @@ fn account_menu_switches_notifications() {
     assert!(last_snapshot(&effects).accounts[0].settings.muted);
     assert!(
         effects.iter().any(
-            |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].muted)
+            |effect| matches!(effect, Effect::Persist(persisted) if persisted.accounts[0].settings.muted)
         )
     );
     assert_eq!(
@@ -303,7 +303,7 @@ fn account_menu_settings_and_reload() {
         account: id(2),
         action: AccountMenuAction::Reload,
     });
-    assert!(has(&effects, &Effect::Reload(id(2))));
+    assert!(effects.contains(&Effect::Reload(id(2))));
     assert!(matches!(
         core.handle(Input::AccountMenu {
             account: id(9),

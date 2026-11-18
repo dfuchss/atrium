@@ -26,11 +26,7 @@ impl BundleFs for RealFs {
     }
 
     fn remove_all(&self, path: &Path) -> io::Result<()> {
-        if path.symlink_metadata()?.is_dir() {
-            std::fs::remove_dir_all(path)
-        } else {
-            std::fs::remove_file(path)
-        }
+        fs_util::remove_if_present(path)
     }
 }
 

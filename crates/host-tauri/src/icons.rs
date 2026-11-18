@@ -5,28 +5,23 @@ use std::time::Duration;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
-use domain::core::{SimpleIconResult, simple_icon_url};
+use domain::{SimpleIconResult, simple_icon_url};
 
 /// Larger responses are rejected.
 pub(crate) const MAX_ICON_BYTES: u64 = 512 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Downloads `url` and returns it as `data:<mime>;base64,...`; only `image/*` responses.
-pub(crate) fn download_icon(url: &str) -> Result<String, String> {
-    download(url).map_err(|error| error.to_string())
-}
-
 /// Downloads the Simple Icons glyph `slug` (white SVG).
 pub(crate) fn download_simple_icon(slug: &str) -> SimpleIconResult {
-    match download(&simple_icon_url(slug)) {
+    match download_icon(&simple_icon_url(slug)) {
         Ok(data_url) => SimpleIconResult::Found(data_url),
         Err(ureq::Error::StatusCode(404)) => SimpleIconResult::NotFound,
         Err(error) => SimpleIconResult::Failed(error.to_string()),
     }
 }
 
-fn io_error(message: impl Into<String>) -> ureq::Error {
-    ureq::Error::Io(std::io::Error::other(message.into()))
+fn io_error(error: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> ureq::Error {
+    ureq::Error::Io(std::io::Error::other(error))
 }
 
 /// True for addresses that belong to the local machine or network, never to a public icon host.
@@ -76,8 +71,9 @@ fn ensure_public_host(url: &url::Url) -> Result<(), ureq::Error> {
     Ok(())
 }
 
-fn download(url: &str) -> Result<String, ureq::Error> {
-    let target = url::Url::parse(url).map_err(|error| io_error(error.to_string()))?;
+/// Downloads `url` and returns it as `data:<mime>;base64,...`; only `image/*` responses.
+pub(crate) fn download_icon(url: &str) -> Result<String, ureq::Error> {
+    let target = url::Url::parse(url).map_err(io_error)?;
     if !matches!(target.scheme(), "http" | "https") {
         return Err(io_error("scheme not allowed"));
     }
@@ -88,34 +84,31 @@ fn download(url: &str) -> Result<String, ureq::Error> {
 fn fetch(url: &str) -> Result<String, ureq::Error> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))
-        .user_agent(domain::catalog::webkit_user_agent(
+        .user_agent(domain::webkit_user_agent(
             &crate::native::user_agent_platform(),
         ))
-        // Only the requested URL passed the host allow-list (`domain::core::icons`); a redirect
+        // Only the requested URL passed the host allow-list (`domain::Core`); a redirect
         // could lead anywhere, so it is returned as is and refused below.
         .max_redirects(0)
         .build()
         .into();
     let mut response = agent.get(url).call()?;
     if response.status().is_redirection() {
-        return Err(ureq::Error::Io(std::io::Error::other(
-            "redirects are not followed",
-        )));
+        return Err(io_error("redirects are not followed"));
     }
     let content_type = response
         .headers()
         .get("content-type")
         .and_then(|value| value.to_str().ok())
         .map(String::from);
-    let mime = image_mime(content_type.as_deref())
-        .map_err(|error| ureq::Error::Io(std::io::Error::other(error)))?;
+    let mime = image_mime(content_type.as_deref()).map_err(io_error)?;
     let bytes = response
         .body_mut()
         .with_config()
         .limit(MAX_ICON_BYTES)
         .read_to_vec()?;
     if bytes.is_empty() {
-        return Err(ureq::Error::Io(std::io::Error::other("empty response")));
+        return Err(io_error("empty response"));
     }
     Ok(data_url(&mime, &bytes))
 }

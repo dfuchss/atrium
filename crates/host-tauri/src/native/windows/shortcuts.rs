@@ -11,21 +11,21 @@
 
 use std::sync::{LazyLock, OnceLock};
 
-use domain::MenuModel;
-use tauri::{AppHandle, Manager, Runtime, Webview};
-use webview_dialogs::{
+use platform_ffi::{
     KeyPress, VIRTUAL_KEY, VK_ADD, VK_NUMPAD0, VK_OEM_4, VK_OEM_6, VK_OEM_COMMA, VK_OEM_MINUS,
     VK_OEM_PLUS, VK_SUBTRACT,
 };
+use tauri::{Manager, Runtime, Webview};
 
+use crate::Logger;
 use crate::menus::{ID_ZOOM_IN, ID_ZOOM_OUT, ID_ZOOM_RESET, Shortcut};
-use crate::window_shortcuts::{ShortcutAccounts, ShortcutActions, Target, window_shortcuts};
-use crate::{Feed, Logger};
+use crate::native::with_platform_webview;
+use crate::window_shortcuts::{ShortcutActions, Target, window_shortcuts};
 
 /// A virtual key and whether Shift is held with it (Ctrl always is).
 type Accelerator = (VIRTUAL_KEY, bool);
 
-/// Runs a shortcut's target; set by [`Shortcuts::install`].
+/// Runs a shortcut's target; set by [`install_shortcuts`].
 type Run = Box<dyn Fn(Target) + Send + Sync>;
 
 static RUN: OnceLock<Run> = OnceLock::new();
@@ -82,22 +82,13 @@ fn target_of(press: KeyPress) -> Option<Target> {
 /// Offers the key presses of `webview`, a webview of the main window, to the shortcuts.
 pub(crate) fn attach<R: Runtime>(webview: &Webview<R>) {
     let logger = Logger::new(webview.app_handle());
-    let (label, attach_logger) = (webview.label().to_string(), logger.clone());
-    let scheduled = webview.with_webview(move |platform| {
-        if let Err(error) = webview_dialogs::on_key_down(&platform.controller(), take_shortcut) {
-            attach_logger.log(&format!("[{label}] no keyboard shortcuts: {error}"));
-        }
+    with_platform_webview(webview, &logger, "no keyboard shortcuts", |platform| {
+        platform_ffi::on_key_down(&platform.controller(), take_shortcut)
     });
-    if let Err(error) = scheduled {
-        logger.log(&format!(
-            "[{}] no keyboard shortcuts: {error}",
-            webview.label()
-        ));
-    }
 }
 
 /// Takes `press` if it is a shortcut and runs that off `WebView2`'s event, which must not touch
-/// windows (closing one, bringing one to the front). Before [`Shortcuts::install`] no key is
+/// windows (closing one, bringing one to the front). Before [`install_shortcuts`] no key is
 /// taken.
 fn take_shortcut(press: KeyPress) -> bool {
     let Some((target, run)) = target_of(press).zip(RUN.get()) else {
@@ -107,45 +98,16 @@ fn take_shortcut(press: KeyPress) -> bool {
     true
 }
 
-/// The keyboard shortcuts of the main window.
-pub(crate) struct Shortcuts {
-    accounts: ShortcutAccounts,
-}
-
-impl Shortcuts {
-    pub(crate) fn new() -> Shortcuts {
-        Shortcuts {
-            accounts: ShortcutAccounts::default(),
-        }
-    }
-
-    /// Makes the shortcuts of the window `window_label`'s webviews work; they feed their inputs
-    /// to `feed`. Only the first call takes effect: there is one main window.
-    #[expect(
-        clippy::unnecessary_wraps,
-        reason = "same signature as on Linux, where adding the shortcuts can fail"
-    )]
-    pub(crate) fn install<R: Runtime>(
-        &mut self,
-        app: &AppHandle<R>,
-        window_label: &str,
-        feed: &Feed,
-    ) -> tauri::Result<()> {
-        let actions = ShortcutActions {
-            app: app.clone(),
-            label: window_label.to_string(),
-            feed: feed.clone(),
-            accounts: self.accounts.clone(),
-        };
-        // A second main window does not exist: an earlier one keeps its shortcuts.
-        let _ = RUN.set(Box::new(move |target| actions.run(target)));
-        Ok(())
-    }
-
-    /// Takes the accounts for the account shortcuts from `model`.
-    pub(crate) fn set_accounts(&self, model: &MenuModel) {
-        self.accounts.set(model);
-    }
+/// Makes the shortcuts run by `actions` work in their window's webviews. Only the first call
+/// takes effect: there is one main window.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as on Linux, where adding the shortcuts can fail"
+)]
+pub(crate) fn install_shortcuts<R: Runtime>(actions: ShortcutActions<R>) -> tauri::Result<()> {
+    // A second main window does not exist: an earlier one keeps its shortcuts.
+    let _ = RUN.set(Box::new(move |target| actions.run(target)));
+    Ok(())
 }
 
 #[cfg(test)]

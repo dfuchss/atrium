@@ -19,16 +19,19 @@
 //! [`Notifier`]: domain::ports::Notifier
 //! [`Platform`]: domain::ports::Platform
 
+mod data_stores;
 mod dialogs;
+mod downloads;
 mod icons;
+mod labels;
 mod links;
 mod logger;
 mod menus;
 mod native;
 mod notifications;
+mod page_hooks;
 mod platform;
 mod quit;
-pub mod services;
 mod webviews;
 #[cfg(not(target_os = "macos"))]
 mod window_shortcuts;
@@ -43,7 +46,7 @@ use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
 use tauri::window::Color;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Theme, WebviewBuilder, WebviewUrl, Window};
 
-use crate::links::{PopupQuota, ViewPolicies, new_popup_quota};
+use crate::links::{PopupQuota, ViewPolicies};
 use crate::logger::Logger;
 use crate::menus::MenuState;
 use crate::notifications::NotificationTargets;
@@ -63,7 +66,8 @@ pub fn window_background(theme: Theme) -> Color {
 }
 
 /// Removes what the launcher put into the environment that would override the settings (the
-/// `GTK_THEME` of an `AppImage` on Linux). Call it first in `main`, before any thread starts.
+/// `GTK_THEME` of an `AppImage` on Linux) and names the host's helper for launching apps that
+/// the `AppImage`'s GIO does not find. Call it first in `main`, before any thread starts.
 pub fn clean_launch_environment() {
     native::clean_launch_environment();
 }
@@ -74,7 +78,7 @@ pub fn set_app_id(identifier: &str) {
     native::set_app_id(identifier);
 }
 
-/// The host's part of the user agent presets (see `domain::catalog::webkit_user_agent`).
+/// The host's part of the user agent presets (see `domain::webkit_user_agent`).
 pub fn user_agent_platform() -> String {
     native::user_agent_platform()
 }
@@ -157,8 +161,8 @@ pub fn guard_single_instance<R: Runtime>(
 }
 
 /// Tells the desktop that Atrium added or removed icons of its desktop entry (Linux: KDE does
-/// not notice new icon size folders by itself); the error, if any, as text for the log.
-pub fn announce_new_icons() -> Result<(), String> {
+/// not notice new icon size folders by itself); a failure is only worth logging.
+pub fn announce_new_icons() -> std::io::Result<()> {
     native::announce_new_icons()
 }
 
@@ -201,7 +205,7 @@ impl<R: Runtime> TauriHost<R> {
             policies: Arc::default(),
             dialogs: dialogs::Dialogs::new(),
             popup_counter: Arc::default(),
-            popup_quota: new_popup_quota(),
+            popup_quota: Arc::default(),
             menus: Mutex::default(),
             config_dir: None,
             extra_init_script: None,
@@ -243,6 +247,12 @@ impl<R: Runtime> TauriHost<R> {
         self.dialogs.install(&self.app, &self.logger);
     }
 
+    /// Takes the account names for the titles of the pages' dialogs from `snapshot`; call it
+    /// with each snapshot the core emits.
+    pub fn set_dialog_names(&self, snapshot: &Snapshot) {
+        self.dialogs.set_names(snapshot);
+    }
+
     /// File the host logger appends to (`<app_log_dir>/atrium.log`), if available.
     pub fn log_file(&self) -> Option<PathBuf> {
         self.logger.file()
@@ -260,7 +270,7 @@ impl<R: Runtime> TauriHost<R> {
             Some(dir) => dir.clone(),
             None => self.app.path().app_config_dir().map_err(port_err)?,
         };
-        Ok(config_dir.join("services"))
+        Ok(store_fs::services::dir(&config_dir))
     }
 
     fn window(&self) -> PortResult<Window<R>> {
@@ -272,7 +282,6 @@ impl<R: Runtime> TauriHost<R> {
 
 impl<R: Runtime> UiSink for TauriHost<R> {
     fn emit_snapshot(&self, snapshot: &Snapshot) -> PortResult {
-        self.dialogs.set_names(snapshot);
         self.app
             .emit_to(UI_WEBVIEW, EVENT_SNAPSHOT, snapshot)
             .map_err(port_err)

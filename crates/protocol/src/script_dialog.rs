@@ -15,6 +15,9 @@ pub const SCRIPT_DIALOG_QUERY: &str = "script-dialog";
 pub const CMD_SCRIPT_DIALOG_GET: &str = "plugin:script-dialog|get";
 pub const CMD_SCRIPT_DIALOG_SHOW: &str = "plugin:script-dialog|show";
 pub const CMD_SCRIPT_DIALOG_ANSWER: &str = "plugin:script-dialog|answer";
+/// Label of the checkbox a dialog offers to suppress the page's further dialogs, on every
+/// platform.
+pub const SUPPRESSION_TITLE: &str = "Prevent this page from creating additional dialogs";
 
 /// What the dialog window shows. The texts come from the page: shown as text, never as HTML.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

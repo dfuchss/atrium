@@ -3,7 +3,8 @@
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::{Core, Effect, ICON_SCRIPT, SimpleIconResult};
+use super::scripts::ICON_SCRIPT;
+use super::{Core, Effect, SimpleIconResult};
 
 /// Favicon lookups per account and app run.
 const MAX_FAVICON_ATTEMPTS: u8 = 3;
@@ -16,7 +17,7 @@ pub fn simple_icon_url(slug: &str) -> String {
 }
 
 /// Normalises a Simple Icons slug: trimmed, lowercase, `[a-z0-9]` only. `Ok(None)` = empty.
-pub fn normalize_slug(raw: &str) -> Result<Option<String>, String> {
+pub(super) fn normalize_slug(raw: &str) -> Result<Option<String>, String> {
     let slug = raw.trim().to_lowercase();
     if slug.is_empty() {
         Ok(None)
@@ -145,7 +146,7 @@ impl Core {
             .iter()
             .filter(|account| account.simple_icon_data.is_none())
             .filter_map(|account| {
-                let slug = account.simple_icon.clone()?;
+                let slug = account.settings.simple_icon.clone()?;
                 Some(Effect::FetchSimpleIcon {
                     account: account.id,
                     slug,
@@ -163,7 +164,7 @@ impl Core {
         let Some(account) = self.account_mut(account_id) else {
             return vec![Self::unknown(account_id)];
         };
-        if account.simple_icon.as_deref() != Some(slug) {
+        if account.settings.simple_icon.as_deref() != Some(slug) {
             return vec![]; // Stale: the slug changed meanwhile.
         }
         match result {

@@ -2,8 +2,8 @@
 //! and hands over to the swap helper when the user applies it.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use protocol::{UpdateCommand, UpdateState, UpdateStatus};
 
@@ -13,9 +13,10 @@ use crate::native;
 use crate::release::{RELEASES_PAGE, Release};
 use crate::source::ReleaseSource;
 use crate::staging::{StageRequest, remove_if_present, stage};
-use crate::store::{SwapResult, UpdaterFiles, UpdaterSettings, write_private};
+use crate::store::{SwapResult, UpdaterFiles, UpdaterSettings};
 use crate::swap::{new_update_path, old_update_path, partial_update_path};
 use crate::version::Version;
+use fs_util::{lock_ignoring_poison, now_ms};
 
 /// Time between automatic checks.
 const CHECK_INTERVAL_MS: u64 = 6 * 60 * 60 * 1000;
@@ -107,18 +108,6 @@ fn ready_or(staged: Option<Version>, fallback: UpdateState) -> UpdateState {
     }
 }
 
-fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-fn now_ms() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |since_epoch| {
-            u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
-        })
-}
-
 struct Shared {
     config: UpdaterConfig,
     source: Box<dyn ReleaseSource>,
@@ -178,7 +167,7 @@ impl Updater {
     }
 
     pub fn status(&self) -> UpdateStatus {
-        locked(&self.shared.status).clone()
+        lock_ignoring_poison(&self.shared.status).clone()
     }
 
     /// Cleans up after the previous run, then checks after a short delay and every few hours
@@ -222,7 +211,7 @@ impl Updater {
             }
             UpdateCommand::ApplyUpdate => self.prepare_apply_update(),
             UpdateCommand::OpenReleasePage => {
-                UpdaterAction::OpenUrl(locked(&self.shared.page_url).clone())
+                UpdaterAction::OpenUrl(lock_ignoring_poison(&self.shared.page_url).clone())
             }
         }
     }
@@ -230,7 +219,7 @@ impl Updater {
     /// Starts the prepared helper; call when the app exits. Returns whether it started. A
     /// helper that cannot start is reported on the next start.
     pub fn launch_pending_helper(&self) -> bool {
-        let Some(plan) = locked(&self.shared.pending).take() else {
+        let Some(plan) = lock_ignoring_poison(&self.shared.pending).take() else {
             return false;
         };
         match native::helper_executable(&plan.install)
@@ -247,8 +236,7 @@ impl Updater {
                     version: plan.version,
                     message: format!("the update helper did not start: {error}"),
                 };
-                let json = serde_json::to_string(&result).unwrap_or_default();
-                let _ = write_private(&UpdaterFiles::result_file(&plan.updates_dir), &json);
+                let _ = UpdaterFiles::write_swap_result(&plan.updates_dir, &result);
                 false
             }
         }
@@ -260,7 +248,7 @@ impl Updater {
 
     fn set_status(&self, change: impl FnOnce(&mut UpdateStatus)) {
         let status = {
-            let mut status = locked(&self.shared.status);
+            let mut status = lock_ignoring_poison(&self.shared.status);
             change(&mut status);
             status.clone()
         };
@@ -272,18 +260,18 @@ impl Updater {
     }
 
     fn staged(&self) -> Option<Version> {
-        *locked(&self.shared.staged)
+        *lock_ignoring_poison(&self.shared.staged)
     }
 
     fn set_staged(&self, version: Option<Version>) {
-        *locked(&self.shared.staged) = version;
+        *lock_ignoring_poison(&self.shared.staged) = version;
         self.change_settings(|settings| {
             settings.staged_version = version.map(|version| version.to_string());
         });
     }
 
     fn change_settings(&self, change: impl FnOnce(&mut UpdaterSettings)) {
-        let mut settings = locked(&self.shared.settings);
+        let mut settings = lock_ignoring_poison(&self.shared.settings);
         change(&mut settings);
         if let Err(error) = self.shared.files.save_settings(&settings) {
             self.log(&format!("cannot save the updater settings: {error}"));
@@ -291,7 +279,7 @@ impl Updater {
     }
 
     fn check_if_due(&self, now: u64) {
-        let settings = locked(&self.shared.settings).clone();
+        let settings = lock_ignoring_poison(&self.shared.settings).clone();
         if settings.auto_check && now.saturating_sub(settings.last_check_ms) >= CHECK_INTERVAL_MS {
             self.check();
         }

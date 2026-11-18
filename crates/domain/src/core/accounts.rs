@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::layout::WindowSize;
 use super::{Core, Effect, log_effects};
-use crate::catalog::ServiceDef;
+use crate::catalog::normalized_instance;
 use crate::model::Account;
 
 impl Core {
@@ -16,7 +16,7 @@ impl Core {
         let active_is_enabled = self
             .active
             .and_then(|id| self.account(id))
-            .is_some_and(|account| account.enabled);
+            .is_some_and(|account| account.settings.enabled);
         if !active_is_enabled {
             self.active = self.nearest_enabled_account(0, None);
         }
@@ -47,8 +47,8 @@ impl Core {
             .persisted
             .accounts
             .iter()
-            .filter(|account| account.enabled)
-            .partition(|account| account.start_asleep && Some(account.id) != self.active);
+            .filter(|account| account.settings.enabled)
+            .partition(|account| account.settings.start_asleep && Some(account.id) != self.active);
         let ids = |accounts: Vec<&Account>| accounts.iter().map(|account| account.id).collect();
         (ids(to_load), ids(asleep))
     }
@@ -59,11 +59,8 @@ impl Core {
         let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
         };
-        if !account.enabled {
-            return vec![
-                Effect::Log(format!("select: account {account_id} is disabled")),
-                self.emit(),
-            ];
+        if !account.settings.enabled {
+            return self.rejected(format!("select: account {account_id} is disabled"));
         }
         let mut effects = vec![];
         if self.dialog_open {
@@ -88,22 +85,22 @@ impl Core {
         &mut self,
         service_id: &str,
         label: &str,
-        instance: Option<String>,
+        instance: Option<&str>,
     ) -> Vec<Effect> {
         let instance = normalized_instance(instance);
-        let Some(service) = self.catalog.get(service_id) else {
-            return vec![
-                Effect::Log(format!("add account: unknown service {service_id}")),
-                self.emit(),
-            ];
+        let Some(service) = self.registry.get(service_id) else {
+            return self.rejected(format!("add account: unknown service {service_id}"));
         };
         if let Err(error) = service.resolve_url(instance.as_deref()) {
-            return vec![Effect::Log(format!("add account: {error}")), self.emit()];
+            return self.rejected(format!("add account: {error}"));
         }
-        let label = account_label(label, service);
+        let label = account_label(label, &service.name);
         let mut account = Account::new((self.new_account_id)(), service_id, label, instance);
         if service.user_agent.as_deref() == Some("webkit") {
-            account.user_agent.clone_from(&self.new_account_user_agent);
+            account
+                .settings
+                .user_agent
+                .clone_from(&self.new_account_user_agent);
         }
         let account_id = account.id;
         self.persisted.accounts.push(account);
@@ -183,7 +180,7 @@ impl Core {
         let Some(account) = self.account_mut(account_id) else {
             return vec![Self::unknown(account_id)];
         };
-        account.muted = muted;
+        account.settings.muted = muted;
         let mut effects = vec![self.persist()];
         effects.extend(self.dock_badge());
         effects.push(self.emit());
@@ -216,7 +213,7 @@ impl Core {
         except: Option<Uuid>,
     ) -> Option<Uuid> {
         let accounts = &self.persisted.accounts;
-        let candidate = |account: &&Account| account.enabled && Some(account.id) != except;
+        let candidate = |account: &&Account| account.settings.enabled && Some(account.id) != except;
         accounts
             .iter()
             .skip(index)
@@ -234,20 +231,13 @@ impl Core {
 }
 
 /// The trimmed label, or the service name if it is empty.
-pub(super) fn account_label(label: &str, service: &ServiceDef) -> String {
+pub(crate) fn account_label(label: &str, service_name: &str) -> String {
     let label = label.trim();
     if label.is_empty() {
-        service.name.clone()
+        service_name.to_string()
     } else {
         label.to_string()
     }
-}
-
-/// Normalised instance; empty means none.
-pub(super) fn normalized_instance(instance: Option<String>) -> Option<String> {
-    instance
-        .map(|instance| crate::catalog::normalize_instance(&instance))
-        .filter(|instance| !instance.is_empty())
 }
 
 /// Index `delta` positions away from `index`, clamped to a list of `len` items.

@@ -9,8 +9,8 @@ fn started_creates_views() {
     let content = Bounds {
         x: SIDEBAR,
         y: 0.0,
-        width: 1000.0 - SIDEBAR,
-        height: 600.0,
+        width: WINDOW_WIDTH - SIDEBAR,
+        height: WINDOW_HEIGHT,
     };
     assert_eq!(
         effects[0],
@@ -24,23 +24,10 @@ fn started_creates_views() {
         1
     );
     assert!(
-        matches!(effects[1], Effect::SetUiBounds(b) if b.width == SIDEBAR && b.height == 600.0)
+        matches!(effects[1], Effect::SetUiBounds(b) if b.width == SIDEBAR && b.height == WINDOW_HEIGHT)
     );
-    let views: Vec<_> = effects
-        .iter()
-        .filter_map(|effect| {
-            if let Effect::CreateView {
-                spec,
-                bounds,
-                visible,
-            } = effect
-            {
-                Some((spec.account, *bounds, *visible))
-            } else {
-                None
-            }
-        })
-        .collect();
+    let views = effects_of!(effects, Effect::CreateView { spec, bounds, visible } =>
+        (spec.account, *bounds, *visible));
     assert_eq!(views, vec![(id(1), content, true), (id(2), content, false)]);
     assert_eq!(badges(&effects), vec![DockBadge::None]);
     assert_eq!(core.snapshot().active, Some(id(1)));
@@ -129,7 +116,7 @@ fn notification_click() {
         effects[n - 1],
         Effect::Eval {
             account: id(2),
-            script: "window.__msgr&&window.__msgr.click(5)".into()
+            script: "window.__atrium&&window.__atrium.click(5)".into()
         }
     );
 }
@@ -274,7 +261,7 @@ fn disable_and_enable_account() {
     });
     let effects = update_account(&mut core, 1, |settings| settings.enabled = false);
     assert_eq!(effects[0], Effect::Destroy(id(1)));
-    assert!(has(&effects, &Effect::Show(id(2))));
+    assert!(effects.contains(&Effect::Show(id(2))));
     assert_eq!(badges(&effects), vec![DockBadge::None]);
     let snapshot = last_snapshot(&effects);
     assert_eq!(snapshot.active, Some(id(2)));
@@ -320,14 +307,11 @@ fn disable_and_enable_account() {
 #[test]
 fn disabled_accounts_at_start() {
     let mut a = account(1, "slack", "A");
-    a.enabled = false;
+    a.settings.enabled = false;
     let mut core = core_with(vec![a, account(2, "slack", "B")]);
     core.persisted.settings.active = Some(id(1));
     core.active = Some(id(1));
-    let effects = core.handle(Input::Started {
-        width: 800.0,
-        height: 600.0,
-    });
+    let effects = core.handle(STARTED);
     assert_eq!(
         views(&effects)
             .iter()

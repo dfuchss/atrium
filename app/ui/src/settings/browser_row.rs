@@ -4,8 +4,9 @@
 use leptos::prelude::*;
 use protocol::{BrowserChoice, CMD_LIST_BROWSERS, Snapshot};
 
+use super::setting_radio;
 use crate::commands::update_settings;
-use crate::widgets::{Row, no_autocorrect};
+use crate::widgets::{Row, TextField};
 use crate::{query, tauri};
 
 const BROWSERS: [&str; 6] = [
@@ -36,14 +37,17 @@ pub(super) fn BrowserRow(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     }
 }
 
-fn default_radio(snapshot: ReadSignal<Snapshot>, browser: Memo<Option<String>>) -> impl IntoView {
-    view! {
-        <label class="radio">
-            <input type="radio" name="browser" prop:checked=move || browser.get().is_none()
-                on:change=move |_| update_settings(snapshot, |settings| settings.browser = None) />
-            <span>"System default browser"</span>
-        </label>
-    }
+fn default_radio(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
+    setting_radio(
+        snapshot,
+        "browser",
+        (
+            |settings| settings.browser.clone(),
+            |settings, browser| settings.browser = browser,
+        ),
+        None,
+        "System default browser",
+    )
 }
 
 /// The browser is typed, with the usual application names as suggestions.
@@ -58,7 +62,7 @@ fn typed_row(snapshot: ReadSignal<Snapshot>, browser: Memo<Option<String>>) -> i
     };
     view! {
         <Row label="Browser" hint="Enter the name of an installed application, e.g. Firefox.">
-            {default_radio(snapshot, browser)}
+            {default_radio(snapshot)}
             <label class="radio">
                 <input type="radio" name="browser" prop:checked=move || browser.get().is_some()
                     on:change=move |_| {
@@ -68,17 +72,7 @@ fn typed_row(snapshot: ReadSignal<Snapshot>, browser: Memo<Option<String>>) -> i
                         commit();
                     } />
                 <span>"Open links in:"</span>
-                <input
-                    type="text"
-                    list="browsers"
-                    placeholder="Application name"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    autocomplete="off"
-                    prop:value=move || draft.get()
-                    on:input=move |event| draft.set(event_target_value(&event))
-                    on:change=move |_| commit()
-                    use:no_autocorrect />
+                <TextField value=draft list="browsers" placeholder="Application name" on_change=move |()| commit() />
                 <datalist id="browsers">
                     {BROWSERS.map(|name| view! { <option value=name></option> }).into_iter().collect_view()}
                 </datalist>
@@ -111,7 +105,7 @@ fn installed_row(
     // The select sits below its radio: next to it, the radio's text would wrap.
     view! {
         <Row label="Browser" hint=hint>
-            {default_radio(snapshot, browser)}
+            {default_radio(snapshot)}
             <label class="radio">
                 <input type="radio" name="browser" prop:checked=move || browser.get().is_some()
                     disabled=disabled

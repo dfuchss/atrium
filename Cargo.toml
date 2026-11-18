@@ -5,7 +5,7 @@ members = [
     "crates/fs-util",
     "crates/domain",
     "crates/store-fs",
-    "crates/webview-dialogs",
+    "crates/platform-ffi",
     "crates/host-tauri",
     "crates/updater",
     "app/src-tauri",
@@ -17,7 +17,7 @@ default-members = [
     "crates/fs-util",
     "crates/domain",
     "crates/store-fs",
-    "crates/webview-dialogs",
+    "crates/platform-ffi",
     "crates/host-tauri",
     "crates/updater",
     "app/src-tauri",
@@ -36,7 +36,7 @@ protocol = { path = "crates/protocol" }
 fs-util = { path = "crates/fs-util" }
 domain = { path = "crates/domain" }
 store-fs = { path = "crates/store-fs" }
-webview-dialogs = { path = "crates/webview-dialogs" }
+platform-ffi = { path = "crates/platform-ffi" }
 host-tauri = { path = "crates/host-tauri" }
 updater = { path = "crates/updater" }
 serde = { version = "1", features = ["derive"] }

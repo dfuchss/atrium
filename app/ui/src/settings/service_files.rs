@@ -9,7 +9,7 @@ use super::UiState;
 use super::service_editor::{EditTarget, ServiceEditor};
 use crate::commands::send_command;
 use crate::service_api;
-use crate::widgets::{ConfirmButton, Row};
+use crate::widgets::{ConfirmButton, ErrorNote, Row};
 
 /// Re-reads the folder listing into `files`.
 fn refresh(files: RwSignal<Vec<ServiceFile>>) {
@@ -26,14 +26,7 @@ pub(super) fn ServiceFiles(snapshot: ReadSignal<Snapshot>) -> impl IntoView {
     refresh(files);
     if let Some(name) = ui.edit_service.get_untracked() {
         ui.edit_service.set(None);
-        spawn_local(async move {
-            if let Ok(text) = service_api::read(&name).await {
-                editor.set(Some(EditTarget {
-                    name: Some(name),
-                    text,
-                }));
-            }
-        });
+        open_service_file(name, editor, operation_error);
     }
     let close_editor = Callback::new(move |()| {
         editor.set(None);
@@ -88,9 +81,26 @@ fn FileList(
                     children=move |file| view! { <FileRow file=file files=files editor=editor operation_error=operation_error /> } />
             </section>
         </Show>
-        {move || operation_error.get().map(|message| view! { <div class="note error">{message}</div> })}
+        <ErrorNote message=operation_error />
         <div class="actions"><button class="btn primary" on:click=new_file>"New definition\u{2026}"</button></div>
     }
+}
+
+/// Opens the file `name` in the editor; on failure the error is shown instead.
+fn open_service_file(
+    name: String,
+    editor: RwSignal<Option<EditTarget>>,
+    error: RwSignal<Option<String>>,
+) {
+    spawn_local(async move {
+        match service_api::read(&name).await {
+            Ok(text) => editor.set(Some(EditTarget {
+                name: Some(name),
+                text,
+            })),
+            Err(message) => error.set(Some(message)),
+        }
+    });
 }
 
 #[component]
@@ -106,18 +116,7 @@ fn FileRow(
         operation_error.set(result.err());
         refresh(files);
     };
-    let edit = move |_| {
-        let name = edited.clone();
-        spawn_local(async move {
-            match service_api::read(&name).await {
-                Ok(text) => editor.set(Some(EditTarget {
-                    name: Some(name),
-                    text,
-                })),
-                Err(message) => operation_error.set(Some(message)),
-            }
-        });
-    };
+    let edit = move |_| open_service_file(edited.clone(), editor, operation_error);
     let toggle = move |_| {
         let name = toggled.clone();
         spawn_local(async move { report(service_api::set_enabled(&name, !enabled).await) });

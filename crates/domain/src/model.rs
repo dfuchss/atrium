@@ -1,81 +1,25 @@
 //! Persisted data.
 
-use protocol::{AccountSettings, AfterWake, AppSettings, CustomService, LinkTarget};
+use protocol::{AccountSettings, AfterWake, AppSettings, CustomService};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// One configured account = one service view with its own isolated data store.
-/// Fields added after v0.1 have serde defaults so older `accounts.json` files still load.
+/// One configured account = one service view with its own isolated data store. Stored with
+/// its settings flat beside the fields the user does not edit.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
     /// Also the view id and (as bytes) the `WKWebView` data store identifier.
     pub id: Uuid,
     /// [`crate::ServiceDef::id`].
     pub service: String,
-    pub label: String,
-    #[serde(default)]
-    pub instance: Option<String>,
-    /// No notifications from this account (and not counted in the dock badge).
-    #[serde(default)]
-    pub muted: bool,
-    /// Show the unread badge on the sidebar icon (UI only).
-    #[serde(default = "yes")]
-    pub show_badge: bool,
-    /// Count this account's unread in the dock badge.
-    #[serde(default = "yes")]
-    pub in_dock_badge: bool,
-    /// Overrides the service's user agent preset ("webkit" | "chrome" | "default" | literal).
-    #[serde(default)]
-    pub user_agent: Option<String>,
-    /// Disabled accounts keep their settings and login but get no view.
-    #[serde(default = "yes")]
-    pub enabled: bool,
-    /// Overrides `AppSettings::link_target`.
-    #[serde(default)]
-    pub link_target: Option<LinkTarget>,
-    /// User-chosen sidebar icon (`data:` or https URL).
-    #[serde(default)]
-    pub custom_icon: Option<String>,
-    /// Page zoom factor, 1.0 = 100 %.
-    #[serde(default = "one")]
-    pub zoom: f64,
-    /// Unload the view after this many minutes in the background; None = use the global
-    /// setting, Some(0) = never.
-    #[serde(default)]
-    pub hibernate_after_min: Option<u32>,
-    /// Don't load the view at startup (unless the account is the one shown); it loads when
-    /// selected.
-    #[serde(default)]
-    pub start_asleep: bool,
-    /// Overrides `AppSettings::after_wake`; None = use the global setting.
-    #[serde(default)]
-    pub after_wake: Option<AfterWake>,
-    /// CSS injected into every page of this account.
-    #[serde(default)]
-    pub custom_css: Option<String>,
+    #[serde(flatten)]
+    pub settings: AccountSettings,
     /// Cached site favicon as `data:` URL (fetched once, refreshed on request).
     #[serde(default)]
     pub favicon: Option<String>,
-    /// Grant camera/microphone/screen capture; None = the service default.
-    #[serde(default)]
-    pub allow_media: Option<bool>,
-    /// Simple Icons slug (normalised) chosen by the user.
-    #[serde(default)]
-    pub simple_icon: Option<String>,
     /// Cached white glyph of `simple_icon` as `data:image/svg+xml` URL; cleared when the slug changes.
     #[serde(default)]
     pub simple_icon_data: Option<String>,
-    /// Hosts whose new windows always open in the app (normalised).
-    #[serde(default)]
-    pub app_hosts: Vec<String>,
-}
-
-fn yes() -> bool {
-    true
-}
-
-fn one() -> f64 {
-    1.0
 }
 
 impl Account {
@@ -89,25 +33,27 @@ impl Account {
         Account {
             id,
             service: service.into(),
-            label: label.into(),
-            instance,
-            muted: false,
-            show_badge: true,
-            in_dock_badge: true,
-            user_agent: None,
-            enabled: true,
-            link_target: None,
-            custom_icon: None,
-            zoom: 1.0,
-            hibernate_after_min: None,
-            start_asleep: false,
-            after_wake: None,
-            custom_css: None,
+            settings: AccountSettings {
+                label: label.into(),
+                instance,
+                muted: false,
+                show_badge: true,
+                in_dock_badge: true,
+                user_agent: None,
+                enabled: true,
+                link_target: None,
+                custom_icon: None,
+                zoom: 1.0,
+                hibernate_after_min: None,
+                start_asleep: false,
+                after_wake: None,
+                custom_css: None,
+                allow_media: None,
+                simple_icon: None,
+                app_hosts: Vec::new(),
+            },
             favicon: None,
-            allow_media: None,
-            simple_icon: None,
             simple_icon_data: None,
-            app_hosts: Vec::new(),
         }
     }
 
@@ -116,51 +62,12 @@ impl Account {
         *self.id.as_bytes()
     }
 
-    /// The user-editable part, as shown in the settings dialog.
-    pub fn settings(&self) -> AccountSettings {
-        AccountSettings {
-            label: self.label.clone(),
-            instance: self.instance.clone(),
-            muted: self.muted,
-            show_badge: self.show_badge,
-            in_dock_badge: self.in_dock_badge,
-            user_agent: self.user_agent.clone(),
-            enabled: self.enabled,
-            link_target: self.link_target,
-            custom_icon: self.custom_icon.clone(),
-            zoom: self.zoom,
-            hibernate_after_min: self.hibernate_after_min,
-            start_asleep: self.start_asleep,
-            after_wake: self.after_wake,
-            custom_css: self.custom_css.clone(),
-            allow_media: self.allow_media,
-            simple_icon: self.simple_icon.clone(),
-            app_hosts: self.app_hosts.clone(),
-        }
-    }
-
     /// Stores already validated settings; a new Simple Icons slug drops the cached glyph.
     pub fn apply_settings(&mut self, settings: AccountSettings) {
-        if self.simple_icon != settings.simple_icon {
+        if self.settings.simple_icon != settings.simple_icon {
             self.simple_icon_data = None;
         }
-        self.label = settings.label;
-        self.instance = settings.instance;
-        self.muted = settings.muted;
-        self.show_badge = settings.show_badge;
-        self.in_dock_badge = settings.in_dock_badge;
-        self.user_agent = settings.user_agent;
-        self.enabled = settings.enabled;
-        self.link_target = settings.link_target;
-        self.custom_icon = settings.custom_icon;
-        self.zoom = settings.zoom;
-        self.hibernate_after_min = settings.hibernate_after_min;
-        self.start_asleep = settings.start_asleep;
-        self.after_wake = settings.after_wake;
-        self.custom_css = settings.custom_css;
-        self.allow_media = settings.allow_media;
-        self.simple_icon = settings.simple_icon;
-        self.app_hosts = settings.app_hosts;
+        self.settings = settings;
     }
 }
 
@@ -234,7 +141,7 @@ pub fn unused_store_ids(existing: &[[u8; 16]], accounts: &[Account]) -> Vec<[u8;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use protocol::DockBadgeMode;
+    use protocol::{DockBadgeMode, LinkTarget};
 
     #[test]
     fn unused_stores_are_those_without_account() {
@@ -259,34 +166,89 @@ mod tests {
         let p: Persisted = serde_json::from_str(json).unwrap();
         let a = &p.accounts[0];
         assert_eq!(
-            (a.label.as_str(), a.instance.as_deref(), a.muted),
+            (
+                a.settings.label.as_str(),
+                a.settings.instance.as_deref(),
+                a.settings.muted
+            ),
             ("KIT", Some("kit"), true)
         );
-        assert!(a.show_badge && a.in_dock_badge && a.user_agent.is_none());
         assert!(
-            a.enabled
-                && a.link_target.is_none()
-                && a.custom_icon.is_none()
-                && a.custom_css.is_none()
+            a.settings.show_badge && a.settings.in_dock_badge && a.settings.user_agent.is_none()
+        );
+        assert!(
+            a.settings.enabled
+                && a.settings.link_target.is_none()
+                && a.settings.custom_icon.is_none()
+                && a.settings.custom_css.is_none()
         );
         assert_eq!(
-            (a.zoom, a.hibernate_after_min, a.favicon.as_deref()),
+            (
+                a.settings.zoom,
+                a.settings.hibernate_after_min,
+                a.favicon.as_deref()
+            ),
             (1.0, None, None)
         );
         assert!(p.custom_services.is_empty());
-        assert_eq!(a.allow_media, None);
-        assert!(a.app_hosts.is_empty() && !a.start_asleep);
+        assert_eq!(a.settings.allow_media, None);
+        assert!(a.settings.app_hosts.is_empty() && !a.settings.start_asleep);
         assert_eq!(
-            (a.simple_icon.as_deref(), a.simple_icon_data.as_deref()),
+            (
+                a.settings.simple_icon.as_deref(),
+                a.simple_icon_data.as_deref()
+            ),
             (None, None)
         );
-        assert!(!p.accounts[1].muted && p.accounts[1].instance.is_none());
+        assert!(!p.accounts[1].settings.muted && p.accounts[1].settings.instance.is_none());
         assert_eq!(p.settings.active, Some(Uuid::from_u128(42)));
         let expected = AppSettings {
             dnd: true,
             ..AppSettings::default()
         };
         assert_eq!(p.settings.app, expected);
+    }
+
+    /// The keys and values an account had on disk before its settings were a struct of their
+    /// own, so files stay readable by older versions.
+    #[test]
+    fn account_keeps_its_stored_format() {
+        let mut account = Account::new(Uuid::from_u128(42), "slack", "KIT", Some("kit".into()));
+        account.settings.link_target = Some(LinkTarget::AppWindow);
+        account.settings.hibernate_after_min = Some(10);
+        account.settings.after_wake = Some(AfterWake::Reload);
+        account.settings.allow_media = Some(true);
+        account.settings.simple_icon = Some("slack".into());
+        account.settings.app_hosts = vec!["*.example.org".into()];
+        account.favicon = Some("data:image/png;base64,AA==".into());
+        let old_format = serde_json::json!({
+            "id": "00000000-0000-0000-0000-00000000002a",
+            "service": "slack",
+            "label": "KIT",
+            "instance": "kit",
+            "muted": false,
+            "show_badge": true,
+            "in_dock_badge": true,
+            "user_agent": null,
+            "enabled": true,
+            "link_target": "app_window",
+            "custom_icon": null,
+            "zoom": 1.0,
+            "hibernate_after_min": 10,
+            "start_asleep": false,
+            "after_wake": "reload",
+            "custom_css": null,
+            "favicon": "data:image/png;base64,AA==",
+            "allow_media": true,
+            "simple_icon": "slack",
+            "simple_icon_data": null,
+            "app_hosts": ["*.example.org"]
+        });
+        assert_eq!(serde_json::to_value(&account).unwrap(), old_format);
+        assert_eq!(
+            serde_json::from_value::<Account>(old_format).unwrap(),
+            account
+        );
     }
 
     #[test]
@@ -297,21 +259,21 @@ mod tests {
             accounts: vec![Account::new(Uuid::from_u128(1), "slack", "S", None)],
             ..Default::default()
         };
-        p.accounts[0].user_agent = Some("chrome".into());
+        p.accounts[0].settings.user_agent = Some("chrome".into());
         p.settings.app.dock_badge = DockBadgeMode::CountOnly;
         p.settings.app.browser = Some("Firefox".into());
         p.settings.active = Some(Uuid::from_u128(1));
         p.settings.app.link_target = LinkTarget::AppWindow;
         let a = &mut p.accounts[0];
-        a.enabled = false;
-        a.link_target = Some(LinkTarget::SystemBrowser);
-        a.zoom = 1.25;
-        a.hibernate_after_min = Some(10);
-        a.start_asleep = true;
-        a.custom_css = Some("body{color:red}".into());
+        a.settings.enabled = false;
+        a.settings.link_target = Some(LinkTarget::SystemBrowser);
+        a.settings.zoom = 1.25;
+        a.settings.hibernate_after_min = Some(10);
+        a.settings.start_asleep = true;
+        a.settings.custom_css = Some("body{color:red}".into());
         a.favicon = Some("data:image/png;base64,AA==".into());
-        a.app_hosts = vec!["*.example.org".into()];
-        a.simple_icon = Some("discord".into());
+        a.settings.app_hosts = vec!["*.example.org".into()];
+        a.settings.simple_icon = Some("discord".into());
         a.simple_icon_data = Some("data:image/svg+xml;base64,AA==".into());
         p.custom_services.push(CustomService {
             id: "custom-x".into(),
@@ -331,23 +293,23 @@ mod tests {
     #[test]
     fn muted_account_shows_badge_only_if_kept_when_muted() {
         let mut account = Account::new(Uuid::from_u128(1), "slack", "S", None);
-        assert!(account.settings().shows_badge(false));
-        account.muted = true;
-        assert!(account.settings().shows_badge(true));
-        assert!(!account.settings().shows_badge(false));
-        account.show_badge = false;
-        assert!(!account.settings().shows_badge(true));
+        assert!(account.settings.shows_badge(false));
+        account.settings.muted = true;
+        assert!(account.settings.shows_badge(true));
+        assert!(!account.settings.shows_badge(false));
+        account.settings.show_badge = false;
+        assert!(!account.settings.shows_badge(true));
     }
 
     #[test]
     fn apply_settings_round_trips_and_drops_stale_glyph() {
         let mut account = Account::new(Uuid::from_u128(1), "slack", "Work", None);
-        account.simple_icon = Some("slack".into());
+        account.settings.simple_icon = Some("slack".into());
         account.simple_icon_data = Some("data:image/svg+xml;base64,AA".into());
-        let mut settings = account.settings();
+        let mut settings = account.settings.clone();
         settings.label = "Home".into();
         account.apply_settings(settings.clone());
-        assert_eq!(account.settings(), settings);
+        assert_eq!(account.settings, settings);
         assert!(
             account.simple_icon_data.is_some(),
             "same slug keeps the glyph"
@@ -355,7 +317,7 @@ mod tests {
 
         settings.simple_icon = Some("discord".into());
         account.apply_settings(settings);
-        assert_eq!(account.simple_icon.as_deref(), Some("discord"));
+        assert_eq!(account.settings.simple_icon.as_deref(), Some("discord"));
         assert_eq!(account.simple_icon_data, None);
     }
 }

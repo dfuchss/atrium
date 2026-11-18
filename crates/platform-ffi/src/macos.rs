@@ -29,11 +29,9 @@ mod configuration;
 mod reload;
 mod wake;
 
-use std::cell::RefCell;
 use std::ffi::CStr;
-use std::fmt;
 use std::ptr::{self, null_mut};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use block2::{DynBlock, RcBlock};
 pub use objc2::MainThreadMarker;
@@ -48,52 +46,21 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use objc2_web_kit::{WKFrameInfo, WKWebView};
 use tauri::webview::PlatformWebview;
 
+use protocol::SUPPRESSION_TITLE;
+
 use crate::{
-    DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, PageOrigin, Presentation,
+    AnswerOnce, DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, HandlerSlot,
+    InstallError, PageOrigin, Presentation,
 };
 
 pub use configuration::{forbid_automatic_windows, service_configuration};
 pub use reload::reload_from_origin;
 pub use wake::observe_screens_wake;
 
-#[derive(Debug)]
-pub enum InstallError {
-    AlreadyInstalled,
-    /// The webview given to [`install`] has no UI delegate.
-    NoDelegate,
-    DonorClassExists,
-    MissingDonorMethod(String),
-    /// wry implements the method itself; its own handling is kept.
-    AlreadyImplemented(String),
-}
-
-impl fmt::Display for InstallError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            InstallError::AlreadyInstalled => write!(formatter, "dialogs are already installed"),
-            InstallError::NoDelegate => write!(formatter, "the webview has no UI delegate"),
-            InstallError::DonorClassExists => write!(
-                formatter,
-                "class {} exists already",
-                DONOR_CLASS.to_string_lossy()
-            ),
-            InstallError::MissingDonorMethod(selector) => {
-                write!(formatter, "donor class lacks {selector}")
-            }
-            InstallError::AlreadyImplemented(selector) => {
-                write!(formatter, "wry implements {selector} itself")
-            }
-        }
-    }
-}
-
-impl std::error::Error for InstallError {}
-
-const DONOR_CLASS: &CStr = c"AtriumDialogMethods";
-const SUPPRESSION_TITLE: &str = "Prevent this page from creating additional dialogs";
+pub(crate) const DONOR_CLASS: &CStr = c"AtriumDialogMethods";
 const PROMPT_FIELD_SIZE: (f64, f64) = (300.0, 24.0);
 
-static HANDLER: OnceLock<Arc<dyn DialogHandler>> = OnceLock::new();
+static HANDLER: HandlerSlot<Arc<dyn DialogHandler>> = HandlerSlot::new();
 
 /// Adds the three panel methods to the class of `webview`'s UI delegate (wry's, shared by all
 /// its webviews); see the crate documentation for when to call it. On an error nothing changes:
@@ -104,9 +71,7 @@ pub fn install(
 ) -> Result<(), InstallError> {
     let target = delegate_class(webview)?;
     let donor = register_donor_class()?;
-    HANDLER
-        .set(handler)
-        .map_err(|_| InstallError::AlreadyInstalled)?;
+    HANDLER.install(handler)?;
     for selector in panel_selectors() {
         copy_method(donor, target, selector)?;
     }
@@ -282,7 +247,7 @@ fn run_panel(
     message: &NSString,
     finish: impl FnOnce(DialogAnswer) + 'static,
 ) {
-    let completion = Completion::new(finish);
+    let completion = AnswerOnce::new(finish);
     // Dropping `completion` unanswered gives WebKit the default answer.
     let (Some(mtm), Some(handler)) = (MainThreadMarker::new(), HANDLER.get()) else {
         return;
@@ -299,9 +264,12 @@ fn run_panel(
     let (alert, controls) = build_alert(mtm, &request.kind, &text);
     let handler = handler.clone();
     let answered = move |response: NSModalResponse| {
+        let Some(finish) = completion.take() else {
+            return;
+        };
         let (answer, suppress_further) = controls.answer(response);
         handler.answered(&request, &answer, suppress_further);
-        completion.answer(answer);
+        finish(answer);
     };
     match webview.window() {
         Some(window) => {
@@ -338,15 +306,14 @@ impl PanelControls {
             .suppression_button
             .as_ref()
             .is_some_and(|button| button.state() == NSControlStateValueOn);
-        let answer = if response == NSAlertFirstButtonReturn {
-            match &self.text_field {
-                Some(field) => DialogAnswer::Text(field.stringValue().to_string()),
-                None => DialogAnswer::Confirmed,
-            }
-        } else {
-            DialogAnswer::Cancelled
-        };
-        (answer, suppress_further)
+        let entered = self
+            .text_field
+            .as_ref()
+            .map(|field| field.stringValue().to_string());
+        (
+            DialogAnswer::from_ok(response == NSAlertFirstButtonReturn, entered),
+            suppress_further,
+        )
     }
 }
 
@@ -410,35 +377,4 @@ fn add_text_field(
     alert.layout();
     alert.window().setInitialFirstResponder(Some(&field));
     field
-}
-
-/// Answers `WebKit` exactly once: with the dialog's answer, or with the default when dropped
-/// unanswered (the sheet's window closed before the user answered).
-struct Completion {
-    finish: RefCell<Option<Finish>>,
-}
-
-type Finish = Box<dyn FnOnce(DialogAnswer)>;
-
-impl Completion {
-    fn new(finish: impl FnOnce(DialogAnswer) + 'static) -> Completion {
-        Completion {
-            finish: RefCell::new(Some(Box::new(finish))),
-        }
-    }
-
-    fn answer(&self, answer: DialogAnswer) {
-        let finish = self.finish.borrow_mut().take();
-        if let Some(finish) = finish {
-            finish(answer);
-        }
-    }
-}
-
-impl Drop for Completion {
-    fn drop(&mut self) {
-        if let Some(finish) = self.finish.get_mut().take() {
-            finish(DialogAnswer::Cancelled);
-        }
-    }
 }

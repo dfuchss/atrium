@@ -2,11 +2,17 @@
 //! (request/response) instead of going through the core; only a successful save, delete or
 //! toggle asks the core to reload the services.
 
+#![expect(
+    clippy::needless_pass_by_value,
+    reason = "Tauri commands receive their arguments by value"
+)]
+
 use std::path::PathBuf;
 
 use domain::Input;
-use host_tauri::{Feed, services};
+use host_tauri::Feed;
 use protocol::{ServiceFile, ServiceProblem, UiCommand};
+use store_fs::services;
 use tauri::State;
 
 /// The services folder and the channel into the core.
@@ -30,19 +36,11 @@ impl ServiceFiles {
 }
 
 #[tauri::command]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 pub(crate) fn list_service_files(files: State<'_, ServiceFiles>) -> Vec<ServiceFile> {
     services::list_service_files(&files.dir)
 }
 
 #[tauri::command]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 pub(crate) fn read_service_file(
     files: State<'_, ServiceFiles>,
     name: String,
@@ -56,19 +54,11 @@ pub(crate) fn new_service_template() -> String {
 }
 
 #[tauri::command]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 pub(crate) fn validate_service(text: String) -> Vec<ServiceProblem> {
     domain::Catalog::diagnose(&text)
 }
 
 #[tauri::command]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 pub(crate) fn save_service_file(
     files: State<'_, ServiceFiles>,
     name: String,
@@ -83,10 +73,6 @@ pub(crate) fn save_service_file(
 }
 
 #[tauri::command]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 pub(crate) fn delete_service_file(
     files: State<'_, ServiceFiles>,
     name: String,
@@ -95,10 +81,6 @@ pub(crate) fn delete_service_file(
 }
 
 #[tauri::command]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Tauri commands receive their arguments by value"
-)]
 pub(crate) fn set_service_file_enabled(
     files: State<'_, ServiceFiles>,
     name: String,

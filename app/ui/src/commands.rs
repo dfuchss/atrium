@@ -1,7 +1,7 @@
 //! Where UI commands go: to Rust through Tauri, or into the local demo snapshot.
 
 use leptos::prelude::*;
-use protocol::{AppSettings, Snapshot, UiCommand};
+use protocol::{AppSettings, CMD_UI_COMMAND, Snapshot, UiCommand};
 
 use crate::{demo, query, tauri};
 
@@ -15,7 +15,7 @@ pub(crate) fn send_command(command: UiCommand) {
         return;
     };
     if query::use_tauri() {
-        leptos::task::spawn_local(tauri::send(command));
+        leptos::task::spawn_local(tauri::send(CMD_UI_COMMAND, command));
     } else {
         set_snapshot.update(|snapshot| demo::apply_locally(snapshot, command));
     }

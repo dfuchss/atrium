@@ -1,5 +1,5 @@
 //! JavaScript dialogs: Atrium's own, decided by the shared policy of `dialogs` (see
-//! `webview_dialogs::windows`), for the service views and the windows they open.
+//! `platform_ffi::windows`), for the service views and the windows they open.
 //!
 //! Each shown dialog gets a small window of Atrium's UI (`script-dialog-<id>`, see
 //! `protocol::script_dialog`): owned by the asking webview's window, so it stays above it,
@@ -13,18 +13,20 @@
 //! page that asked waits for the answer anyway.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
+use fs_util::lock_ignoring_poison;
+use platform_ffi::{DialogAnswer, DialogHandler, DialogKind, ShownDialog};
 use protocol::{SCRIPT_DIALOG_QUERY, ScriptDialog, ScriptDialogAnswer, ScriptDialogKind};
 use tauri::plugin::TauriPlugin;
 use tauri::{
     AppHandle, LogicalSize, Manager, PhysicalPosition, Runtime, State, Webview, WebviewUrl,
     WebviewWindowBuilder, Window, WindowEvent,
 };
-use webview_dialogs::{DialogAnswer, DialogHandler, DialogKind, ShownDialog};
 
 use crate::Logger;
 use crate::logger::spawn_logged;
+use crate::native::with_platform_webview;
 
 /// Name of the plugin the dialog windows answer through (see `protocol::script_dialog`).
 const PLUGIN: &str = "script-dialog";
@@ -35,7 +37,6 @@ const WIDTH: f64 = 440.0;
 const INITIAL_HEIGHT: f64 = 160.0;
 const MAX_HEIGHT: f64 = 720.0;
 
-/// A dialog whose window is open.
 struct OpenDialog {
     dialog: ScriptDialog,
     /// Label of the window the dialog is centred over.
@@ -48,7 +49,7 @@ struct OpenDialogs(Mutex<HashMap<u64, OpenDialog>>);
 
 impl OpenDialogs {
     fn with<T>(&self, access: impl FnOnce(&mut HashMap<u64, OpenDialog>) -> T) -> T {
-        access(&mut self.0.lock().unwrap_or_else(PoisonError::into_inner))
+        access(&mut lock_ignoring_poison(&self.0))
     }
 }
 
@@ -66,27 +67,19 @@ pub(crate) fn install_dialogs<R: Runtime>(
     }
     let (show_app, show_logger) = (app.clone(), logger.clone());
     let show = Box::new(move |shown: ShownDialog| open_later(&show_app, shown, &show_logger));
-    match webview_dialogs::install(handler, show) {
+    match platform_ffi::install(handler, show) {
         Ok(()) => logger.log("JavaScript dialogs: Atrium's own"),
         Err(error) => logger.log(&format!("JavaScript dialogs unavailable: {error}")),
     }
 }
 
 /// Shows the dialogs of `webview` through the installed handler; they carry its label (see
-/// `dialogs::account_of_label`).
+/// `labels::account_of_label`).
 pub(crate) fn attach_dialogs<R: Runtime>(webview: &Webview<R>, logger: &Logger) {
-    let (label, attach_logger) = (webview.label().to_string(), logger.clone());
-    let scheduled = webview.with_webview(move |platform| {
-        if let Err(error) = webview_dialogs::attach(&platform.controller(), &label) {
-            attach_logger.log(&format!("[{label}] cannot attach dialogs: {error}"));
-        }
+    let label = webview.label().to_string();
+    with_platform_webview(webview, logger, "cannot attach dialogs", move |platform| {
+        platform_ffi::attach(&platform.controller(), &label)
     });
-    if let Err(error) = scheduled {
-        logger.log(&format!(
-            "[{}] cannot attach dialogs: {error}",
-            webview.label()
-        ));
-    }
 }
 
 /// The commands of the dialog windows. They run on Tauri's thread pool (`async`): run on the
@@ -170,11 +163,8 @@ fn script_dialog(shown: &ShownDialog) -> ScriptDialog {
 
 /// The dialog answer for the user's `answer` to a dialog of `kind`.
 fn dialog_answer(kind: &ScriptDialogKind, answer: ScriptDialogAnswer) -> DialogAnswer {
-    match (answer.confirmed, kind) {
-        (false, _) => DialogAnswer::Cancelled,
-        (true, ScriptDialogKind::Prompt { .. }) => DialogAnswer::Text(answer.text),
-        (true, _) => DialogAnswer::Confirmed,
-    }
+    let entered = matches!(kind, ScriptDialogKind::Prompt { .. }).then_some(answer.text);
+    DialogAnswer::from_ok(answer.confirmed, entered)
 }
 
 /// Ends dialog `id` with `answer` unless it has ended already: forgets its window and resumes
@@ -186,7 +176,7 @@ fn finish<R: Runtime>(app: &AppHandle<R>, id: u64, answer: DialogAnswer, suppres
     if open.is_some() {
         // Fails only once the event loop has ended, and the page with it.
         let _ = app.run_on_main_thread(move || {
-            webview_dialogs::answer(id, &answer, suppress_further);
+            platform_ffi::answer(id, &answer, suppress_further);
         });
     }
 }
@@ -283,7 +273,7 @@ fn present<R: Runtime>(
         window.show()?;
         window.set_focus()?;
     } else {
-        webview_dialogs::show_without_activating(window.hwnd()?);
+        platform_ffi::show_without_activating(window.hwnd()?);
     }
     Ok(())
 }

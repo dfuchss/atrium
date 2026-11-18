@@ -8,7 +8,7 @@ use leptos::task::spawn_local;
 use protocol::ServiceProblem;
 
 use crate::service_api;
-use crate::widgets::{Row, no_autocorrect};
+use crate::widgets::{ErrorNote, Row, TextField, no_autocorrect};
 
 /// How long typing must pause before the text is validated.
 const VALIDATE_DELAY: Duration = Duration::from_millis(400);
@@ -75,8 +75,7 @@ pub(super) fn ServiceEditor(target: EditTarget, on_close: Callback<()>) -> impl 
             <h3>{if creating { "New service definition" } else { "Edit service definition" }}</h3>
             <Row label="File name" hint="Letters a-z, digits, - and _, ending in .toml.">
                 {if creating {
-                    view! { <input type="text" class="mono" autocapitalize="off" spellcheck="false" autocomplete="off"
-                        prop:value=move || file_name.get() on:input=move |event| file_name.set(event_target_value(&event)) use:no_autocorrect /> }.into_any()
+                    view! { <TextField value=file_name class="mono" /> }.into_any()
                 } else {
                     view! { <code>{file_name.get_untracked()}</code> }.into_any()
                 }}
@@ -84,7 +83,7 @@ pub(super) fn ServiceEditor(target: EditTarget, on_close: Callback<()>) -> impl 
             <textarea class="mono toml-editor" rows="24" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"
                 prop:value=move || text.get() on:input=on_input use:no_autocorrect></textarea>
             <Problems problems=problems text=text />
-            {move || failure.get().map(|message| view! { <div class="note error">{message}</div> })}
+            <ErrorNote message=failure />
             <div class="actions">
                 <button class="btn primary" disabled=move || file_name.with(String::is_empty) on:click=save>"Save"</button>
                 <button class="btn" on:click=move |_| on_close.run(())>"Cancel"</button>

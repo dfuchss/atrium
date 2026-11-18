@@ -5,15 +5,14 @@
 
 use std::rc::Rc;
 
-use domain::MenuModel;
 use gtk::gdk::ModifierType;
 use gtk::gdk::keys::{Key, constants};
 use gtk::prelude::*;
-use tauri::{AppHandle, Manager, Runtime};
+use tauri::{Manager, Runtime};
 
+use crate::Logger;
 use crate::menus::{ID_ZOOM_IN, ID_ZOOM_OUT, ID_ZOOM_RESET, Shortcut};
-use crate::window_shortcuts::{ShortcutAccounts, ShortcutActions, Target, window_shortcuts};
-use crate::{Feed, Logger};
+use crate::window_shortcuts::{ShortcutActions, Target, window_shortcuts};
 
 /// A GTK key and its modifiers.
 type Accelerator = (u32, ModifierType);
@@ -47,43 +46,15 @@ fn gtk_accelerator(shortcut: Shortcut) -> Accelerator {
     (key, ModifierType::CONTROL_MASK | shift)
 }
 
-/// The keyboard shortcuts of the main window.
-pub(crate) struct Shortcuts {
-    accounts: ShortcutAccounts,
-}
-
-impl Shortcuts {
-    pub(crate) fn new() -> Shortcuts {
-        Shortcuts {
-            accounts: ShortcutAccounts::default(),
+/// Adds the shortcuts run by `actions` to their window.
+pub(crate) fn install_shortcuts<R: Runtime>(actions: ShortcutActions<R>) -> tauri::Result<()> {
+    let app = actions.app.clone();
+    app.run_on_main_thread(move || {
+        let actions = Rc::new(actions);
+        if let Err(error) = add_accelerators(&actions) {
+            Logger::new(&actions.app).log(&format!("no keyboard shortcuts: {error}"));
         }
-    }
-
-    /// Adds the shortcuts to the window `window_label`; they feed their inputs to `feed`.
-    pub(crate) fn install<R: Runtime>(
-        &mut self,
-        app: &AppHandle<R>,
-        window_label: &str,
-        feed: &Feed,
-    ) -> tauri::Result<()> {
-        let actions = ShortcutActions {
-            app: app.clone(),
-            label: window_label.to_string(),
-            feed: feed.clone(),
-            accounts: self.accounts.clone(),
-        };
-        app.run_on_main_thread(move || {
-            let actions = Rc::new(actions);
-            if let Err(error) = add_accelerators(&actions) {
-                Logger::new(&actions.app).log(&format!("no keyboard shortcuts: {error}"));
-            }
-        })
-    }
-
-    /// Takes the accounts for the account shortcuts from `model`.
-    pub(crate) fn set_accounts(&self, model: &MenuModel) {
-        self.accounts.set(model);
-    }
+    })
 }
 
 /// Adds an accelerator group with all [`bindings`] to the window of `actions` (main thread).

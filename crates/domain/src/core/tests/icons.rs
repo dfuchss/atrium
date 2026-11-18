@@ -1,3 +1,5 @@
+use super::super::icons::normalize_slug;
+use super::super::scripts::ICON_SCRIPT;
 use super::*;
 
 fn page_loaded(core: &mut Core) -> Vec<Effect> {
@@ -73,10 +75,7 @@ fn favicon_is_downloaded_and_cached() {
     );
     // a cached favicon is not looked up again on the next run
     let mut next_run = core_with(core.persisted.accounts.clone());
-    next_run.handle(Input::Started {
-        width: 800.0,
-        height: 600.0,
-    });
+    next_run.handle(STARTED);
     assert!(page_loaded(&mut next_run).is_empty());
 }
 
@@ -177,7 +176,7 @@ fn simple_icon_fetch_on_set_and_change() {
         slug: "discord".into()
     }));
     assert_eq!(
-        core.account(id(1)).unwrap().simple_icon.as_deref(),
+        core.account(id(1)).unwrap().settings.simple_icon.as_deref(),
         Some("discord")
     );
     // unchanged slug: no refetch
@@ -207,7 +206,7 @@ fn simple_icon_fetch_on_set_and_change() {
             .iter()
             .any(|effect| matches!(effect, Effect::FetchSimpleIcon { .. }))
     );
-    assert!(core.account(id(1)).unwrap().simple_icon.is_none());
+    assert!(core.account(id(1)).unwrap().settings.simple_icon.is_none());
 }
 
 #[test]
@@ -226,15 +225,15 @@ fn simple_icon_invalid_slug_logged_no_glyph() {
             .iter()
             .any(|effect| matches!(effect, Effect::FetchSimpleIcon { .. }))
     );
-    assert!(core.account(id(1)).unwrap().simple_icon.is_none());
+    assert!(core.account(id(1)).unwrap().settings.simple_icon.is_none());
 }
 
 #[test]
 fn simple_icon_fetched_on_start_when_missing() {
     let mut a = account(1, "discord", "D");
-    a.simple_icon = Some("discord".into());
+    a.settings.simple_icon = Some("discord".into());
     let mut b = account(2, "discord", "E");
-    b.simple_icon = Some("matrix".into());
+    b.settings.simple_icon = Some("matrix".into());
     b.simple_icon_data = Some(svg("CC"));
     let (_, effects) = started(vec![a, b]);
     let n = effects
@@ -290,7 +289,7 @@ fn simple_icon_precedence_and_404_fallback() {
     // slug without cached glyph and without favicon: initials
     let (next_run, _) = started(vec![{
         let mut a = account(1, "slack", "S");
-        a.simple_icon = Some("slack".into());
+        a.settings.simple_icon = Some("slack".into());
         a
     }]);
     let v = &next_run.snapshot().accounts[0];

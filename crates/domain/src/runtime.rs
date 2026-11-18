@@ -50,7 +50,7 @@ impl StartupLoad {
 
 /// True if `effect` must be dropped: persisting while the saved data was unreadable would
 /// replace it with the empty fallback.
-pub fn skip_effect(effect: &Effect, read_only: bool) -> bool {
+fn skip_effect(effect: &Effect, read_only: bool) -> bool {
     read_only && matches!(effect, Effect::Persist(_))
 }
 

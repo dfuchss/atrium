@@ -8,9 +8,10 @@ use std::os::windows::process::CommandExt as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::location::{InstallLocation, RunningAppImage, can_replace};
-use crate::staging::place_next_to_install;
-use crate::version::Version;
+use crate::location::{self, InstallLocation};
+pub(crate) use crate::native::single_file::{
+    NO_DOWNLOAD_REASON, helper_executable, prepare_update, processes_running_from, relaunch,
+};
 
 /// The user opens Atrium again after the swap.
 pub(crate) const RELAUNCHES_AFTER_SWAP: bool = false;
@@ -30,12 +31,11 @@ pub fn asset_name_for_arch(arch: &str) -> Option<&'static str> {
 
 /// Where the running executable is installed, and whether it may replace itself.
 pub fn install_location(debug_build: bool) -> InstallLocation {
-    match std::env::current_exe() {
-        Ok(executable) => resolve(&executable, debug_build, &can_replace),
-        Err(error) => InstallLocation::ManualOnly {
-            reason: format!("cannot locate Atrium: {error}"),
-        },
-    }
+    location::locate(
+        debug_build,
+        std::env::current_exe(),
+        |executable, can_replace| resolve(executable, can_replace),
+    )
 }
 
 /// Whether a Cargo target folder holds `executable`.
@@ -48,60 +48,21 @@ fn in_cargo_target(executable: &Path) -> bool {
 
 /// Only a release build outside Cargo's target folder updates itself, in place, and only when
 /// `can_replace(executable)` says the user may rename and remove it.
-fn resolve(
-    executable: &Path,
-    debug_build: bool,
-    can_replace: &dyn Fn(&Path) -> bool,
-) -> InstallLocation {
-    let reason = if debug_build {
-        "this is a development build"
-    } else if in_cargo_target(executable) {
-        "it runs from the build folder"
+fn resolve(executable: &Path, can_replace: &dyn Fn(&Path) -> bool) -> Result<PathBuf, String> {
+    if in_cargo_target(executable) {
+        Err("it runs from the build folder".into())
     } else if !can_replace(executable) {
-        "the folder of Atrium is not writable for you"
+        Err("the folder of Atrium is not writable for you".into())
     } else {
-        return InstallLocation::SelfUpdatable {
-            bundle: executable.to_path_buf(),
-        };
-    };
-    InstallLocation::ManualOnly {
-        reason: reason.into(),
+        Ok(executable.to_path_buf())
     }
 }
-
-/// An executable is not an `AppImage`.
-#[must_use]
-pub fn running_appimage() -> Option<RunningAppImage> {
-    None
-}
-
-/// Why a release without the file for this machine is only announced.
-pub(crate) const NO_DOWNLOAD_REASON: &str = "the release has no download for this computer";
 
 /// The sentence the About tab shows when updates have to be installed by hand.
 pub(crate) fn manual_only_text(reason: &str) -> String {
     format!(
         "Atrium installs updates itself only when it runs as the downloaded program, but {reason}."
     )
-}
-
-/// Moves the verified download next to the install (`<install>.new-update`), which it returns.
-/// Identity and version come from `SHA256SUMS` and the tag.
-pub(crate) fn prepare_update(
-    downloaded: &Path,
-    _version: Version,
-    install: &Path,
-) -> Result<PathBuf, String> {
-    place_next_to_install(downloaded, install)
-}
-
-/// The helper is the installed executable.
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "the platforms share this signature; macOS can fail"
-)]
-pub(crate) fn helper_executable(install: &Path) -> std::io::Result<PathBuf> {
-    Ok(install.to_path_buf())
 }
 
 /// Whether `tasklist` lists a process `pid`; when it cannot tell, the process counts as alive,
@@ -136,31 +97,15 @@ fn lists_process(csv: &str, pid: u32) -> bool {
         .any(|row| row.split(',').nth(1) == Some(column.as_str()))
 }
 
-/// Always empty: renaming the executable while another instance runs from it is safe on
-/// Windows; that instance keeps the old version, and its file is removed after it quit.
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "the platforms share this signature; macOS can fail"
-)]
-pub(crate) fn processes_running_from(_install: &Path) -> Result<Vec<u32>, String> {
-    Ok(Vec::new())
-}
-
-/// Nothing to do: the user opens Atrium again after the swap.
-pub(crate) fn relaunch(_install: &Path) {}
-
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    pub(crate) use crate::native::single_file::fakes::{fake_asset, fake_staged, verify_staged};
     use crate::swap::{new_update_path, partial_update_path};
+    use crate::version::Version;
 
     /// The release asset the flow tests use.
     pub(crate) const ASSET: &str = "atrium-windows-x86_64.exe";
-
-    /// The release asset of Atrium in `version`: a file holding the version.
-    pub(crate) fn fake_asset(_dir: &Path, version: &str) -> Vec<u8> {
-        version.as_bytes().to_vec()
-    }
 
     /// `Atrium.exe` in version 0.1.0 in `<dir>/Atrium`; returns its path.
     pub(crate) fn fake_install(dir: &Path) -> PathBuf {
@@ -169,16 +114,6 @@ pub(crate) mod tests {
         let install = folder.join("Atrium.exe");
         std::fs::write(&install, fake_asset(dir, "0.1.0")).unwrap();
         install
-    }
-
-    /// Stages the executable of `version` next to `install`.
-    pub(crate) fn fake_staged(dir: &Path, install: &Path, version: &str) {
-        std::fs::write(new_update_path(install), fake_asset(dir, version)).unwrap();
-    }
-
-    /// Fails unless `path` is the executable of `version`.
-    pub(crate) fn verify_staged(path: &Path, version: &str) {
-        assert_eq!(std::fs::read(path).unwrap(), fake_asset(path, version));
     }
 
     #[test]
@@ -194,10 +129,7 @@ pub(crate) mod tests {
     fn a_release_build_in_a_writable_folder_updates_itself() {
         let dir = tempfile::tempdir().unwrap();
         let install = fake_install(dir.path());
-        assert_eq!(
-            resolve(&install, false, &|_| true),
-            InstallLocation::SelfUpdatable { bundle: install }
-        );
+        assert_eq!(resolve(&install, &|_| true), Ok(install));
     }
 
     #[test]
@@ -209,19 +141,12 @@ pub(crate) mod tests {
         std::fs::write(target.join(CARGO_TARGET_MARKER), "Signature").unwrap();
         let built = target.join("release/atrium.exe");
         let cases = [
-            (&install, true, true, "development"),
-            (&built, false, true, "build folder"),
-            (&install, false, false, "not writable"),
+            (&built, true, "build folder"),
+            (&install, false, "not writable"),
         ];
-        for (executable, debug, replaceable, expected) in cases {
-            let location = resolve(executable, debug, &|_| replaceable);
-            assert!(
-                location
-                    .manual_reason()
-                    .unwrap_or_default()
-                    .contains(expected),
-                "{location:?}"
-            );
+        for (executable, replaceable, expected) in cases {
+            let reason = resolve(executable, &|_| replaceable).unwrap_err();
+            assert!(reason.contains(expected), "{reason}");
         }
     }
 

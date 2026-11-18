@@ -2,7 +2,7 @@
 
 use protocol::{
     AccountSettings, AccountView, AppInfo, AppSettings, CustomService, OperatingSystem,
-    ServiceInfo, Snapshot, UiCommand,
+    ServiceInfo, Snapshot, UiCommand, custom_service_base_id,
 };
 use uuid::Uuid;
 
@@ -202,7 +202,7 @@ fn account_view_mut(snapshot: &mut Snapshot, id: Uuid) -> Option<&mut AccountVie
 }
 
 fn add_custom_service(snapshot: &mut Snapshot, mut service: CustomService) {
-    service.id = format!("custom-{}", service.name.to_lowercase().replace(' ', "-"));
+    service.id = custom_service_base_id(&service.name);
     snapshot.services.push(ServiceInfo {
         id: service.id.clone(),
         name: service.name.clone(),

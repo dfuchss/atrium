@@ -8,6 +8,8 @@ mod icons;
 mod layout;
 mod menus;
 mod messages;
+mod notifications;
+mod registry;
 mod scripts;
 mod services;
 mod settings;
@@ -25,36 +27,25 @@ use std::collections::{HashMap, HashSet};
 use protocol::{AppInfo, AppSettings, UiCommand};
 use uuid::Uuid;
 
-use crate::catalog::{Catalog, ServiceDef};
+use crate::catalog::Catalog;
 use crate::model::{Account, Persisted};
 use crate::throttle::RateLimiter;
 
-pub use icons::{normalize_slug, simple_icon_url};
+pub(crate) use accounts::account_label;
+pub use icons::simple_icon_url;
 pub use messages::{
     AccountMenu, AccountMenuAction, AccountMenuItem, Bounds, DockBadge, Effect, Input, MenuAccount,
     MenuAction, MenuModel, NotificationReq, SimpleIconResult, ViewPolicy, ViewSpec,
 };
-pub use scripts::ICON_SCRIPT;
-pub use settings::ZOOM_STEPS;
-pub use tick::SLEEP_GAP_MS;
-pub use unread::HIDDEN_PREVIEW_BODY;
 
 use layout::WindowSize;
-use unread::{TitleRules, UnreadTracker};
+use notifications::NOTIFICATIONS_PER_MINUTE;
+use registry::ServiceRegistry;
+use unread::UnreadTracker;
 use wake::{CRASH_RELOAD_WINDOW_MS, MAX_CRASH_RELOADS};
 
 pub struct Core {
-    /// Built-in + user TOML services; `catalog` = this + custom services.
-    base_catalog: Catalog,
-    /// The user's TOML definitions applied on top of `builtin_catalog` in `base_catalog`.
-    user_service_defs: Vec<ServiceDef>,
-    /// Problems of the last load of the user's service files.
-    service_errors: Vec<String>,
-    /// The catalog without user files (built-ins only), the base of every reload.
-    builtin_catalog: Catalog,
-    catalog: Catalog,
-    /// Unread title patterns per service id, compiled from `catalog`.
-    title_rules: HashMap<String, TitleRules>,
+    registry: ServiceRegistry,
     persisted: Persisted,
     new_account_id: Box<dyn FnMut() -> Uuid + Send>,
     /// The host's part of the user agent presets, e.g. `X11; Linux x86_64`.
@@ -89,6 +80,8 @@ pub struct Core {
     /// User agent preset of new accounts whose service asks for the `webkit` one (see
     /// [`Core::set_new_account_user_agent`]).
     new_account_user_agent: Option<String>,
+    /// Notifications per account and minute.
+    notification_limit: RateLimiter<Uuid>,
     /// External opens (browser, mail app) per account, so a page cannot flood the desktop.
     external_link_limit: RateLimiter<Uuid>,
     /// Reloads after a crashed web process per account, so a crashing page is not reloaded
@@ -97,6 +90,8 @@ pub struct Core {
     /// Accounts whose crashes are no longer reloaded (logged once).
     crash_reloads_stopped: HashSet<Uuid>,
 }
+
+pub(crate) const MS_PER_MINUTE: u64 = 60_000;
 
 /// One external open per account within this time (tick clock).
 const EXTERNAL_LINK_INTERVAL_MS: u64 = 2_000;
@@ -114,12 +109,7 @@ impl Core {
     ) -> Core {
         let active = persisted.settings.active;
         let mut core = Core {
-            catalog: catalog.clone(),
-            builtin_catalog: catalog.clone(),
-            base_catalog: catalog,
-            user_service_defs: vec![],
-            service_errors: vec![],
-            title_rules: HashMap::new(),
+            registry: ServiceRegistry::new(catalog),
             persisted,
             new_account_id,
             user_agent_platform,
@@ -141,11 +131,12 @@ impl Core {
             startup_log: vec![],
             log_page_titles: false,
             new_account_user_agent: None,
+            notification_limit: RateLimiter::new(NOTIFICATIONS_PER_MINUTE, MS_PER_MINUTE),
             external_link_limit: RateLimiter::new(1, EXTERNAL_LINK_INTERVAL_MS),
             crash_reload_limit: RateLimiter::new(MAX_CRASH_RELOADS, CRASH_RELOAD_WINDOW_MS),
             crash_reloads_stopped: HashSet::new(),
         };
-        core.startup_log = core.rebuild_catalog();
+        core.startup_log = core.registry.rebuild(&core.persisted.custom_services);
         core
     }
 
@@ -222,7 +213,7 @@ impl Core {
                 service,
                 label,
                 instance,
-            } => self.add_account(&service, &label, instance),
+            } => self.add_account(&service, &label, instance.as_deref()),
             UiCommand::RemoveAccount { account } => self.remove_account(account),
             UiCommand::SetMuted { account, muted } => self.set_muted(account, muted),
             UiCommand::Move { account, delta } => self.move_account(account, delta),
@@ -261,6 +252,11 @@ impl Core {
 
     fn emit(&self) -> Effect {
         Effect::EmitSnapshot(self.snapshot())
+    }
+
+    /// A refused command: the reason is logged and the unchanged state re-sent to the UI.
+    fn rejected(&self, reason: String) -> Vec<Effect> {
+        vec![Effect::Log(reason), self.emit()]
     }
 
     fn has_account(&self, account_id: Uuid) -> bool {
@@ -311,11 +307,4 @@ impl Core {
 /// One log effect per message.
 fn log_effects(messages: Vec<String>) -> Vec<Effect> {
     messages.into_iter().map(Effect::Log).collect()
-}
-
-/// Trims an optional text setting; empty means unset.
-fn trimmed(value: Option<String>) -> Option<String> {
-    value
-        .map(|text| text.trim().to_string())
-        .filter(|text| !text.is_empty())
 }

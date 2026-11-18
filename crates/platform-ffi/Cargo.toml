@@ -1,5 +1,5 @@
 [package]
-name = "webview-dialogs"
+name = "platform-ffi"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -55,6 +55,10 @@ webkit2gtk = { version = "2.0", features = ["v2_40"] }
 
 [target.'cfg(any(target_os = "linux", windows))'.dependencies]
 url.workspace = true
+
+# Windows shows its dialogs in the UI, which takes the suppression title from there too.
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+protocol.workspace = true
 
 # The versions wry builds on, so each crate is built once.
 [target.'cfg(windows)'.dependencies]

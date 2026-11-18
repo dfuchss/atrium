@@ -249,7 +249,6 @@ pub enum Input {
     },
 }
 
-/// Outcome of a Simple Icons download.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SimpleIconResult {
     /// The white SVG glyph as `data:image/svg+xml;base64,...` URL.

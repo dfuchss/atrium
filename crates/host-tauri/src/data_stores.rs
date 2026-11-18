@@ -104,7 +104,6 @@ fn store_in_use<'a>(
     current.contains(&account) || labels.any(|label| belongs_to_account(label, account))
 }
 
-/// The ids of the accounts in `snapshot`.
 fn account_ids(snapshot: &Mutex<Snapshot>) -> Vec<Uuid> {
     let snapshot = snapshot.lock().unwrap_or_else(PoisonError::into_inner);
     snapshot.accounts.iter().map(|view| view.id).collect()

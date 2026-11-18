@@ -36,7 +36,6 @@ const WIDTH: f64 = 440.0;
 const INITIAL_HEIGHT: f64 = 160.0;
 const MAX_HEIGHT: f64 = 720.0;
 
-/// A dialog whose window is open.
 struct OpenDialog {
     dialog: ScriptDialog,
     /// Label of the window the dialog is centred over.

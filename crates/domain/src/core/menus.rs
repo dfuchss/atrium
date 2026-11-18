@@ -88,7 +88,6 @@ impl Core {
         effects
     }
 
-    /// Opens the settings dialog with the account's settings.
     fn open_account_settings(&mut self, account_id: Uuid) -> Vec<Effect> {
         if !self.has_account(account_id) {
             return vec![Self::unknown(account_id)];

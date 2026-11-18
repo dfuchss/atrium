@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use crate::release::LATEST_RELEASE_API;
 
-/// Largest accepted release JSON.
 const MAX_RELEASE_JSON_BYTES: u64 = 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);

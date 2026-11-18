@@ -128,7 +128,6 @@ struct PolledNotification {
     body: Option<String>,
 }
 
-/// Decoded result of the poll script.
 struct PollResult {
     notifications: Vec<PolledNotification>,
     /// The unread expression's value; None if it yielded nothing usable.

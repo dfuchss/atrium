@@ -265,7 +265,6 @@ pub(crate) fn hibernate_label(minutes: Option<u32>) -> String {
         .map_or_else(|| "Never".to_string(), minutes_label)
 }
 
-/// Label of an after-wake mode.
 pub(crate) fn after_wake_label(mode: AfterWake) -> &'static str {
     match mode {
         AfterWake::Check => "Check, reload if stuck",

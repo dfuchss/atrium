@@ -98,7 +98,6 @@ pub(crate) fn add_child<R: Runtime>(
     Ok(webview)
 }
 
-/// Adds a service view to `window`.
 pub(crate) fn build_service_view<R: Runtime>(
     window: &Window<R>,
     builder: WebviewBuilder<R>,

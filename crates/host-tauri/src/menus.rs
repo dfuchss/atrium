@@ -451,7 +451,6 @@ fn replace_tray_menu<R: Runtime>(
 pub(crate) struct MenuState<R: Runtime> {
     last: Option<MenuModel>,
     tray: Option<TrayIcon<R>>,
-    /// The menu the tray was built with.
     tray_menu: Option<Menu<R>>,
     shortcuts: Shortcuts,
 }

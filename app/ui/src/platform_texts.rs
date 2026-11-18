@@ -10,7 +10,6 @@ pub(crate) struct Texts {
     pub(crate) tray_hint: &'static str,
     pub(crate) badge_tab: &'static str,
     pub(crate) account_badge_toggle: &'static str,
-    /// Hint of the after-wake selects.
     pub(crate) after_wake_hint: &'static str,
     /// About: the state of `WebKit`'s web process sandbox where it is not the system's default.
     pub(crate) web_process_sandbox: Option<&'static str>,

@@ -7,7 +7,6 @@ use tauri::{LogicalPosition, LogicalSize, Runtime, Webview, WebviewBuilder, Wind
 
 use crate::port_err;
 
-/// Adds `builder` as a child webview of `window` at `bounds`.
 pub(crate) fn add_child_at<R: Runtime>(
     window: &Window<R>,
     builder: WebviewBuilder<R>,

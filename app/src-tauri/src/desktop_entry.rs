@@ -59,7 +59,6 @@ impl DesktopDirs {
     }
 }
 
-/// The file name of the installed icons.
 fn icon_file() -> String {
     format!("{ICON_NAME}.png")
 }

@@ -55,7 +55,6 @@ impl Drop for ComScope {
     }
 }
 
-/// A new, empty `ShellLink`.
 fn new_shell_link() -> windows::core::Result<IShellLinkW> {
     // SAFETY: `ShellLink` is the class id of the shell's link object, which implements
     // `IShellLinkW`; COM is initialised by the caller's `ComScope`.
@@ -100,7 +99,6 @@ fn string_value(text: &str) -> windows::core::Result<PROPVARIANT> {
     Ok(value)
 }
 
-/// Reads the shortcut `link`.
 pub fn read_shortcut(link: &Path) -> windows::core::Result<Shortcut> {
     let _com = ComScope::enter()?;
     let shell_link = new_shell_link()?;

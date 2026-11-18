@@ -51,7 +51,6 @@ pub enum InstallError {
     /// wry implements the method itself; its own handling is kept.
     #[cfg(target_os = "macos")]
     AlreadyImplemented(String),
-    /// `WebView2` refused a call.
     #[cfg(windows)]
     WebView2(::windows::core::Error),
 }

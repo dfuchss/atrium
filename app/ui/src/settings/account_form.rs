@@ -17,7 +17,6 @@ use crate::widgets::{
 
 /// Uploaded icons larger than this are rejected (they are stored in `accounts.json`).
 const MAX_ICON_BYTES: f64 = 256.0 * 1024.0;
-/// Zoom levels offered, in percent.
 const ZOOM_PERCENTS: [u32; 10] = [50, 67, 80, 90, 100, 110, 125, 150, 175, 200];
 
 /// User agent mode of an account that uses its service's user agent.

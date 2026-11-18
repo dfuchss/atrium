@@ -52,7 +52,6 @@ impl Fixture {
         self.dir.path().join("data")
     }
 
-    /// The release asset of Atrium in `version`.
     fn release_asset(&self, version: &str) -> Vec<u8> {
         fake_asset(self.dir.path(), version)
     }

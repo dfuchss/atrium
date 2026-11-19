@@ -12,7 +12,6 @@ use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Manager, Runtime, Webview, WebviewBuilder, WebviewUrl, Window};
 use uuid::Uuid;
 
-use crate::audio;
 use crate::data_stores::delete_data_store;
 use crate::downloads::download_hook;
 use crate::labels::{popup_label_prefix, view_label};
@@ -90,7 +89,7 @@ impl<R: Runtime> TauriHost<R> {
             app: self.app.clone(),
             spec: shared_spec.clone(),
             policies: self.policies.clone(),
-            window_mutes: self.window_mutes.clone(),
+            muted_accounts: self.muted_accounts.clone(),
             popup_counter: self.popup_counter.clone(),
             popup_quota: self.popup_quota.clone(),
             feed: self.feed.clone(),
@@ -165,7 +164,13 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         let (account, feed) = (spec.account, self.feed.clone());
         native::observe_capture(
             &webview,
-            Box::new(move |active| feed(Input::CaptureChanged { account, active })),
+            Box::new(move |active| {
+                feed(Input::CaptureChanged {
+                    account,
+                    window: None,
+                    active,
+                });
+            }),
             &self.logger,
         );
         if !visible {
@@ -201,7 +206,7 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
     }
 
     fn destroy(&self, account: Uuid) -> PortResult {
-        lock_ignoring_poison(&self.window_mutes).forget_account(account);
+        lock_ignoring_poison(&self.muted_accounts).remove(&account);
         // The windows share the account's data store and login: they go with the view.
         for label in popup_labels(&self.app, account) {
             if let Some(window) = self.app.get_webview_window(&label) {
@@ -240,18 +245,23 @@ impl<R: Runtime> WebviewHost for TauriHost<R> {
         self.webview(account)?.set_zoom(zoom).map_err(port_err)
     }
 
-    /// Also for the account's in-app windows, except those that capture (see `audio`); those
-    /// opened later read `window_mutes`, which is updated before the windows are listed here.
+    /// Also for the account's in-app windows; those opened later read `muted_accounts` (see
+    /// `audio`).
     fn set_audio_muted(&self, account: Uuid, muted: bool) -> PortResult {
-        lock_ignoring_poison(&self.window_mutes).set_account_muted(account, muted);
+        let webview = self.webview(account)?;
+        let mut muted_accounts = lock_ignoring_poison(&self.muted_accounts);
+        if muted {
+            muted_accounts.insert(account);
+        } else {
+            muted_accounts.remove(&account);
+        }
         for label in popup_labels(&self.app, account) {
-            let window_muted =
-                lock_ignoring_poison(&self.window_mutes).window_muted(account, &label);
             if let Some(window) = self.app.get_webview_window(&label) {
-                audio::apply(&window, window_muted, &self.logger);
+                native::set_audio_muted(window.as_ref(), muted, &self.logger);
             }
         }
-        native::set_audio_muted(&self.webview(account)?, muted, &self.logger)
+        native::set_audio_muted(&webview, muted, &self.logger);
+        Ok(())
     }
 
     fn clear_data(&self, account: Uuid) -> PortResult {

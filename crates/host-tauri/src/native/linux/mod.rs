@@ -255,14 +255,11 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, _logger: &Logger) -
 }
 
 /// Mutes or unmutes the audio of `webview`'s pages, keeping media capture as it is.
-pub(crate) fn set_audio_muted<R: Runtime>(
-    webview: &Webview<R>,
-    muted: bool,
-    _logger: &Logger,
-) -> PortResult {
-    webview
-        .with_webview(move |platform| platform_ffi::set_audio_muted(&platform.inner(), muted))
-        .map_err(port_err)
+pub(crate) fn set_audio_muted<R: Runtime>(webview: &Webview<R>, muted: bool, logger: &Logger) {
+    with_platform_webview(webview, logger, "cannot mute audio", move |platform| {
+        platform_ffi::set_audio_muted(&platform.inner(), muted);
+        Ok::<(), Infallible>(())
+    });
 }
 
 /// Calls `on_change` each time `webview`'s page starts or stops capturing the microphone or

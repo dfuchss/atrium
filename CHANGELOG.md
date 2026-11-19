@@ -13,7 +13,11 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 #### All platforms
 
-- *Do not disturb* also mutes the sounds the services play themselves, such as message pings and ringtones, in their in-app windows too; a service in a call (using the microphone or camera) keeps its sound, and so does an in-app window in a call on macOS and Linux
+- *Do not disturb* also mutes the sounds of the services and their in-app windows, except for a service in a call
+
+#### Windows
+
+- A call in an in-app window is muted by *Do not disturb* as well; a call in the service itself keeps its sound
 
 ## 0.6.0
 

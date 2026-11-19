@@ -32,9 +32,7 @@ impl Core {
         if previous.link_target != self.settings().link_target {
             effects.extend(self.default_link_target_policies());
         }
-        if previous.dnd != self.settings().dnd {
-            effects.extend(self.audio_muted_effects());
-        }
+        effects.extend(self.dnd_changed(previous.dnd));
         effects.extend(self.dock_badge());
         effects.push(self.emit());
         effects
@@ -54,12 +52,9 @@ impl Core {
     }
 
     pub(super) fn set_dnd(&mut self, enabled: bool) -> Vec<Effect> {
-        let changed = self.settings().dnd != enabled;
-        self.persisted.settings.app.dnd = enabled;
+        let was = std::mem::replace(&mut self.persisted.settings.app.dnd, enabled);
         let mut effects = vec![self.persist()];
-        if changed {
-            effects.extend(self.audio_muted_effects());
-        }
+        effects.extend(self.dnd_changed(was));
         effects.push(self.emit());
         effects
     }

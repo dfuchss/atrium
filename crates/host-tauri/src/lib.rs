@@ -47,7 +47,7 @@ use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
 use tauri::window::Color;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Theme, WebviewBuilder, WebviewUrl, Window};
 
-use crate::audio::SharedWindowMutes;
+use crate::audio::MutedAccounts;
 use crate::links::{PopupQuota, ViewPolicies};
 use crate::logger::Logger;
 use crate::menus::MenuState;
@@ -188,8 +188,8 @@ pub struct TauriHost<R: Runtime> {
     notifications: Arc<Mutex<NotificationTargets>>,
     logger: Logger,
     policies: ViewPolicies,
-    /// The mute of the in-app windows (see `audio`).
-    window_mutes: SharedWindowMutes,
+    /// Accounts whose view and in-app windows are muted (see `audio`).
+    muted_accounts: MutedAccounts,
     dialogs: dialogs::Dialogs,
     /// Numbers the labels of popup/app windows.
     popup_counter: Arc<AtomicU64>,
@@ -213,7 +213,7 @@ impl<R: Runtime> TauriHost<R> {
             feed,
             notifications: Arc::default(),
             policies: Arc::default(),
-            window_mutes: Arc::default(),
+            muted_accounts: Arc::default(),
             dialogs: dialogs::Dialogs::new(),
             popup_counter: Arc::default(),
             popup_quota: Arc::default(),

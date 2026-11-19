@@ -5,8 +5,13 @@ fn audio_mutes(effects: &[Effect]) -> Vec<(Uuid, bool)> {
 }
 
 fn capture(core: &mut Core, n: u128, active: bool) -> Vec<Effect> {
+    window_capture(core, n, None, active)
+}
+
+fn window_capture(core: &mut Core, n: u128, window: Option<&str>, active: bool) -> Vec<Effect> {
     core.handle(Input::CaptureChanged {
         account: id(n),
+        window: window.map(String::from),
         active,
     })
 }
@@ -16,9 +21,9 @@ fn set_dnd(core: &mut Core, enabled: bool) -> Vec<Effect> {
 }
 
 #[test]
-fn created_views_are_muted_while_dnd_is_on() {
+fn created_views_are_muted_only_while_dnd_is_on() {
     let (_, effects) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
-    assert_eq!(audio_mutes(&effects), vec![(id(1), false), (id(2), false)]);
+    assert!(audio_mutes(&effects).is_empty(), "views start unmuted");
     let mut persisted = Persisted {
         accounts: vec![account(1, "slack", "A")],
         ..Persisted::default()
@@ -111,10 +116,31 @@ fn capture_without_dnd_mutes_nothing() {
 }
 
 #[test]
+fn the_account_keeps_its_audio_while_its_view_or_a_window_captures() {
+    let (mut core, _) = started(vec![account(1, "slack", "A")]);
+    set_dnd(&mut core, true);
+    let effects = window_capture(&mut core, 1, Some("w1"), true);
+    assert_eq!(audio_mutes(&effects), vec![(id(1), false)]);
+    assert!(audio_mutes(&capture(&mut core, 1, true)).is_empty());
+    assert!(audio_mutes(&window_capture(&mut core, 1, Some("w1"), false)).is_empty());
+    assert!(
+        window_capture(&mut core, 1, Some("w2"), false).is_empty(),
+        "a window that never captured closes"
+    );
+    let effects = capture(&mut core, 1, false);
+    assert_eq!(
+        audio_mutes(&effects),
+        vec![(id(1), true)],
+        "nothing captures"
+    );
+}
+
+#[test]
 fn capture_is_forgotten_with_the_view() {
     let (mut core, _) = started(vec![account(1, "slack", "A"), account(2, "slack", "B")]);
     set_dnd(&mut core, true);
     capture(&mut core, 2, true);
+    window_capture(&mut core, 2, Some("w1"), true);
     core.handle(Input::Ui(UiCommand::Hibernate { account: id(2) }));
     let effects = capture(&mut core, 2, true);
     assert!(effects.is_empty(), "no view -> ignored: {effects:?}");

@@ -48,8 +48,8 @@ impl Core {
         }
     }
 
-    /// `SetViewPolicy`, `CreateView`, `SetZoom`, `SetAudioMuted` for an account (marks it
-    /// loaded), or a log line.
+    /// `SetViewPolicy`, `CreateView`, `SetZoom` and, if muted, `SetAudioMuted` for an account
+    /// (marks it loaded), or a log line.
     pub(super) fn load_view(&mut self, account_id: Uuid, visible: bool) -> Vec<Effect> {
         let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
@@ -58,7 +58,7 @@ impl Core {
             Ok(spec) => {
                 let (policy, zoom) = (self.view_policy(account), account.settings.zoom);
                 self.loaded_views.insert(account_id);
-                vec![
+                let mut effects = vec![
                     Effect::SetViewPolicy {
                         account: account_id,
                         policy,
@@ -72,11 +72,15 @@ impl Core {
                         account: account_id,
                         zoom,
                     },
-                    Effect::SetAudioMuted {
+                ];
+                // A new view starts unmuted.
+                if self.audio_muted(account_id) {
+                    effects.push(Effect::SetAudioMuted {
                         account: account_id,
-                        muted: self.audio_muted(account_id),
-                    },
-                ]
+                        muted: true,
+                    });
+                }
+                effects
             }
             Err(error) => vec![Effect::Log(error)],
         }

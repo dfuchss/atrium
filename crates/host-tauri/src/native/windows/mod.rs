@@ -129,23 +129,15 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, logger: &Logger) ->
 
 /// Mutes or unmutes the audio of `webview`'s pages, keeping media capture as it is; a failure
 /// (a `WebView2` runtime too old for it) is logged.
-pub(crate) fn set_audio_muted<R: Runtime>(
-    webview: &Webview<R>,
-    muted: bool,
-    logger: &Logger,
-) -> PortResult {
-    let (label, logger) = (webview.label().to_string(), logger.clone());
-    webview
-        .with_webview(move |platform| {
-            if let Err(error) = platform_ffi::set_audio_muted(&platform.controller(), muted) {
-                logger.log(&format!("[{label}] cannot mute audio: {error}"));
-            }
-        })
-        .map_err(port_err)
+pub(crate) fn set_audio_muted<R: Runtime>(webview: &Webview<R>, muted: bool, logger: &Logger) {
+    with_platform_webview(webview, logger, "cannot mute audio", move |platform| {
+        platform_ffi::set_audio_muted(&platform.controller(), muted)
+    });
 }
 
-/// Nothing to observe: `WebView2` tells no microphone or camera capture state (only that a
-/// screen capture starts), so in Do Not Disturb a call's audio is muted like any other.
+/// Nothing to observe: `WebView2` tells no microphone or camera capture state. The service
+/// views report it through the page (`PAGE_CAPTURE_DETECTION`); a call in an in-app window
+/// goes unnoticed, so Do Not Disturb mutes it.
 pub(crate) fn observe_capture<R: Runtime>(
     _webview: &Webview<R>,
     _on_change: super::OnCapture,

@@ -97,10 +97,8 @@ fn _platform_interface<R: Runtime, M: Manager<R>>() {
     let _: fn(&Webview<R>, Bounds) -> PortResult = place;
     let _: fn(&Webview<R>, bool) -> PortResult = set_visible;
     let _: fn(&Webview<R>, &Logger) -> PortResult = force_reload;
-    // Audio muted while Do Not Disturb is on, media capture untouched (service views, popups),
-    // except in a webview that captures the microphone or camera (a call), where the engine
-    // tells it (not `WebView2`).
-    let _: fn(&Webview<R>, bool, &Logger) -> PortResult = set_audio_muted;
+    // Do Not Disturb: audio mute (capture untouched) and, where the engine reports it, capture.
+    let _: fn(&Webview<R>, bool, &Logger) = set_audio_muted;
     let _: fn(&Webview<R>, OnCapture, &Logger) = observe_capture;
     // Popups: what a popup's page may do before it is created, whose user scripts it runs.
     let _: for<'a> fn(

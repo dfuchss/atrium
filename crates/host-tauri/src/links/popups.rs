@@ -170,10 +170,10 @@ impl<R: Runtime> LinkPolicy<R> {
                 ));
                 native::attach_dialogs(window.as_ref(), &self.logger);
                 audio::watch_window(
-                    &self.app,
                     &window,
                     account,
-                    &self.window_mutes,
+                    &self.muted_accounts,
+                    &self.feed,
                     &self.logger,
                 );
                 watch_close(self.app.clone(), label, &self.logger);

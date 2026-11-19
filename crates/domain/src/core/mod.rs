@@ -68,9 +68,9 @@ pub struct Core {
     app_info: AppInfo,
     /// Accounts whose view currently exists.
     loaded_views: HashSet<Uuid>,
-    /// Loaded accounts whose view captures the microphone or camera (see
-    /// [`Input::CaptureChanged`]).
-    capturing: HashSet<Uuid>,
+    /// What captures the microphone or camera, per loaded account: the view (None) and in-app
+    /// windows (see [`Input::CaptureChanged`]). No entry while nothing does.
+    capturing: HashMap<Uuid, HashSet<Option<String>>>,
     /// Last time (tick clock) each account was active (shown) or left.
     last_activity_ms: HashMap<Uuid, u64>,
     /// Latest wall clock reading (ticks and resumes).
@@ -134,7 +134,7 @@ impl Core {
             last_menus: None,
             app_info: AppInfo::default(),
             loaded_views: HashSet::new(),
-            capturing: HashSet::new(),
+            capturing: HashMap::new(),
             last_activity_ms: HashMap::new(),
             last_tick_ms: None,
             slept: false,
@@ -164,9 +164,8 @@ impl Core {
         self.new_account_user_agent = preset;
     }
 
-    /// Where the engine reports no microphone/camera use itself (`WebView2`), the views get a
-    /// page script that does, and each poll feeds it as [`Input::CaptureChanged`]. Off by
-    /// default; set before the views are created.
+    /// For engines that report no capture state: the views get a probe script, which each
+    /// poll reads. Set before the views are created.
     pub fn set_page_capture_detection(&mut self, enabled: bool) {
         self.page_capture_detection = enabled;
     }
@@ -210,7 +209,11 @@ impl Core {
             Input::Tick { now_ms } => self.tick(now_ms),
             Input::Resumed { now_ms } => self.resumed(now_ms),
             Input::WebProcessTerminated { account } => self.web_process_terminated(account),
-            Input::CaptureChanged { account, active } => self.capture_changed(account, active),
+            Input::CaptureChanged {
+                account,
+                window,
+                active,
+            } => self.capture_changed(account, window, active),
             Input::IconFound {
                 account,
                 raw,

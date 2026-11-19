@@ -224,10 +224,12 @@ pub enum Input {
     WebProcessTerminated {
         account: Uuid,
     },
-    /// The account's view started (`active`) or stopped capturing the microphone or camera,
-    /// muted capture included: a call, whose audio Do Not Disturb leaves on.
+    /// The account's view (`window` None) or its in-app window `window` (an id of the
+    /// adapter's) started (`active`) or stopped capturing the microphone or camera, muted
+    /// capture included: a call, whose audio Do Not Disturb leaves on. A closed window stops.
     CaptureChanged {
         account: Uuid,
+        window: Option<String>,
         active: bool,
     },
     /// Callback of [`Effect::FindIcon`]: JSON encoding of the icon URL (or null), and the
@@ -308,10 +310,8 @@ pub enum Effect {
         account: Uuid,
         zoom: f64,
     },
-    /// Whether the audio the pages of the view and its popups play is muted: while Do Not
-    /// Disturb is on and the view captures neither microphone nor camera (see
-    /// [`Input::CaptureChanged`]). Emitted after every create and on change; media capture
-    /// itself is not affected. A popup that captures itself keeps its audio (the adapter).
+    /// Mutes the audio of the view and its windows, not their capture: while Do Not Disturb is
+    /// on and none of them captures (see [`Input::CaptureChanged`]). Views start unmuted.
     SetAudioMuted {
         account: Uuid,
         muted: bool,

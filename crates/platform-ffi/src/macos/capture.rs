@@ -7,7 +7,6 @@
 //! YES), and for such objects KVO drops the observations when the object is deallocated
 //! (macOS 10.13+), so the observer never outlives what it observes while registered.
 
-use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr;
 
@@ -26,19 +25,13 @@ const CAPTURE_KEYS: [&str; 2] = ["microphoneCaptureState", "cameraCaptureState"]
 /// Key of the observer's association with its web view; only its address matters.
 static OBSERVER_KEY: u8 = 0;
 
-struct CaptureIvars {
-    on_change: Box<dyn Fn(bool)>,
-    /// Last reported state.
-    capturing: Cell<bool>,
-}
-
 define_class!(
     // SAFETY: `NSObject` has no subclassing requirements, and the class does not implement
     // `dealloc`.
     #[unsafe(super(NSObject))]
     #[thread_kind = MainThreadOnly]
     #[name = "AtriumCaptureObserver"]
-    #[ivars = CaptureIvars]
+    #[ivars = Box<dyn Fn(bool)>]
     struct CaptureObserver;
 
     impl CaptureObserver {
@@ -52,28 +45,17 @@ define_class!(
             _context: *mut c_void,
         ) {
             if let Some(view) = object.and_then(AnyObject::downcast_ref::<WKWebView>) {
-                self.report(capturing(view));
+                (self.ivars())(capturing(view));
             }
         }
     }
 );
 
 impl CaptureObserver {
-    fn new(mtm: MainThreadMarker, on_change: Box<dyn Fn(bool)>, capturing: bool) -> Retained<Self> {
-        let this = mtm.alloc::<Self>().set_ivars(CaptureIvars {
-            on_change,
-            capturing: Cell::new(capturing),
-        });
+    fn new(mtm: MainThreadMarker, on_change: Box<dyn Fn(bool)>) -> Retained<Self> {
+        let this = mtm.alloc::<Self>().set_ivars(on_change);
         // SAFETY: `init` of `NSObject` on an allocated, ivar-initialized instance.
         unsafe { msg_send![super(this), init] }
-    }
-
-    /// Calls `on_change` if `capturing` differs from the last state.
-    fn report(&self, capturing: bool) {
-        let ivars = self.ivars();
-        if ivars.capturing.replace(capturing) != capturing {
-            (ivars.on_change)(capturing);
-        }
     }
 }
 
@@ -86,8 +68,8 @@ fn capturing(view: &WKWebView) -> bool {
     microphone != WKMediaCaptureState::None || camera != WKMediaCaptureState::None
 }
 
-/// Calls `on_change` on the main thread each time `webview`'s page starts or stops capturing
-/// the microphone or camera, for as long as the web view lives. Call it once per web view (a
+/// Calls `on_change` on the main thread with whether `webview`'s page captures the microphone
+/// or camera on each change of either, repeats possible, for as long as the web view lives. Call it once per web view (a
 /// second call would release the first observer while it is still registered), through
 /// `Webview::with_webview`, which runs on the main thread; an error off it.
 pub fn observe_capture(
@@ -99,7 +81,7 @@ pub fn observe_capture(
     // SAFETY: `inner()` is the `WKWebView` Tauri built for this webview, alive while `webview`
     // is borrowed.
     let view = unsafe { &*inner };
-    let observer = CaptureObserver::new(mtm, Box::new(on_change), capturing(view));
+    let observer = CaptureObserver::new(mtm, Box::new(on_change));
     for key in CAPTURE_KEYS {
         // SAFETY: `observer` implements `observeValueForKeyPath:ofObject:change:context:` and
         // lives as long as the web view (associated below); the key path is a valid string and

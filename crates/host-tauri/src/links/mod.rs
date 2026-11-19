@@ -37,7 +37,7 @@ use tauri::webview::{NewWindowFeatures, NewWindowResponse};
 use tauri::{AppHandle, Runtime, Url};
 use uuid::Uuid;
 
-use crate::audio::SharedWindowMutes;
+use crate::audio::MutedAccounts;
 use crate::{Feed, Logger};
 pub(crate) use close_hook::CLOSE_HOOK;
 use popups::Opening;
@@ -62,7 +62,7 @@ pub(crate) struct LinkPolicy<R: Runtime> {
     pub(crate) app: AppHandle<R>,
     pub(crate) spec: Arc<ViewSpec>,
     pub(crate) policies: ViewPolicies,
-    pub(crate) window_mutes: SharedWindowMutes,
+    pub(crate) muted_accounts: MutedAccounts,
     pub(crate) popup_counter: Arc<AtomicU64>,
     pub(crate) popup_quota: PopupQuota,
     pub(crate) feed: Feed,

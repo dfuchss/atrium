@@ -60,7 +60,7 @@ Below them, *Service definition files* lists the TOML files of the services fold
 
 ### Notifications
 
-*Do not disturb* suppresses all notifications. *Message preview* shows the message text (otherwise only "New message"), *Play sound* plays the notification sound. *Badge when muted* keeps or hides the sidebar badge of accounts with notifications off.
+*Do not disturb* suppresses all notifications and mutes the sounds of the services, except for a service in a call (microphone or camera on; see [Windows](Windows#known-limitations)). *Message preview* shows the message text (otherwise only "New message"), *Play sound* plays the notification sound. *Badge when muted* keeps or hides the sidebar badge of accounts with notifications off.
 
 *Sidebar badges*: *Count*, *Dot* or *Urgent only*. Mentions and direct messages show red, with their number or as a dot; other unread messages show a white dot. *Urgent only* shows the red number and hides the white dot.
 

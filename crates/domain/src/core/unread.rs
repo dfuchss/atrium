@@ -220,7 +220,7 @@ impl Core {
             self.notifications(account_id, &prefix, poll.notifications)
         };
         if self.page_capture_detection {
-            effects.extend(self.capture_changed(account_id, poll.capturing));
+            effects.extend(self.capture_changed(account_id, None, poll.capturing));
         }
         if has_poll {
             effects.extend(self.apply_polled_unread(account_id, &service_id, poll.unread));

@@ -19,7 +19,7 @@
 //! it already names the target of a navigation that has only started, while the old page's
 //! scripts still run (a page could set `location` to another site and ask at once).
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -65,20 +65,14 @@ pub fn set_audio_muted(view: &WebView, muted: bool) {
     view.set_is_muted(muted);
 }
 
-/// Calls `on_change` each time `view`'s page starts or stops capturing the microphone or
-/// camera (`WebKitGTK` 2.34+), a muted capture included, for as long as the view lives. Call it
-/// on the main thread, where `on_change` runs too.
+/// Calls `on_change` with whether `view`'s page captures the microphone or camera
+/// (`WebKitGTK` 2.34+), a muted capture included, on each change of either, repeats possible,
+/// for as long as the view lives. Call it on the main thread, where `on_change` runs too.
 pub fn observe_capture(view: &WebView, on_change: impl Fn(bool) + 'static) {
-    let last = Cell::new(capturing(view));
-    let report = Rc::new(move |view: &WebView| {
-        let now = capturing(view);
-        if last.replace(now) != now {
-            on_change(now);
-        }
-    });
-    let camera_report = report.clone();
-    view.connect_microphone_capture_state_notify(move |view| report(view));
-    view.connect_camera_capture_state_notify(move |view| camera_report(view));
+    let on_change = Rc::new(on_change);
+    let on_camera_change = on_change.clone();
+    view.connect_microphone_capture_state_notify(move |view| on_change(capturing(view)));
+    view.connect_camera_capture_state_notify(move |view| on_camera_change(capturing(view)));
 }
 
 /// True while `view`'s page captures the microphone or camera, muted or not.

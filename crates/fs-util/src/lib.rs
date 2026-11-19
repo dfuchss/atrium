@@ -1,5 +1,5 @@
-//! File operations, the mutex lock and the running `AppImage` (`appimage`) shared by Atrium's
-//! crates.
+//! File operations, the mutex lock and how Atrium is packaged on Linux (`appimage`) shared by
+//! Atrium's crates.
 //!
 //! Permission bits (`mode`) exist on Unix only. On Windows they are ignored: Atrium's files lie
 //! in the user's profile, whose folders pass on an access list that leaves other users out.
@@ -11,6 +11,9 @@ use std::io::{self, Write as _};
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// The file Cargo puts into every target folder.
+const CARGO_TARGET_MARKER: &str = "CACHEDIR.TAG";
 
 /// Locks `mutex` even if a thread panicked while holding it, so one panic does not take every
 /// later caller down with it.
@@ -25,6 +28,15 @@ pub fn now_ms() -> u64 {
         .map_or(0, |since_epoch| {
             u64::try_from(since_epoch.as_millis()).unwrap_or(u64::MAX)
         })
+}
+
+/// Whether a Cargo target folder holds `executable`: a build from source, not the downloaded
+/// release.
+pub fn in_cargo_target(executable: &Path) -> bool {
+    executable
+        .ancestors()
+        .skip(1)
+        .any(|folder| folder.join(CARGO_TARGET_MARKER).is_file())
 }
 
 /// Removes the file or folder tree at `path` (a symlink itself, not what it points to); a path
@@ -126,6 +138,16 @@ mod tests {
     use super::*;
 
     const MODE: u32 = 0o640;
+
+    #[test]
+    fn finds_the_cargo_target_folder_above_the_executable() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target");
+        std::fs::create_dir_all(target.join("release")).unwrap();
+        std::fs::write(target.join(CARGO_TARGET_MARKER), "Signature").unwrap();
+        assert!(in_cargo_target(&target.join("release/atrium")));
+        assert!(!in_cargo_target(&dir.path().join("Programs/atrium")));
+    }
 
     #[test]
     fn removes_files_and_trees_and_accepts_missing_paths() {

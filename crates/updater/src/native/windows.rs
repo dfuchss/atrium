@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::location::{self, InstallLocation};
+use crate::native::single_file::resolve_executable;
 pub(crate) use crate::native::single_file::{
     NO_DOWNLOAD_REASON, helper_executable, prepare_update, processes_running_from, relaunch,
 };
@@ -17,10 +18,6 @@ pub(crate) use crate::native::single_file::{
 pub(crate) const RELAUNCHES_AFTER_SWAP: bool = false;
 /// A running executable cannot be replaced, only renamed: it is moved aside first.
 pub(crate) const SWAPS_IN_ONE_RENAME: bool = false;
-
-/// The file Cargo puts into every target folder; an executable below one is a build from
-/// source, not the downloaded release.
-const CARGO_TARGET_MARKER: &str = "CACHEDIR.TAG";
 
 /// The release asset for a Windows machine of the given architecture
 /// (`std::env::consts::ARCH`); the name is fixed by `.github/workflows/release.yml`. Only
@@ -34,28 +31,8 @@ pub fn install_location(debug_build: bool) -> InstallLocation {
     location::locate(
         debug_build,
         std::env::current_exe(),
-        |executable, can_replace| resolve(executable, can_replace),
+        |executable, can_replace| resolve_executable(executable, can_replace),
     )
-}
-
-/// Whether a Cargo target folder holds `executable`.
-fn in_cargo_target(executable: &Path) -> bool {
-    executable
-        .ancestors()
-        .skip(1)
-        .any(|folder| folder.join(CARGO_TARGET_MARKER).is_file())
-}
-
-/// Only a release build outside Cargo's target folder updates itself, in place, and only when
-/// `can_replace(executable)` says the user may rename and remove it.
-fn resolve(executable: &Path, can_replace: &dyn Fn(&Path) -> bool) -> Result<PathBuf, String> {
-    if in_cargo_target(executable) {
-        Err("it runs from the build folder".into())
-    } else if !can_replace(executable) {
-        Err("the folder of Atrium is not writable for you".into())
-    } else {
-        Ok(executable.to_path_buf())
-    }
 }
 
 /// The sentence the About tab shows when updates have to be installed by hand.
@@ -100,6 +77,7 @@ fn lists_process(csv: &str, pid: u32) -> bool {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::native::single_file::fakes::fake_cargo_build;
     pub(crate) use crate::native::single_file::fakes::{fake_asset, fake_staged, verify_staged};
     use crate::swap::{new_update_path, partial_update_path};
     use crate::version::Version;
@@ -129,23 +107,20 @@ pub(crate) mod tests {
     fn a_release_build_in_a_writable_folder_updates_itself() {
         let dir = tempfile::tempdir().unwrap();
         let install = fake_install(dir.path());
-        assert_eq!(resolve(&install, &|_| true), Ok(install));
+        assert_eq!(resolve_executable(&install, &|_| true), Ok(install));
     }
 
     #[test]
     fn everything_else_only_notifies() {
         let dir = tempfile::tempdir().unwrap();
         let install = fake_install(dir.path());
-        let target = dir.path().join("target");
-        std::fs::create_dir_all(target.join("release")).unwrap();
-        std::fs::write(target.join(CARGO_TARGET_MARKER), "Signature").unwrap();
-        let built = target.join("release/atrium.exe");
+        let built = fake_cargo_build(dir.path());
         let cases = [
             (&built, true, "build folder"),
             (&install, false, "not writable"),
         ];
         for (executable, replaceable, expected) in cases {
-            let reason = resolve(executable, &|_| replaceable).unwrap_err();
+            let reason = resolve_executable(executable, &|_| replaceable).unwrap_err();
             assert!(reason.contains(expected), "{reason}");
         }
     }

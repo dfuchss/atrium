@@ -1,8 +1,8 @@
-//! The `AppImage` Atrium runs from on Linux: the updater replaces it, the desktop integration
-//! installs its entry.
+//! How Atrium is packaged on Linux, the `AppImage` or the plain release binary: the updater
+//! replaces that file, the desktop integration installs its entry.
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The `AppImage` Atrium runs from.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -11,6 +11,25 @@ pub struct RunningAppImage {
     pub file: PathBuf,
     /// Where the runtime mounted or extracted it (`$APPDIR`).
     pub dir: PathBuf,
+}
+
+/// How the running Atrium is packaged on Linux.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Packaging {
+    /// Started from the `AppImage`.
+    AppImage(RunningAppImage),
+    /// Started as the program file itself (the release binary or a build from source).
+    Binary(PathBuf),
+}
+
+impl Packaging {
+    /// The file the user started: the `AppImage` or the program.
+    pub fn file(&self) -> &Path {
+        match self {
+            Packaging::AppImage(running) => &running.file,
+            Packaging::Binary(executable) => executable,
+        }
+    }
 }
 
 /// What the `AppImage` runtime tells the running app about itself.
@@ -38,22 +57,52 @@ impl AppImageEnv {
         })
     }
 
-    /// The `AppImage` this process runs from, if it does. The executable has to lie below
-    /// `$APPDIR`, so an `APPIMAGE` variable inherited by another program does not count.
-    pub fn running(&self) -> Option<RunningAppImage> {
-        let (file, dir) = (self.appimage.as_ref()?, self.appdir.as_ref()?);
-        self.executable.starts_with(dir).then(|| RunningAppImage {
-            file: file.clone(),
-            dir: dir.clone(),
-        })
+    /// The `AppImage` this process runs from, else the running executable. The executable has
+    /// to lie below `$APPDIR`, so an `APPIMAGE` variable inherited by another program does not
+    /// count.
+    pub fn packaging(&self) -> Packaging {
+        match (&self.appimage, &self.appdir) {
+            (Some(file), Some(dir)) if self.executable.starts_with(dir) => {
+                Packaging::AppImage(RunningAppImage {
+                    file: file.clone(),
+                    dir: dir.clone(),
+                })
+            }
+            _ => Packaging::Binary(self.executable.clone()),
+        }
     }
 }
 
-/// The `AppImage` Atrium runs from, or `None` (a source build, an app bundle, or the file is
-/// gone).
-pub fn running_appimage() -> Option<RunningAppImage> {
-    AppImageEnv::from_env()
-        .ok()?
-        .running()
-        .filter(|running| running.file.is_absolute() && running.file.is_file())
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn env(appimage: Option<&str>, appdir: Option<&str>) -> AppImageEnv {
+        AppImageEnv {
+            executable: "/tmp/.mount_atriumAbC/usr/bin/atrium".into(),
+            appimage: appimage.map(PathBuf::from),
+            appdir: appdir.map(PathBuf::from),
+        }
+    }
+
+    #[test]
+    fn only_an_executable_in_the_mount_runs_as_the_appimage() {
+        let mount = Some("/tmp/.mount_atriumAbC");
+        let appimage = Some("/home/u/Atrium.AppImage");
+        assert_eq!(
+            env(appimage, mount).packaging(),
+            Packaging::AppImage(RunningAppImage {
+                file: "/home/u/Atrium.AppImage".into(),
+                dir: "/tmp/.mount_atriumAbC".into(),
+            })
+        );
+        let binary = Packaging::Binary("/tmp/.mount_atriumAbC/usr/bin/atrium".into());
+        for other in [
+            env(None, mount),
+            env(appimage, None),
+            env(appimage, Some("/tmp/.mount_other")),
+        ] {
+            assert_eq!(other.packaging(), binary);
+        }
+    }
 }

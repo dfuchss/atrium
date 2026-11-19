@@ -1,6 +1,6 @@
 # Releasing
 
-Releases are built by `.github/workflows/release.yml` when a tag `v<version>` is pushed; the tag must match the version in the workspace `Cargo.toml`, the only place the version is set (`tauri.conf.json` inherits it and must not set its own). The workflow builds the macOS zips (arm64, x86_64), the Linux AppImages (x86_64, aarch64) and the Windows executable (x86_64), writes `SHA256SUMS`, which the in-app updater requires, and publishes them as the latest GitHub release.
+Releases are built by `.github/workflows/release.yml` when a tag `v<version>` is pushed; the tag must match the version in the workspace `Cargo.toml`, the only place the version is set (`tauri.conf.json` inherits it and must not set its own). The workflow builds the macOS zips (arm64, x86_64), the Linux AppImages and plain binaries (x86_64, aarch64) and the Windows executable (x86_64), writes `SHA256SUMS`, which the in-app updater requires, and publishes them as the latest GitHub release.
 
 ## Changelog
 

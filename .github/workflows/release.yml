@@ -1,8 +1,8 @@
 name: release
 
-# Builds unsigned macOS bundles for Apple silicon and Intel, Linux AppImages for x86_64 and aarch64 and a
-# Windows x86_64 executable on a version tag and publishes them as a GitHub Release with a SHA256SUMS file, which the in-app
-# updater requires.
+# Builds unsigned macOS bundles for Apple silicon and Intel, Linux AppImages and plain binaries for x86_64 and
+# aarch64 and a Windows x86_64 executable on a version tag and publishes them as a GitHub Release with a SHA256SUMS
+# file, which the in-app updater requires.
 on:
   push:
     tags: ['v*']
@@ -79,8 +79,8 @@ jobs:
   build-linux:
     name: Build Linux ${{ matrix.arch }}
     needs: version
-    # The AppImage bundles the runner's WebKitGTK and GTK and needs at least the runner's glibc.
-    # Both runners are pinned to the oldest Ubuntu release the AppImage supports (24.04), so that
+    # The AppImage bundles the runner's WebKitGTK and GTK, the plain binary links the system's; both need at
+    # least the runner's glibc. Both runners are pinned to the oldest Ubuntu release supported (24.04), so that
     # ubuntu-latest moving to a newer release does not raise the glibc floor.
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -113,18 +113,22 @@ jobs:
       - name: Build the AppImage
         working-directory: app/src-tauri
         run: cargo tauri build --bundles appimage
-      - name: Check and rename the AppImage
+      - name: Check and rename the AppImage and the binary
         run: |
           version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "atrium") | .version')"
           built_images=(target/release/bundle/appimage/atrium_"${version}"_*.AppImage)
           scripts/check-appimage.sh "${built_images[@]}"
           mkdir dist
+          # The plain binary of the same build; it uses the system's WebKitGTK and GTK.
+          install -m 755 target/release/atrium "dist/atrium-linux-${{ matrix.arch }}"
           mv "${built_images[0]}" "dist/atrium-linux-${{ matrix.arch }}.AppImage"
           chmod 755 "dist/atrium-linux-${{ matrix.arch }}.AppImage"
       - uses: actions/upload-artifact@v7
         with:
           name: atrium-linux-${{ matrix.arch }}
-          path: dist/atrium-linux-${{ matrix.arch }}.AppImage
+          path: |
+            dist/atrium-linux-${{ matrix.arch }}
+            dist/atrium-linux-${{ matrix.arch }}.AppImage
           if-no-files-found: error
 
   build-windows:
@@ -184,7 +188,7 @@ jobs:
       - name: Write checksums
         working-directory: dist
         run: |
-          sha256sum atrium-macos-*.zip atrium-linux-*.AppImage atrium-windows-*.exe > SHA256SUMS
+          sha256sum atrium-macos-*.zip atrium-linux-x86_64 atrium-linux-aarch64 atrium-linux-*.AppImage atrium-windows-*.exe > SHA256SUMS
           cat SHA256SUMS
       - name: Build release notes
         run: .github/scripts/release-notes.sh "${GITHUB_REF_NAME}" > release-notes.md
@@ -192,7 +196,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" dist/atrium-macos-*.zip dist/atrium-linux-*.AppImage dist/atrium-windows-*.exe dist/SHA256SUMS \
+          gh release create "${GITHUB_REF_NAME}" dist/atrium-macos-*.zip dist/atrium-linux-x86_64 dist/atrium-linux-aarch64 dist/atrium-linux-*.AppImage dist/atrium-windows-*.exe dist/SHA256SUMS \
             --repo "${GITHUB_REPOSITORY}" \
             --title "Atrium ${GITHUB_REF_NAME#v}" \
             --notes-file release-notes.md \

@@ -1,8 +1,8 @@
 //! Tauri commands of the desktop integration (Settings): they show the state of the launcher
-//! entry and install or remove it on request, the desktop entry of the `AppImage` on Linux
-//! (`desktop_entry`) and the Start menu shortcut on Windows (`start_menu`). Nothing is written
-//! at startup. Where there is nothing to offer (macOS, a source build on Linux) the state is
-//! `None`. They also list the installed browsers for links.
+//! entry and install or remove it on request, the desktop entry of the `AppImage` or the release
+//! binary on Linux (`desktop_entry`) and the Start menu shortcut on Windows (`start_menu`).
+//! Nothing is written at startup. Where there is nothing to offer (macOS, a source build on
+//! Linux) the state is `None`. They also list the installed browsers for links.
 
 #![expect(
     clippy::needless_pass_by_value,
@@ -38,15 +38,19 @@ pub(crate) fn uninstall_desktop_entry(
     platform::uninstall(&app, &log)
 }
 
-/// The desktop entry of the running `AppImage`.
+/// The desktop entry of the running `AppImage` or release binary.
 #[cfg(not(windows))]
 mod platform {
-    use fs_util::appimage::{RunningAppImage, running_appimage};
+    use std::ffi::OsString;
+
+    use fs_util::appimage::{AppImageEnv, Packaging};
     use protocol::DesktopEntryState;
     use tauri::AppHandle;
 
     use super::DesktopLog;
     use crate::desktop_entry::{self, DesktopDirs};
+
+    const NOTHING_TO_OFFER: &str = "Atrium does not run as the AppImage or the downloaded program";
 
     /// Lets the desktop see the changed icons; a failure only goes to the log.
     fn announce_icons(log: &DesktopLog) {
@@ -55,37 +59,48 @@ mod platform {
         }
     }
 
-    fn state_of(
-        dirs: &DesktopDirs,
-        running: &RunningAppImage,
-    ) -> Result<DesktopEntryState, String> {
-        desktop_entry::state(dirs, &running.file)
+    /// The running `AppImage`, or on Linux the program outside a Cargo target folder; None
+    /// where there is nothing to offer.
+    fn running() -> Option<Packaging> {
+        let packaging = AppImageEnv::from_env().ok()?.packaging();
+        let offered = match &packaging {
+            Packaging::AppImage(running) => running.file.is_absolute() && running.file.is_file(),
+            Packaging::Binary(file) => cfg!(target_os = "linux") && !fs_util::in_cargo_target(file),
+        };
+        offered.then_some(packaging)
+    }
+
+    fn icons(packaging: &Packaging) -> Result<Vec<(OsString, Vec<u8>)>, String> {
+        match packaging {
+            Packaging::AppImage(running) => desktop_entry::appimage_icons(running),
+            Packaging::Binary(_) => Ok(desktop_entry::embedded_icons()),
+        }
     }
 
     pub(super) fn state(_app: &AppHandle) -> Result<Option<DesktopEntryState>, String> {
-        let Some(running) = running_appimage() else {
+        let Some(running) = running() else {
             return Ok(None);
         };
-        state_of(&DesktopDirs::from_env()?, &running).map(Some)
+        desktop_entry::state(&DesktopDirs::from_env()?, running.file()).map(Some)
     }
 
     pub(super) fn install(_app: &AppHandle, log: &DesktopLog) -> Result<DesktopEntryState, String> {
-        let running = running_appimage().ok_or("Atrium does not run as an AppImage")?;
+        let running = running().ok_or(NOTHING_TO_OFFER)?;
         let dirs = DesktopDirs::from_env()?;
-        desktop_entry::install(&dirs, &running)?;
+        desktop_entry::install(&dirs, running.file(), &icons(&running)?)?;
         announce_icons(log);
-        state_of(&dirs, &running)
+        desktop_entry::state(&dirs, running.file())
     }
 
     pub(super) fn uninstall(
         _app: &AppHandle,
         log: &DesktopLog,
     ) -> Result<DesktopEntryState, String> {
-        let running = running_appimage().ok_or("Atrium does not run as an AppImage")?;
+        let running = running().ok_or(NOTHING_TO_OFFER)?;
         let dirs = DesktopDirs::from_env()?;
         desktop_entry::uninstall(&dirs)?;
         announce_icons(log);
-        state_of(&dirs, &running)
+        desktop_entry::state(&dirs, running.file())
     }
 }
 

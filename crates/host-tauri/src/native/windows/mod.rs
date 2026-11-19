@@ -1,7 +1,8 @@
 //! Windows (`WebView2`): a `WebView2` user data folder per account (see `web_data`), child
 //! webviews that Tauri lays out like on macOS (see `child_views`), the unread dot on the
-//! taskbar button, Atrium's own JavaScript dialogs (`dialogs`), the browser list (`browsers`)
-//! and the keyboard shortcuts of the main window's webviews (`shortcuts`). Resumes from sleep
+//! taskbar button, Atrium's own JavaScript dialogs (`dialogs`), the browser list (`browsers`),
+//! the keyboard shortcuts of the main window's webviews (`shortcuts`) and notifications whose
+//! click still counts in the notification centre (`notification_links`). Resumes from sleep
 //! come from the power notifications of Windows, crashed pages from each service view's
 //! `ProcessFailed` event (see `platform_ffi::windows`).
 //!
@@ -38,15 +39,20 @@ use crate::{Feed, Input, Logger, port_err};
 
 mod browsers;
 mod dialogs;
+mod notification_links;
 mod shortcuts;
 
 pub(crate) use crate::window_shortcuts::Shortcuts;
 pub(crate) use browsers::{installed_browsers, open_url_with};
 pub(crate) use dialogs::{attach_dialogs, install_dialogs};
+pub(crate) use notification_links::{
+    NotificationLinks, follow_notification_links, register_notification_links,
+    show_linked_notification,
+};
 pub(crate) use shortcuts::install_shortcuts;
 
 /// Sound name of an instant message (`ms-winsoundevent:Notification.IM`), as
-/// `tauri-winrt-notification` names it.
+/// `tauri-winrt-notification` and the toasts of `notification_links` name it.
 pub(crate) const NOTIFICATION_SOUND: &str = "IM";
 
 /// Gives the process the `AppUserModelID` `identifier`, before any window exists: the taskbar

@@ -22,6 +22,8 @@ Atrium adds nothing to the Start menu by itself. To get a Start menu entry, open
 
 Atrium's windows carry the same app id, so the taskbar groups them under that shortcut, with its name and icon. The keyboard shortcuts work with <kbd>Ctrl</kbd> (see [Usage](Usage#keyboard-shortcuts)); Settings and Quit are also in the tray menu. *Auto* appearance follows the light or dark app mode of Windows, also when it changes while Atrium runs. *After waking from sleep* checks or reloads the services once the system resumes from sleep or hibernation.
 
+A click on a notification shows its account, also once the notification moved to the notification centre: each start registers the link scheme `org.fuchss.atrium:` (the identifier) for the running program under `HKEY_CURRENT_USER\Software\Classes\org.fuchss.atrium`, and a click opens the notification's link, which the running Atrium follows. Links to notifications Atrium no longer remembers are ignored. **Uninstall** leaves this key; delete it by hand after removing Atrium.
+
 New accounts present Chrome's user agent instead of Safari's, as WebView2 is Chromium; it can be changed per account.
 
 ## Data locations
@@ -41,7 +43,7 @@ Atrium finds these folders through Windows (`SHGetKnownFolderPath`), so changing
 - A service whose page stopped responding is not reloaded, only logged; a service whose WebView2 browser process ended (all processes of its account) stays blank until Atrium starts again. A crashed or ended page process is reloaded, at most three times a minute.
 - Hidden services keep running, but Chromium throttles their timers like those of a background tab (Tauri's background throttling setting does not apply to WebView2).
 - Notifications of a build in `target\debug` or `target\release` are shown under the name of PowerShell. Elsewhere, Windows shows Atrium's name once the Start menu shortcut is installed (see [Desktop integration](#desktop-integration)), which carries the identifier as app id (a development identifier for a development instance).
-- A click on a notification shows its account only while the notification is on screen, not once it moved to the notification centre.
+- A click on a notification of a development instance with its own config folder (`ATRIUM_CONFIG_DIR`) shows its account only while the notification is on screen, not once it moved to the notification centre: such an instance registers no link scheme, as Windows would start the program without its config folder.
 - *Do not disturb* also mutes a call held in an in-app window: WebView2 does not tell when a page uses the microphone or camera, and only the service itself reports it. A call in the service keeps its sound.
 
 See also the [known limitations](Known-Limitations) of every platform.

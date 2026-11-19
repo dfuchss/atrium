@@ -1,7 +1,8 @@
 //! One running Atrium per user: two processes would share the accounts' web data folders. The
 //! single-instance plugin claims a name of the user's session (on Linux on the D-Bus session
 //! bus, on Windows a named mutex); a second start hands over to the running Atrium and exits. Where the name cannot be
-//! claimed (Linux without a session bus) every start runs.
+//! claimed (Linux without a session bus) every start runs. On Windows a second start may carry
+//! a notification link, which the running Atrium follows (see `notification_links`).
 
 use tauri::{Builder, Manager, Runtime};
 
@@ -13,8 +14,8 @@ pub(crate) fn guard_single_instance<R: Runtime>(
     builder: Builder<R>,
     window_label: &'static str,
 ) -> Builder<R> {
-    builder.plugin(tauri_plugin_single_instance::init(
-        move |app, _args, _cwd| {
+    let builder = builder.plugin(tauri_plugin_single_instance::init(
+        move |app, args, _cwd| {
             let logger = Logger::new(app);
             logger.log("started again: showing the running Atrium");
             if let Some(window) = app.get_window(window_label)
@@ -22,6 +23,13 @@ pub(crate) fn guard_single_instance<R: Runtime>(
             {
                 logger.log(&format!("cannot bring the window to the front: {error}"));
             }
+            #[cfg(windows)]
+            super::follow_notification_links(app, &args, &logger);
+            #[cfg(not(windows))]
+            let _ = args;
         },
-    ))
+    ));
+    #[cfg(windows)]
+    let builder = builder.plugin(super::register_notification_links());
+    builder
 }

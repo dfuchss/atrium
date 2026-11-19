@@ -1,15 +1,19 @@
-//! Native notifications and the routing of their clicks back to the page that sent them.
+//! Native notifications and the routing of their clicks back to the page that sent them. On
+//! Windows a guarded instance shows toasts of its own, whose clicks come as links (see
+//! `native::windows::notification_links`); elsewhere the notification plugin shows them and
+//! reports their clicks.
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use domain::NotificationReq;
 use domain::ports::{Notifier, PortResult};
 use fs_util::lock_ignoring_poison;
-use tauri::Runtime;
+use tauri::{Manager as _, Runtime};
 use tauri_plugin_notification::NotificationExt;
 use uuid::Uuid;
 
-use crate::{Input, TauriHost, native, port_err};
+use crate::{Feed, Input, TauriHost, native, port_err};
 
 /// Native notifications remembered for click routing; older ones are forgotten.
 const MAX_TRACKED_NOTIFICATIONS: u16 = 512;
@@ -40,21 +44,37 @@ impl NotificationTargets {
     }
 }
 
+/// Feeds clicks on tracked native notifications as [`Input::NotificationClicked`]; in the app
+/// state for the notification links of Windows.
+#[derive(Clone)]
+pub(crate) struct NotificationClicks {
+    feed: Feed,
+    targets: Arc<Mutex<NotificationTargets>>,
+}
+
+impl NotificationClicks {
+    /// Feeds the click on the native notification `native_id`; false if it is not tracked (never
+    /// shown or forgotten).
+    pub(crate) fn clicked(&self, native_id: i32) -> bool {
+        let target = lock_ignoring_poison(&self.targets).target(native_id);
+        target
+            .map(|(account, shim_id)| (self.feed)(Input::NotificationClicked { account, shim_id }))
+            .is_some()
+    }
+}
+
 impl<R: Runtime> TauriHost<R> {
     /// Routes clicks on native notifications back as [`Input::NotificationClicked`].
     /// Called by [`TauriHost::new`]; notifications shown before registration report nothing.
     pub(crate) fn register_notification_clicks(&self) {
-        let (feed, notifications) = (self.feed.clone(), self.notifications.clone());
+        let clicks = NotificationClicks {
+            feed: self.feed.clone(),
+            targets: self.notifications.clone(),
+        };
+        self.app.manage(clicks.clone());
         let result = self.app.notification().on_action(move |action| {
-            let Some(native_id) = action
-                .notification()
-                .map(tauri_plugin_notification::ActiveNotification::id)
-            else {
-                return;
-            };
-            let target = lock_ignoring_poison(&notifications).target(native_id);
-            if let Some((account, shim_id)) = target {
-                feed(Input::NotificationClicked { account, shim_id });
+            if let Some(notification) = action.notification() {
+                clicks.clicked(notification.id());
             }
         });
         if let Err(error) = result {
@@ -69,6 +89,10 @@ impl<R: Runtime> Notifier for TauriHost<R> {
     fn notify(&self, request: &NotificationReq) -> PortResult {
         let native_id =
             lock_ignoring_poison(&self.notifications).track(request.account, request.shim_id);
+        #[cfg(windows)]
+        if let Some(links) = self.app.try_state::<native::NotificationLinks>() {
+            return native::show_linked_notification(&links, native_id, request);
+        }
         let mut builder = self
             .app
             .notification()

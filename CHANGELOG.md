@@ -9,6 +9,10 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+## 0.6.1
+
+*Do not disturb* now also mutes the services' own sounds, so their notification sounds stay quiet too. A service in a call keeps its sound.
+
 ### Fixed
 
 #### All platforms

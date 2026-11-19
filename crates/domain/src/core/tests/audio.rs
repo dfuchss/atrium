@@ -230,3 +230,12 @@ fn a_missing_or_malformed_polled_value_is_not_capturing() {
         poll(&mut core, 1, r#"{"c":true}"#);
     }
 }
+
+#[test]
+fn a_crashed_view_stops_counting_as_capturing() {
+    let (mut core, _) = started(vec![account(1, "slack", "A")]);
+    set_dnd(&mut core, true);
+    capture(&mut core, 1, true);
+    let effects = core.handle(Input::WebProcessTerminated { account: id(1) });
+    assert_eq!(audio_mutes(&effects), vec![(id(1), true)]);
+}

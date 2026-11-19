@@ -106,17 +106,18 @@ impl Core {
             return vec![];
         }
         self.stop_wake_check(account_id);
+        // The dead process never reports the end of its capture.
+        let mut effects = self.capture_changed(account_id, None, false);
         let now_ms = self.last_tick_ms.unwrap_or(0);
         if self.crash_reload_limit.allow(account_id, now_ms) {
             self.crash_reloads_stopped.remove(&account_id);
-            logged_reload(account_id, "web process terminated").into()
+            effects.extend(logged_reload(account_id, "web process terminated"));
         } else if self.crash_reloads_stopped.insert(account_id) {
-            vec![Effect::Log(format!(
+            effects.push(Effect::Log(format!(
                 "[{account_id}] web process keeps crashing -> not reloading"
-            ))]
-        } else {
-            vec![]
+            )));
         }
+        effects
     }
 
     /// A reload by the user or a new view starts the account afresh: its wake check ends and

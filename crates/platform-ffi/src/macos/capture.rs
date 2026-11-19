@@ -69,9 +69,9 @@ fn capturing(view: &WKWebView) -> bool {
 }
 
 /// Calls `on_change` on the main thread with whether `webview`'s page captures the microphone
-/// or camera on each change of either, repeats possible, for as long as the web view lives. Call it once per web view (a
-/// second call would release the first observer while it is still registered), through
-/// `Webview::with_webview`, which runs on the main thread; an error off it.
+/// or camera on each change of either, repeats possible, for as long as the web view lives. Call
+/// it once per web view (a second call would release the first observer while it is still
+/// registered), through `Webview::with_webview`, which runs on the main thread; an error off it.
 pub fn observe_capture(
     webview: &PlatformWebview,
     on_change: impl Fn(bool) + 'static,

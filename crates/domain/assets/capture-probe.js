@@ -20,8 +20,8 @@
     MediaStream.prototype.clone = function () {
       const copy = cloneStream.call(this);
       try {
-        const labels = new Set(this.getTracks().filter((t) => tracks.has(t)).map((t) => t.label));
-        copy.getTracks().forEach((t) => labels.has(t.label) && tracks.add(t));
+        const copies = copy.getTracks();
+        this.getTracks().forEach((t, i) => tracks.has(t) && copies[i] && tracks.add(copies[i]));
       } catch (e) {}
       return copy;
     };
@@ -34,7 +34,11 @@
     if (window === top) {
       const frames = new Map();
       addEventListener("message", (event) => {
-        if (event.data && event.data[TAG] === true) frames.set(event.source, Date.now());
+        let frame = event.source && event.source !== window ? event.source : null;
+        while (frame && frame !== window && frame !== top) frame = frame.parent;
+        if (frame === window && event.data && event.data[TAG] === true) {
+          frames.set(event.source, Date.now());
+        }
       });
       if (window.__atrium) window.__atrium.capturing = () => {
         try {

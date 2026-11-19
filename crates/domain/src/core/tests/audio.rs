@@ -131,3 +131,76 @@ fn capture_is_forgotten_with_the_view() {
         "recreated view starts without capture"
     );
 }
+
+fn poll(core: &mut Core, n: u128, raw: &str) -> Vec<Effect> {
+    core.handle(Input::PollResult {
+        account: id(n),
+        raw: serde_json::Value::from(raw).to_string(),
+    })
+}
+
+fn probing(accounts: Vec<Account>) -> (Core, Vec<Effect>) {
+    let persisted = Persisted {
+        accounts,
+        ..Persisted::default()
+    };
+    let mut core = Core::new(
+        Catalog::builtin(),
+        persisted,
+        Box::new(Uuid::nil),
+        UA_PLATFORM.into(),
+    );
+    core.set_page_capture_detection(true);
+    let effects = core.handle(STARTED);
+    (core, effects)
+}
+
+#[test]
+fn without_page_detection_there_is_no_probe_and_the_field_is_ignored() {
+    let (mut core, effects) = started(vec![account(1, "slack", "A")]);
+    assert!(
+        !views(&effects)[0]
+            .0
+            .init_script
+            .contains("__atriumCapturing")
+    );
+    set_dnd(&mut core, true);
+    let effects = poll(&mut core, 1, r#"{"n":[],"u":null,"c":true}"#);
+    assert!(audio_mutes(&effects).is_empty());
+    assert!(core.audio_muted(id(1)));
+}
+
+#[test]
+fn page_detection_injects_the_probe_and_follows_the_polled_value() {
+    let (mut core, effects) = probing(vec![account(1, "slack", "A")]);
+    assert!(
+        views(&effects)[0]
+            .0
+            .init_script
+            .contains(crate::CAPTURE_PROBE)
+    );
+    set_dnd(&mut core, true);
+    let effects = poll(&mut core, 1, r#"{"n":[],"u":null,"c":true}"#);
+    assert_eq!(audio_mutes(&effects), vec![(id(1), false)]);
+    let effects = poll(&mut core, 1, r#"{"n":[],"u":null,"c":true}"#);
+    assert!(audio_mutes(&effects).is_empty(), "unchanged -> nothing");
+    let effects = poll(&mut core, 1, r#"{"n":[],"u":null,"c":false}"#);
+    assert_eq!(audio_mutes(&effects), vec![(id(1), true)]);
+}
+
+#[test]
+fn a_missing_or_malformed_polled_value_is_not_capturing() {
+    let (mut core, _) = probing(vec![account(1, "slack", "A")]);
+    set_dnd(&mut core, true);
+    poll(&mut core, 1, r#"{"n":[],"u":null,"c":true}"#);
+    for raw in [
+        r#"{"n":[],"u":null}"#,
+        r#"{"c":"yes"}"#,
+        r#"{"c":null}"#,
+        r#"{"c":1}"#,
+    ] {
+        let effects = poll(&mut core, 1, raw);
+        assert_eq!(audio_mutes(&effects), vec![(id(1), true)], "{raw}");
+        poll(&mut core, 1, r#"{"c":true}"#);
+    }
+}

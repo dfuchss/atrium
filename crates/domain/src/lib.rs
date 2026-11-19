@@ -38,3 +38,7 @@ fn trimmed(value: Option<&str>) -> Option<String> {
 /// JavaScript injected into every service page: collects web notifications into a queue
 /// (`window.__atrium`) that Rust drains by polling, as service pages get no Tauri IPC.
 const NOTIFY_SHIM: &str = include_str!("../assets/notify-shim.js");
+
+/// JavaScript added where the engine reports no microphone/camera use itself (see
+/// `Core::set_page_capture_detection`): exposes `window.__atrium.capturing()` for the poll.
+const CAPTURE_PROBE: &str = include_str!("../assets/capture-probe.js");

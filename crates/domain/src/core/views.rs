@@ -28,7 +28,7 @@ impl Core {
             url,
             store_id: account.store_id(),
             user_agent,
-            init_script: scripts::init_script(service, account),
+            init_script: scripts::init_script(service, account, self.page_capture_detection),
             internal_hosts: service.resolve_hosts(instance),
         })
     }

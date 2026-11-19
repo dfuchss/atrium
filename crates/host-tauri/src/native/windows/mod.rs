@@ -74,6 +74,9 @@ pub(crate) fn user_agent_platform() -> String {
 /// `WebView2` is Chromium, and sites would otherwise serve it their code for Safari.
 pub(crate) const NEW_ACCOUNT_USER_AGENT: Option<&str> = Some("chrome");
 
+/// `WebView2` has no capture state: the service pages report it (service views only).
+pub(crate) const PAGE_CAPTURE_DETECTION: bool = true;
+
 /// The app icon in colour: Windows does not tint tray icons.
 pub(crate) const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray-icon-color.png");
 pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = false;

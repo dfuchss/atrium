@@ -85,6 +85,12 @@ pub fn user_agent_platform() -> String {
     native::user_agent_platform()
 }
 
+/// Whether service pages must report microphone/camera use themselves, as the engine does not
+/// (see `domain::Core::set_page_capture_detection`).
+pub fn page_capture_detection() -> bool {
+    native::PAGE_CAPTURE_DETECTION
+}
+
 /// The user agent preset of new accounts whose service asks for the `webkit` one, where the
 /// engine is no `WebKit` (see `domain::Core::set_new_account_user_agent`).
 pub fn new_account_user_agent() -> Option<String> {

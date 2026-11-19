@@ -118,6 +118,7 @@ fn _platform_interface<R: Runtime, M: Manager<R>>() {
     // User agents: the platform part of the presets, the preset of new accounts.
     let _: fn() -> String = user_agent_platform;
     let _: Option<&str> = NEW_ACCOUNT_USER_AGENT;
+    let _: bool = PAGE_CAPTURE_DETECTION;
     // OS integration.
     let _: fn(&str) = set_app_id;
     let _: fn(&Window<R>, DockBadge) -> tauri::Result<()> = set_badge;

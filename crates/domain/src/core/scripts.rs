@@ -11,15 +11,19 @@ pub(super) const ICON_SCRIPT: &str = r#"(()=>{try{const abs=h=>new URL(h,documen
 pub(super) const HISTORY_BACK: &str = "history.back()";
 pub(super) const HISTORY_FORWARD: &str = "history.forward()";
 
-/// Init script of an account's views: the service's storage cleaner, the notification shim and
-/// the account's custom CSS.
-pub(super) fn init_script(service: &ServiceDef, account: &Account) -> String {
+/// Init script of an account's views: the service's storage cleaner, the notification shim, the
+/// capture probe where the host needs it, and the account's custom CSS.
+pub(super) fn init_script(service: &ServiceDef, account: &Account, capture_probe: bool) -> String {
     let mut script = String::new();
     if !service.clear_local_storage.is_empty() {
         script.push_str(&storage_cleaner(&service.clear_local_storage));
         script.push('\n');
     }
     script.push_str(crate::NOTIFY_SHIM);
+    if capture_probe {
+        script.push('\n');
+        script.push_str(crate::CAPTURE_PROBE);
+    }
     if let Some(css) = account
         .settings
         .custom_css
@@ -33,9 +37,9 @@ pub(super) fn init_script(service: &ServiceDef, account: &Account) -> String {
 }
 
 /// Drains the shim's notification queue and returns it with the value [`unread_script`] left
-/// in the shim, as one JSON string. Fixed text, so it parses whatever a service's expression
+/// in the shim and whether the capture probe sees a call (`c`, null without the probe), as one JSON string. Fixed text, so it parses whatever a service's expression
 /// looks like, and a value that is no JSON cannot cost the drained notifications.
-pub(super) const POLL_SCRIPT: &str = "(()=>{const m=window.__atrium;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()";
+pub(super) const POLL_SCRIPT: &str = "(()=>{const m=window.__atrium;if(!m)return JSON.stringify({n:[],u:null,c:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;let c=null;try{if(m.capturing)c=m.capturing()===true}catch(e){}return JSON.stringify({n:m.drain(),u:u,c:c});})()";
 
 /// Evaluates a service's unread expression into the shim for the next [`POLL_SCRIPT`]. A script
 /// of its own: a syntax error in the expression fails only this evaluation, not the drain.

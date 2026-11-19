@@ -42,6 +42,9 @@ pub(crate) fn user_agent_platform() -> String {
 /// New accounts follow their service's user agent preset: the engine is `WebKit`.
 pub(crate) const NEW_ACCOUNT_USER_AGENT: Option<&str> = None;
 
+/// The engine tells when a webview captures (see `observe_capture`).
+pub(crate) const PAGE_CAPTURE_DETECTION: bool = false;
+
 /// Monochrome template image (black + alpha); macOS tints it for light/dark menu bars.
 pub(crate) const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray-icon.png");
 pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = true;

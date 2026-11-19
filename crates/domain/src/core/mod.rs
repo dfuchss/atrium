@@ -52,6 +52,9 @@ pub struct Core {
     new_account_id: Box<dyn FnMut() -> Uuid + Send>,
     /// The host's part of the user agent presets, e.g. `X11; Linux x86_64`.
     user_agent_platform: String,
+    /// Whether the views get the capture probe and its poll value feeds the capture state (see
+    /// [`Core::set_page_capture_detection`]).
+    page_capture_detection: bool,
     active: Option<Uuid>,
     dialog_open: bool,
     /// [`protocol::Snapshot::edit_request`] of the snapshot being emitted.
@@ -119,6 +122,7 @@ impl Core {
             persisted,
             new_account_id,
             user_agent_platform,
+            page_capture_detection: false,
             active,
             dialog_open: false,
             edit_request: None,
@@ -158,6 +162,13 @@ impl Core {
     /// Chromium). Existing accounts keep theirs.
     pub fn set_new_account_user_agent(&mut self, preset: Option<String>) {
         self.new_account_user_agent = preset;
+    }
+
+    /// Where the engine reports no microphone/camera use itself (`WebView2`), the views get a
+    /// page script that does, and each poll feeds it as [`Input::CaptureChanged`]. Off by
+    /// default; set before the views are created.
+    pub fn set_page_capture_detection(&mut self, enabled: bool) {
+        self.page_capture_detection = enabled;
     }
 
     /// Read-only app information shown in the snapshot ("About").

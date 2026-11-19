@@ -4,6 +4,7 @@
 //! inputs; each submodule handles one feature.
 
 mod accounts;
+mod audio;
 mod icons;
 mod layout;
 mod menus;
@@ -64,6 +65,9 @@ pub struct Core {
     app_info: AppInfo,
     /// Accounts whose view currently exists.
     loaded_views: HashSet<Uuid>,
+    /// Loaded accounts whose view captures the microphone or camera (see
+    /// [`Input::CaptureChanged`]).
+    capturing: HashSet<Uuid>,
     /// Last time (tick clock) each account was active (shown) or left.
     last_activity_ms: HashMap<Uuid, u64>,
     /// Latest wall clock reading (ticks and resumes).
@@ -126,6 +130,7 @@ impl Core {
             last_menus: None,
             app_info: AppInfo::default(),
             loaded_views: HashSet::new(),
+            capturing: HashSet::new(),
             last_activity_ms: HashMap::new(),
             last_tick_ms: None,
             slept: false,
@@ -194,6 +199,7 @@ impl Core {
             Input::Tick { now_ms } => self.tick(now_ms),
             Input::Resumed { now_ms } => self.resumed(now_ms),
             Input::WebProcessTerminated { account } => self.web_process_terminated(account),
+            Input::CaptureChanged { account, active } => self.capture_changed(account, active),
             Input::IconFound {
                 account,
                 raw,

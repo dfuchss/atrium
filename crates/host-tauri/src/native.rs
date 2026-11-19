@@ -52,6 +52,10 @@ pub(crate) use windows::*;
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 compile_error!("Atrium runs on macOS, Linux and Windows only");
 
+/// Called on the main thread when a webview's page starts (true) or stops capturing the
+/// microphone or camera (see `observe_capture`).
+pub(crate) type OnCapture = Box<dyn Fn(bool) + Send>;
+
 /// Runs `job` with the engine's webview of `webview` on the main thread; a failure of the job,
 /// or to schedule it, is logged as `[<label>] <failure>: <error>`.
 pub(crate) fn with_platform_webview<R: Runtime, E: Display>(
@@ -93,6 +97,11 @@ fn _platform_interface<R: Runtime, M: Manager<R>>() {
     let _: fn(&Webview<R>, Bounds) -> PortResult = place;
     let _: fn(&Webview<R>, bool) -> PortResult = set_visible;
     let _: fn(&Webview<R>, &Logger) -> PortResult = force_reload;
+    // Audio muted while Do Not Disturb is on, media capture untouched (service views, popups),
+    // except in a webview that captures the microphone or camera (a call), where the engine
+    // tells it (not `WebView2`).
+    let _: fn(&Webview<R>, bool, &Logger) -> PortResult = set_audio_muted;
+    let _: fn(&Webview<R>, OnCapture, &Logger) = observe_capture;
     // Popups: what a popup's page may do before it is created, whose user scripts it runs.
     let _: for<'a> fn(
         WebviewWindowBuilder<'a, R, M>,

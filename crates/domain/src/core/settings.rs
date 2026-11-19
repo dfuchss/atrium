@@ -32,6 +32,9 @@ impl Core {
         if previous.link_target != self.settings().link_target {
             effects.extend(self.default_link_target_policies());
         }
+        if previous.dnd != self.settings().dnd {
+            effects.extend(self.audio_muted_effects());
+        }
         effects.extend(self.dock_badge());
         effects.push(self.emit());
         effects
@@ -51,8 +54,14 @@ impl Core {
     }
 
     pub(super) fn set_dnd(&mut self, enabled: bool) -> Vec<Effect> {
+        let changed = self.settings().dnd != enabled;
         self.persisted.settings.app.dnd = enabled;
-        vec![self.persist(), self.emit()]
+        let mut effects = vec![self.persist()];
+        if changed {
+            effects.extend(self.audio_muted_effects());
+        }
+        effects.push(self.emit());
+        effects
     }
 
     pub(super) fn set_zoom(&mut self, account_id: Uuid, zoom: f64) -> Vec<Effect> {

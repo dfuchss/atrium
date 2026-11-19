@@ -26,6 +26,7 @@ macro_rules! effects_of {
 const UA_PLATFORM: &str = "X11; Linux x86_64";
 
 mod accounts;
+mod audio;
 mod hibernation;
 mod icons;
 mod layout;

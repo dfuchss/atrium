@@ -9,6 +9,12 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+### Fixed
+
+#### All platforms
+
+- *Do not disturb* also mutes the sounds the services play themselves, such as message pings and ringtones, in their in-app windows too; on macOS and Linux a service or window in a call (using the microphone or camera) keeps its sound
+
 ## 0.6.0
 
 Settings can be exported and imported: everything into a new installation, or only the settings, custom services and service definition files into an existing one, keeping its services and logins. Each service can override the sidebar badge style and the dock badge. Slack shows its unread count and dot again.

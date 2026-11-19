@@ -43,6 +43,9 @@ pub trait WebviewHost: Send + Sync {
     fn set_view_policy(&self, account: Uuid, policy: ViewPolicy) -> PortResult;
     /// Page zoom, 1.0 = 100 %.
     fn set_zoom(&self, account: Uuid, zoom: f64) -> PortResult;
+    /// Mutes or unmutes the audio the pages of `account`'s view and its popups play; media
+    /// capture (microphone, camera, screen) stays as it is.
+    fn set_audio_muted(&self, account: Uuid, muted: bool) -> PortResult;
     /// Deletes cookies/storage/cache of the view's data store, then reloads the view.
     fn clear_data(&self, account: Uuid) -> PortResult;
     /// URL currently shown in the view.

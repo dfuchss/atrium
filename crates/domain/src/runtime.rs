@@ -82,6 +82,9 @@ pub fn apply(effect: Effect, ports: &Ports<'_>) {
             ("SetViewPolicy", ports.host.set_view_policy(account, policy))
         }
         Effect::SetZoom { account, zoom } => ("SetZoom", ports.host.set_zoom(account, zoom)),
+        Effect::SetAudioMuted { account, muted } => {
+            ("SetAudioMuted", ports.host.set_audio_muted(account, muted))
+        }
         Effect::FindIcon { account, script } => {
             ("FindIcon", ports.host.find_icon(account, &script))
         }
@@ -202,6 +205,9 @@ mod tests {
             Ok(())
         }
         fn set_zoom(&self, _: Uuid, _: f64) -> PortResult {
+            Ok(())
+        }
+        fn set_audio_muted(&self, _: Uuid, _: bool) -> PortResult {
             Ok(())
         }
         fn clear_data(&self, _: Uuid) -> PortResult {

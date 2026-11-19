@@ -13,8 +13,8 @@
 //! `popups` opens the in-app windows, `undecided` holds the hidden windows of Linux, and
 //! `close_hook` closes a popup on its page's `window.close()`.
 //!
-//! Popup/app windows get the same navigation and permission hooks (`page_hooks`) and
-//! JavaScript dialogs (`dialogs`) as the account's view.
+//! Popup/app windows get the same navigation and permission hooks (`page_hooks`), JavaScript
+//! dialogs (`dialogs`) and audio mute (`audio`) as the account's view.
 //!
 //! Never `NewWindowResponse::Allow`: wry would create a bare native window without any of
 //! our handlers (seen with Rainbow opening its own site).
@@ -37,6 +37,7 @@ use tauri::webview::{NewWindowFeatures, NewWindowResponse};
 use tauri::{AppHandle, Runtime, Url};
 use uuid::Uuid;
 
+use crate::audio::SharedWindowMutes;
 use crate::{Feed, Logger};
 pub(crate) use close_hook::CLOSE_HOOK;
 use popups::Opening;
@@ -61,6 +62,7 @@ pub(crate) struct LinkPolicy<R: Runtime> {
     pub(crate) app: AppHandle<R>,
     pub(crate) spec: Arc<ViewSpec>,
     pub(crate) policies: ViewPolicies,
+    pub(crate) window_mutes: SharedWindowMutes,
     pub(crate) popup_counter: Arc<AtomicU64>,
     pub(crate) popup_quota: PopupQuota,
     pub(crate) feed: Feed,

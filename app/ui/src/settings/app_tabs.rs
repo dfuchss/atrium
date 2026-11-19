@@ -105,7 +105,7 @@ pub(super) fn NotificationsTab(snapshot: ReadSignal<Snapshot>) -> impl IntoView 
     view! {
         <h2>"Notifications"</h2>
         <div class="form">
-            {app_toggle(snapshot, "Do not disturb", "Suppress all notifications.", |settings| settings.dnd, |settings, enabled| settings.dnd = enabled)}
+            {app_toggle(snapshot, "Do not disturb", "Suppress all notifications and mute all sounds. On macOS and Linux, a service in a call (microphone or camera on) keeps its sound.", |settings| settings.dnd, |settings, enabled| settings.dnd = enabled)}
             {app_toggle(snapshot, "Message preview", "Otherwise only \u{201C}New message\u{201D} is shown.", |settings| settings.notification_preview, |settings, enabled| settings.notification_preview = enabled)}
             {app_toggle(snapshot, "Play sound", "", |settings| settings.notification_sound, |settings, enabled| settings.notification_sound = enabled)}
             <BadgeRow snapshot=snapshot />

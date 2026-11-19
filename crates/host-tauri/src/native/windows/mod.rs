@@ -124,6 +124,32 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, logger: &Logger) ->
         .map_err(port_err)
 }
 
+/// Mutes or unmutes the audio of `webview`'s pages, keeping media capture as it is; a failure
+/// (a `WebView2` runtime too old for it) is logged.
+pub(crate) fn set_audio_muted<R: Runtime>(
+    webview: &Webview<R>,
+    muted: bool,
+    logger: &Logger,
+) -> PortResult {
+    let (label, logger) = (webview.label().to_string(), logger.clone());
+    webview
+        .with_webview(move |platform| {
+            if let Err(error) = platform_ffi::set_audio_muted(&platform.controller(), muted) {
+                logger.log(&format!("[{label}] cannot mute audio: {error}"));
+            }
+        })
+        .map_err(port_err)
+}
+
+/// Nothing to observe: `WebView2` tells no microphone or camera capture state (only that a
+/// screen capture starts), so in Do Not Disturb a call's audio is muted like any other.
+pub(crate) fn observe_capture<R: Runtime>(
+    _webview: &Webview<R>,
+    _on_change: super::OnCapture,
+    _logger: &Logger,
+) {
+}
+
 /// Gives the popup's page its own drag and drop. `WebView2` has no popup blocker: whether a
 /// `window.open` came from a click is not checked yet, only the window quota applies.
 pub(crate) fn prepare_popup<'a, R: Runtime, M: Manager<R>>(

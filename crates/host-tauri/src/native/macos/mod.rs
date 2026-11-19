@@ -120,6 +120,35 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, _logger: &Logger) -
         .map_err(port_err)
 }
 
+/// Mutes or unmutes the audio of `webview`'s pages, keeping media capture as it is; a `WebKit`
+/// without the private API for it is logged (see `platform_ffi::set_audio_muted`).
+pub(crate) fn set_audio_muted<R: Runtime>(
+    webview: &Webview<R>,
+    muted: bool,
+    logger: &Logger,
+) -> PortResult {
+    let (label, logger) = (webview.label().to_string(), logger.clone());
+    webview
+        .with_webview(move |platform| {
+            if let Err(error) = platform_ffi::set_audio_muted(&platform, muted) {
+                logger.log(&format!("[{label}] cannot mute audio: {error}"));
+            }
+        })
+        .map_err(port_err)
+}
+
+/// Calls `on_change` each time `webview`'s page starts or stops capturing the microphone or
+/// camera (see `platform_ffi::observe_capture`).
+pub(crate) fn observe_capture<R: Runtime>(
+    webview: &Webview<R>,
+    on_change: super::OnCapture,
+    logger: &Logger,
+) {
+    with_platform_webview(webview, logger, "cannot observe capture", move |platform| {
+        platform_ffi::observe_capture(&platform, on_change)
+    });
+}
+
 /// Like the account's view: `window.open` only from a click (see `platform_ffi`).
 pub(crate) fn prepare_popup<'a, R: Runtime, M: Manager<R>>(
     builder: WebviewWindowBuilder<'a, R, M>,

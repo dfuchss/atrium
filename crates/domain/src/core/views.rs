@@ -48,7 +48,8 @@ impl Core {
         }
     }
 
-    /// `SetViewPolicy`, `CreateView`, `SetZoom` for an account (marks it loaded), or a log line.
+    /// `SetViewPolicy`, `CreateView`, `SetZoom`, `SetAudioMuted` for an account (marks it
+    /// loaded), or a log line.
     pub(super) fn load_view(&mut self, account_id: Uuid, visible: bool) -> Vec<Effect> {
         let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
@@ -71,6 +72,10 @@ impl Core {
                         account: account_id,
                         zoom,
                     },
+                    Effect::SetAudioMuted {
+                        account: account_id,
+                        muted: self.audio_muted(account_id),
+                    },
                 ]
             }
             Err(error) => vec![Effect::Log(error)],
@@ -80,6 +85,7 @@ impl Core {
     /// `Destroy` if the account has a view.
     pub(super) fn unload_view(&mut self, account_id: Uuid) -> Vec<Effect> {
         self.start_afresh(account_id);
+        self.capturing.remove(&account_id);
         if self.loaded_views.remove(&account_id) {
             vec![Effect::Destroy(account_id)]
         } else {

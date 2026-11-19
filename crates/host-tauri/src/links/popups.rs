@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use super::close_hook::{CLOSE_HOOK, watch_close};
 use super::{LinkPolicy, policy_of};
+use crate::audio;
 use crate::labels::popup_label;
 use crate::logger::now_ms;
 use crate::native;
@@ -168,6 +169,13 @@ impl<R: Runtime> LinkPolicy<R> {
                     "[{account}] opened window {label} for {shown_url}"
                 ));
                 native::attach_dialogs(window.as_ref(), &self.logger);
+                audio::watch_window(
+                    &self.app,
+                    &window,
+                    account,
+                    &self.window_mutes,
+                    &self.logger,
+                );
                 watch_close(self.app.clone(), label, &self.logger);
                 Some(window)
             }

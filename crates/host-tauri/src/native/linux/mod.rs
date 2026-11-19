@@ -251,6 +251,30 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, _logger: &Logger) -
         .map_err(port_err)
 }
 
+/// Mutes or unmutes the audio of `webview`'s pages, keeping media capture as it is.
+pub(crate) fn set_audio_muted<R: Runtime>(
+    webview: &Webview<R>,
+    muted: bool,
+    _logger: &Logger,
+) -> PortResult {
+    webview
+        .with_webview(move |platform| platform_ffi::set_audio_muted(&platform.inner(), muted))
+        .map_err(port_err)
+}
+
+/// Calls `on_change` each time `webview`'s page starts or stops capturing the microphone or
+/// camera (see `platform_ffi::observe_capture`).
+pub(crate) fn observe_capture<R: Runtime>(
+    webview: &Webview<R>,
+    on_change: super::OnCapture,
+    logger: &Logger,
+) {
+    with_platform_webview(webview, logger, "cannot observe capture", move |platform| {
+        platform_ffi::observe_capture(&platform.inner(), on_change);
+        Ok::<(), Infallible>(())
+    });
+}
+
 /// Calls `decide` once with the size the page asked for `window` (`window.open` features), or
 /// `None` if it asked for none, as soon as `WebKitGTK` tells it: when the window is ready to
 /// show, before its page loads. wry's new-window request carries no size on Linux. On the main

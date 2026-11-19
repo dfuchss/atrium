@@ -52,6 +52,10 @@ pub(crate) use windows::*;
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 compile_error!("Atrium runs on macOS, Linux and Windows only");
 
+/// Called on the main thread when a webview's page starts (true) or stops capturing the
+/// microphone or camera (see `observe_capture`).
+pub(crate) type OnCapture = Box<dyn Fn(bool) + Send>;
+
 /// Runs `job` with the engine's webview of `webview` on the main thread; a failure of the job,
 /// or to schedule it, is logged as `[<label>] <failure>: <error>`.
 pub(crate) fn with_platform_webview<R: Runtime, E: Display>(
@@ -93,6 +97,9 @@ fn _platform_interface<R: Runtime, M: Manager<R>>() {
     let _: fn(&Webview<R>, Bounds) -> PortResult = place;
     let _: fn(&Webview<R>, bool) -> PortResult = set_visible;
     let _: fn(&Webview<R>, &Logger) -> PortResult = force_reload;
+    // Do Not Disturb: audio mute (capture untouched) and, where the engine reports it, capture.
+    let _: fn(&Webview<R>, bool, &Logger) = set_audio_muted;
+    let _: fn(&Webview<R>, OnCapture, &Logger) = observe_capture;
     // Popups: what a popup's page may do before it is created, whose user scripts it runs.
     let _: for<'a> fn(
         WebviewWindowBuilder<'a, R, M>,
@@ -109,6 +116,7 @@ fn _platform_interface<R: Runtime, M: Manager<R>>() {
     // User agents: the platform part of the presets, the preset of new accounts.
     let _: fn() -> String = user_agent_platform;
     let _: Option<&str> = NEW_ACCOUNT_USER_AGENT;
+    let _: bool = PAGE_CAPTURE_DETECTION;
     // OS integration.
     let _: fn(&str) = set_app_id;
     let _: fn(&Window<R>, DockBadge) -> tauri::Result<()> = set_badge;

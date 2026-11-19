@@ -1,8 +1,8 @@
 //! Windows (`WebView2`): Atrium's own `alert`, `confirm` and `prompt` for pages in service
-//! webviews and the windows they open, the reload past the cache and the warning box, and in a
-//! module each the key presses of a webview (`keys`), its failed processes (`process`), the
-//! resumes from sleep (`power`) and the app's `AppUserModelID` (`app_id`): the `WebView2` and
-//! Win32 calls Tauri has no API for.
+//! webviews and the windows they open, the reload past the cache, the mute of a webview's audio
+//! and the warning box, and in a module each the key presses of a webview (`keys`), its failed
+//! processes (`process`), the resumes from sleep (`power`) and the app's `AppUserModelID`
+//! (`app_id`): the `WebView2` and Win32 calls Tauri has no API for.
 //!
 //! [`attach`] turns `WebView2`'s own dialogs of a webview off and handles its
 //! `ScriptDialogOpening` event: what a dialog shows is decided by the [`DialogHandler`] (text,
@@ -32,7 +32,8 @@ use std::sync::Arc;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_SCRIPT_DIALOG_KIND, COREWEBVIEW2_SCRIPT_DIALOG_KIND_ALERT,
     COREWEBVIEW2_SCRIPT_DIALOG_KIND_CONFIRM, COREWEBVIEW2_SCRIPT_DIALOG_KIND_PROMPT,
-    ICoreWebView2Controller, ICoreWebView2Deferral, ICoreWebView2ScriptDialogOpeningEventArgs,
+    ICoreWebView2_8, ICoreWebView2Controller, ICoreWebView2Deferral,
+    ICoreWebView2ScriptDialogOpeningEventArgs,
 };
 use webview2_com::{
     CallDevToolsProtocolMethodCompletedHandler, ScriptDialogOpeningEventHandler, take_pwstr,
@@ -42,7 +43,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     HWND_TOP, MB_ICONWARNING, MB_OK, MB_SETFOREGROUND, MB_TASKMODAL, MessageBoxW,
     SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, ShowWindow,
 };
-use windows::core::{BOOL, HSTRING, PWSTR};
+use windows::core::{BOOL, HSTRING, Interface, PWSTR};
 
 use crate::{
     DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, HandlerSlot, InstallError,
@@ -267,6 +268,23 @@ pub fn reload_ignoring_cache(
             &HSTRING::from(r#"{"ignoreCache":true}"#),
             &completed,
         )
+    }
+}
+
+/// Mutes or unmutes the audio the page of `controller`'s webview plays (`IsMuted`, audio only,
+/// no media capture). Fails on a `WebView2` runtime without `ICoreWebView2_8` (before 1.0.992).
+/// Call it on the main thread.
+pub fn set_audio_muted(
+    controller: &ICoreWebView2Controller,
+    muted: bool,
+) -> windows::core::Result<()> {
+    // SAFETY: plain COM calls on the main thread, which owns the controller: the query for the
+    // newer interface of the same webview, and a setter taking a plain bool.
+    unsafe {
+        controller
+            .CoreWebView2()?
+            .cast::<ICoreWebView2_8>()?
+            .SetIsMuted(muted)
     }
 }
 

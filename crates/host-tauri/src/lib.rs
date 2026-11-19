@@ -19,6 +19,7 @@
 //! [`Notifier`]: domain::ports::Notifier
 //! [`Platform`]: domain::ports::Platform
 
+mod audio;
 mod data_stores;
 mod dialogs;
 mod downloads;
@@ -46,6 +47,7 @@ use protocol::{EVENT_SNAPSHOT, Snapshot, UI_WEBVIEW};
 use tauri::window::Color;
 use tauri::{AppHandle, Emitter, Manager, Runtime, Theme, WebviewBuilder, WebviewUrl, Window};
 
+use crate::audio::MutedAccounts;
 use crate::links::{PopupQuota, ViewPolicies};
 use crate::logger::Logger;
 use crate::menus::MenuState;
@@ -81,6 +83,12 @@ pub fn set_app_id(identifier: &str) {
 /// The host's part of the user agent presets (see `domain::webkit_user_agent`).
 pub fn user_agent_platform() -> String {
     native::user_agent_platform()
+}
+
+/// Whether service pages must report microphone/camera use themselves, as the engine does not
+/// (see `domain::Core::set_page_capture_detection`).
+pub fn page_capture_detection() -> bool {
+    native::PAGE_CAPTURE_DETECTION
 }
 
 /// The user agent preset of new accounts whose service asks for the `webkit` one, where the
@@ -180,6 +188,8 @@ pub struct TauriHost<R: Runtime> {
     notifications: Arc<Mutex<NotificationTargets>>,
     logger: Logger,
     policies: ViewPolicies,
+    /// Accounts whose view and in-app windows are muted (see `audio`).
+    muted_accounts: MutedAccounts,
     dialogs: dialogs::Dialogs,
     /// Numbers the labels of popup/app windows.
     popup_counter: Arc<AtomicU64>,
@@ -203,6 +213,7 @@ impl<R: Runtime> TauriHost<R> {
             feed,
             notifications: Arc::default(),
             policies: Arc::default(),
+            muted_accounts: Arc::default(),
             dialogs: dialogs::Dialogs::new(),
             popup_counter: Arc::default(),
             popup_quota: Arc::default(),

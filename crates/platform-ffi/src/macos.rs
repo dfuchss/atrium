@@ -20,11 +20,14 @@
 //! completes.
 //!
 //! It also builds the `WebKit` configuration of service webviews (`configuration`), which
-//! needs the same Objective-C calls, reports display wakes (`wake`) and reloads webviews from
-//! their origin (`reload`).
+//! needs the same Objective-C calls, reports display wakes (`wake`), reloads webviews from
+//! their origin (`reload`), mutes their audio (`audio`) and observes their microphone and
+//! camera capture (`capture`).
 //!
 //! Every `unsafe` block says why it is sound.
 
+mod audio;
+mod capture;
 mod configuration;
 mod reload;
 mod wake;
@@ -53,6 +56,8 @@ use crate::{
     InstallError, PageOrigin, Presentation,
 };
 
+pub use audio::set_audio_muted;
+pub use capture::observe_capture;
 pub use configuration::{forbid_automatic_windows, service_configuration};
 pub use reload::reload_from_origin;
 pub use wake::observe_screens_wake;

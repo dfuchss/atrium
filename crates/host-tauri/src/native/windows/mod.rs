@@ -74,6 +74,9 @@ pub(crate) fn user_agent_platform() -> String {
 /// `WebView2` is Chromium, and sites would otherwise serve it their code for Safari.
 pub(crate) const NEW_ACCOUNT_USER_AGENT: Option<&str> = Some("chrome");
 
+/// `WebView2` has no capture state: the service pages report it (service views only).
+pub(crate) const PAGE_CAPTURE_DETECTION: bool = true;
+
 /// The app icon in colour: Windows does not tint tray icons.
 pub(crate) const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray-icon-color.png");
 pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = false;
@@ -122,6 +125,24 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, logger: &Logger) ->
             }
         })
         .map_err(port_err)
+}
+
+/// Mutes or unmutes the audio of `webview`'s pages, keeping media capture as it is; a failure
+/// (a `WebView2` runtime too old for it) is logged.
+pub(crate) fn set_audio_muted<R: Runtime>(webview: &Webview<R>, muted: bool, logger: &Logger) {
+    with_platform_webview(webview, logger, "cannot mute audio", move |platform| {
+        platform_ffi::set_audio_muted(&platform.controller(), muted)
+    });
+}
+
+/// Nothing to observe: `WebView2` tells no microphone or camera capture state. The service
+/// views report it through the page (`PAGE_CAPTURE_DETECTION`); a call in an in-app window
+/// goes unnoticed, so Do Not Disturb mutes it.
+pub(crate) fn observe_capture<R: Runtime>(
+    _webview: &Webview<R>,
+    _on_change: super::OnCapture,
+    _logger: &Logger,
+) {
 }
 
 /// Gives the popup's page its own drag and drop. `WebView2` has no popup blocker: whether a

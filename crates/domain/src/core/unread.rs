@@ -99,6 +99,8 @@ struct PollResult {
     notifications: Vec<PolledNotification>,
     /// The unread expression's value; None if it yielded nothing usable.
     unread: Option<Unread>,
+    /// The capture probe's `c`; anything but `true` (missing, null, malformed) is false.
+    capturing: bool,
 }
 
 impl PollResult {
@@ -119,6 +121,7 @@ impl PollResult {
         Ok(PollResult {
             notifications,
             unread: polled_unread(value.get("u")),
+            capturing: value.get("c").and_then(Value::as_bool).unwrap_or(false),
         })
     }
 }
@@ -216,6 +219,9 @@ impl Core {
         } else {
             self.notifications(account_id, &prefix, poll.notifications)
         };
+        if self.page_capture_detection {
+            effects.extend(self.capture_changed(account_id, None, poll.capturing));
+        }
         if has_poll {
             effects.extend(self.apply_polled_unread(account_id, &service_id, poll.unread));
         }

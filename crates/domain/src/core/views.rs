@@ -28,7 +28,7 @@ impl Core {
             url,
             store_id: account.store_id(),
             user_agent,
-            init_script: scripts::init_script(service, account),
+            init_script: scripts::init_script(service, account, self.page_capture_detection),
             internal_hosts: service.resolve_hosts(instance),
         })
     }
@@ -48,7 +48,8 @@ impl Core {
         }
     }
 
-    /// `SetViewPolicy`, `CreateView`, `SetZoom` for an account (marks it loaded), or a log line.
+    /// `SetViewPolicy`, `CreateView`, `SetZoom` and, if muted, `SetAudioMuted` for an account
+    /// (marks it loaded), or a log line.
     pub(super) fn load_view(&mut self, account_id: Uuid, visible: bool) -> Vec<Effect> {
         let Some(account) = self.account(account_id) else {
             return vec![Self::unknown(account_id)];
@@ -57,7 +58,7 @@ impl Core {
             Ok(spec) => {
                 let (policy, zoom) = (self.view_policy(account), account.settings.zoom);
                 self.loaded_views.insert(account_id);
-                vec![
+                let mut effects = vec![
                     Effect::SetViewPolicy {
                         account: account_id,
                         policy,
@@ -71,7 +72,15 @@ impl Core {
                         account: account_id,
                         zoom,
                     },
-                ]
+                ];
+                // A new view starts unmuted.
+                if self.audio_muted(account_id) {
+                    effects.push(Effect::SetAudioMuted {
+                        account: account_id,
+                        muted: true,
+                    });
+                }
+                effects
             }
             Err(error) => vec![Effect::Log(error)],
         }
@@ -80,6 +89,7 @@ impl Core {
     /// `Destroy` if the account has a view.
     pub(super) fn unload_view(&mut self, account_id: Uuid) -> Vec<Effect> {
         self.start_afresh(account_id);
+        self.capturing.remove(&account_id);
         if self.loaded_views.remove(&account_id) {
             vec![Effect::Destroy(account_id)]
         } else {

@@ -223,7 +223,7 @@ fn tick_script_exact_and_unknown_account() {
         effects,
         vec![Effect::Poll {
             account: id(1),
-            script: "(()=>{const m=window.__atrium;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;return JSON.stringify({n:m.drain(),u:u});})()".into()
+            script: "(()=>{const m=window.__atrium;if(!m)return JSON.stringify({n:[],u:null});let u=null;try{u=JSON.parse(JSON.stringify(m.unread))}catch(e){}m.unread=null;let c=false;try{c=m.capturing?.()===true}catch(e){}return JSON.stringify({n:m.drain(),u:u,c:c});})()".into()
         }]
     );
     assert!(matches!(

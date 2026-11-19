@@ -32,6 +32,7 @@ impl Core {
         if previous.link_target != self.settings().link_target {
             effects.extend(self.default_link_target_policies());
         }
+        effects.extend(self.dnd_changed(previous.dnd));
         effects.extend(self.dock_badge());
         effects.push(self.emit());
         effects
@@ -51,8 +52,11 @@ impl Core {
     }
 
     pub(super) fn set_dnd(&mut self, enabled: bool) -> Vec<Effect> {
-        self.persisted.settings.app.dnd = enabled;
-        vec![self.persist(), self.emit()]
+        let was = std::mem::replace(&mut self.persisted.settings.app.dnd, enabled);
+        let mut effects = vec![self.persist()];
+        effects.extend(self.dnd_changed(was));
+        effects.push(self.emit());
+        effects
     }
 
     pub(super) fn set_zoom(&mut self, account_id: Uuid, zoom: f64) -> Vec<Effect> {

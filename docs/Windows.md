@@ -42,5 +42,6 @@ Atrium finds these folders through Windows (`SHGetKnownFolderPath`), so changing
 - Hidden services keep running, but Chromium throttles their timers like those of a background tab (Tauri's background throttling setting does not apply to WebView2).
 - Notifications of a build in `target\debug` or `target\release` are shown under the name of PowerShell. Elsewhere, Windows shows Atrium's name once the Start menu shortcut is installed (see [Desktop integration](#desktop-integration)), which carries the identifier as app id (a development identifier for a development instance).
 - A click on a notification shows its account only while the notification is on screen, not once it moved to the notification centre.
+- *Do not disturb* also mutes a call held in an in-app window: WebView2 does not tell when a page uses the microphone or camera, and only the service itself reports it. A call in the service keeps its sound.
 
 See also the [known limitations](Known-Limitations) of every platform.

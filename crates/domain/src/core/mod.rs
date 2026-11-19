@@ -4,6 +4,7 @@
 //! inputs; each submodule handles one feature.
 
 mod accounts;
+mod audio;
 mod icons;
 mod layout;
 mod menus;
@@ -51,6 +52,9 @@ pub struct Core {
     new_account_id: Box<dyn FnMut() -> Uuid + Send>,
     /// The host's part of the user agent presets, e.g. `X11; Linux x86_64`.
     user_agent_platform: String,
+    /// Whether the views get the capture probe and its poll value feeds the capture state (see
+    /// [`Core::set_page_capture_detection`]).
+    page_capture_detection: bool,
     active: Option<Uuid>,
     dialog_open: bool,
     /// [`protocol::Snapshot::edit_request`] of the snapshot being emitted.
@@ -64,6 +68,9 @@ pub struct Core {
     app_info: AppInfo,
     /// Accounts whose view currently exists.
     loaded_views: HashSet<Uuid>,
+    /// What captures the microphone or camera, per loaded account: the view (None) and in-app
+    /// windows (see [`Input::CaptureChanged`]). No entry while nothing does.
+    capturing: HashMap<Uuid, HashSet<Option<String>>>,
     /// Last time (tick clock) each account was active (shown) or left.
     last_activity_ms: HashMap<Uuid, u64>,
     /// Latest wall clock reading (ticks and resumes).
@@ -115,6 +122,7 @@ impl Core {
             persisted,
             new_account_id,
             user_agent_platform,
+            page_capture_detection: false,
             active,
             dialog_open: false,
             edit_request: None,
@@ -126,6 +134,7 @@ impl Core {
             last_menus: None,
             app_info: AppInfo::default(),
             loaded_views: HashSet::new(),
+            capturing: HashMap::new(),
             last_activity_ms: HashMap::new(),
             last_tick_ms: None,
             slept: false,
@@ -153,6 +162,12 @@ impl Core {
     /// Chromium). Existing accounts keep theirs.
     pub fn set_new_account_user_agent(&mut self, preset: Option<String>) {
         self.new_account_user_agent = preset;
+    }
+
+    /// For engines that report no capture state: the views get a probe script, which each
+    /// poll reads. Set before the views are created.
+    pub fn set_page_capture_detection(&mut self, enabled: bool) {
+        self.page_capture_detection = enabled;
     }
 
     /// Read-only app information shown in the snapshot ("About").
@@ -194,6 +209,11 @@ impl Core {
             Input::Tick { now_ms } => self.tick(now_ms),
             Input::Resumed { now_ms } => self.resumed(now_ms),
             Input::WebProcessTerminated { account } => self.web_process_terminated(account),
+            Input::CaptureChanged {
+                account,
+                window,
+                active,
+            } => self.capture_changed(account, window, active),
             Input::IconFound {
                 account,
                 raw,

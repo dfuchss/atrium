@@ -3,8 +3,9 @@
 //! types, decided by a [`DialogHandler`], and the glue to the engine of each platform:
 //! `WKWebView` on macOS (`macos`), `WebKitGTK` on Linux (`linux`), `WebView2` on Windows
 //! (`windows`). On macOS also the other `WebKit` calls: the service view configuration, reloads
-//! from origin and display wakes; on Windows the other `WebView2` and Win32 calls, and the
-//! shell shortcuts of the Start menu (`shortcut`).
+//! from origin, display wakes, the audio mute and the capture state; on Linux too the audio mute
+//! and the capture state; on Windows the other `WebView2` and Win32 calls (the audio mute
+//! among them), and the shell shortcuts of the Start menu (`shortcut`).
 //!
 //! The macOS and Windows glue holds the `unsafe` code of this crate; every block says why it is
 //! sound. Besides it, only the Linux theme of `host-tauri` has `unsafe` code.

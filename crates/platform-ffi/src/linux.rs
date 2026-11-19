@@ -1,5 +1,6 @@
 //! Linux (`WebKitGTK`): native `alert`, `confirm` and `prompt` for pages in service webviews
-//! and the windows they open.
+//! and the windows they open, the mute of their audio ([`set_audio_muted`]) and their
+//! microphone and camera capture ([`observe_capture`]).
 //!
 //! [`attach`] connects `WebKitGTK`'s `script-dialog` signal of a webview: what a dialog shows is
 //! decided by the [`DialogHandler`] (text, suppression, rate limits), this module only converts
@@ -24,7 +25,9 @@ use std::sync::Arc;
 
 use gtk::prelude::*;
 use protocol::SUPPRESSION_TITLE;
-use webkit2gtk::{LoadEvent, ScriptDialog, ScriptDialogType, WebView, WebViewExt};
+use webkit2gtk::{
+    LoadEvent, MediaCaptureState, ScriptDialog, ScriptDialogType, WebView, WebViewExt,
+};
 
 use crate::{
     AnswerOnce, DialogAnswer, DialogHandler, DialogKind, DialogRequest, DialogText, HandlerSlot,
@@ -54,6 +57,28 @@ pub fn attach(view: &WebView, tag: &str) -> Result<(), InstallError> {
         on_script_dialog(view, dialog, &page.origin(), &handler, &tag)
     });
     Ok(())
+}
+
+/// Mutes or unmutes the audio `view`'s pages play (`webkit_web_view_set_is_muted`, which mutes
+/// audio only, no media capture). Call it on the main thread.
+pub fn set_audio_muted(view: &WebView, muted: bool) {
+    view.set_is_muted(muted);
+}
+
+/// Calls `on_change` with whether `view`'s page captures the microphone or camera
+/// (`WebKitGTK` 2.34+), a muted capture included, on each change of either, repeats possible,
+/// for as long as the view lives. Call it on the main thread, where `on_change` runs too.
+pub fn observe_capture(view: &WebView, on_change: impl Fn(bool) + 'static) {
+    let on_change = Rc::new(on_change);
+    let on_camera_change = on_change.clone();
+    view.connect_microphone_capture_state_notify(move |view| on_change(capturing(view)));
+    view.connect_camera_capture_state_notify(move |view| on_camera_change(capturing(view)));
+}
+
+/// True while `view`'s page captures the microphone or camera, muted or not.
+fn capturing(view: &WebView) -> bool {
+    view.microphone_capture_state() != MediaCaptureState::None
+        || view.camera_capture_state() != MediaCaptureState::None
 }
 
 /// The URI of the page last committed in a view, shared by its signal handlers (main thread).

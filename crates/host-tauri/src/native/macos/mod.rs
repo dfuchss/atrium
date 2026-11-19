@@ -42,6 +42,9 @@ pub(crate) fn user_agent_platform() -> String {
 /// New accounts follow their service's user agent preset: the engine is `WebKit`.
 pub(crate) const NEW_ACCOUNT_USER_AGENT: Option<&str> = None;
 
+/// The engine tells when a webview captures (see `observe_capture`).
+pub(crate) const PAGE_CAPTURE_DETECTION: bool = false;
+
 /// Monochrome template image (black + alpha); macOS tints it for light/dark menu bars.
 pub(crate) const TRAY_ICON: &[u8] = include_bytes!("../../../assets/tray-icon.png");
 pub(crate) const TRAY_ICON_IS_TEMPLATE: bool = true;
@@ -118,6 +121,26 @@ pub(crate) fn force_reload<R: Runtime>(webview: &Webview<R>, _logger: &Logger) -
     webview
         .with_webview(|platform| platform_ffi::reload_from_origin(&platform))
         .map_err(port_err)
+}
+
+/// Mutes or unmutes the audio of `webview`'s pages, keeping media capture as it is; a `WebKit`
+/// without the private API for it is logged (see `platform_ffi::set_audio_muted`).
+pub(crate) fn set_audio_muted<R: Runtime>(webview: &Webview<R>, muted: bool, logger: &Logger) {
+    with_platform_webview(webview, logger, "cannot mute audio", move |platform| {
+        platform_ffi::set_audio_muted(&platform, muted)
+    });
+}
+
+/// Calls `on_change` each time `webview`'s page starts or stops capturing the microphone or
+/// camera (see `platform_ffi::observe_capture`).
+pub(crate) fn observe_capture<R: Runtime>(
+    webview: &Webview<R>,
+    on_change: super::OnCapture,
+    logger: &Logger,
+) {
+    with_platform_webview(webview, logger, "cannot observe capture", move |platform| {
+        platform_ffi::observe_capture(&platform, on_change)
+    });
 }
 
 /// Like the account's view: `window.open` only from a click (see `platform_ffi`).

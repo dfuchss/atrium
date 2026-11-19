@@ -9,6 +9,10 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+## 0.6.2
+
+On Windows, a click on a notification opens its account also after the notification moved to the notification centre.
+
 ### Fixed
 
 #### Windows

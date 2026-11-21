@@ -53,6 +53,16 @@ tauri-plugin-notification = "2.8.1"
 tauri-plugin-opener = "2.7.3"
 tempfile = "3"
 
+# Smaller release binaries (the Linux binary and the Windows executable ship as they are); panic stays unwind.
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+# Stripping the wasm UI removes its target_features section, which wasm-opt then needs.
+[profile.release.package.atrium-ui]
+strip = false
+
 # Clean-code rules for every crate (each opts in with `lints.workspace = true`); thresholds
 # live in clippy.toml. Run everything with scripts/check.sh.
 [workspace.lints.rust]

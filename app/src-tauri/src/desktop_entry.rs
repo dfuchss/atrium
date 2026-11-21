@@ -1,8 +1,9 @@
-//! The desktop entry and icons that Atrium installs for its `AppImage` on Linux, as plain file
-//! operations below the XDG data folder: `applications/org.fuchss.atrium.desktop` and
-//! `icons/hicolor/<size>/apps/org.fuchss.atrium.png`. Both are named after Atrium's app id, so
-//! the desktop matches the window to the entry, install writes every icon size of the bundle and
-//! uninstall removes them from every size folder.
+//! The desktop entry and icons that Atrium installs for its `AppImage` or its release binary on
+//! Linux, as plain file operations below the XDG data folder:
+//! `applications/org.fuchss.atrium.desktop` and `icons/hicolor/<size>/apps/org.fuchss.atrium.png`.
+//! Both are named after Atrium's app id, so the desktop matches the window to the entry, install
+//! writes every icon size it is given (those of the `AppImage` or the ones built into the binary)
+//! and uninstall removes them from every size folder.
 
 use std::ffi::{OsStr, OsString};
 use std::io;
@@ -12,7 +13,7 @@ use fs_util::appimage::RunningAppImage;
 use fs_util::write_atomically;
 use protocol::DesktopEntryState;
 
-/// The entry of the `AppImage` bundle; `{{exec}}` stands for the quoted path of the file and
+/// The entry of Atrium; `{{exec}}` stands for the quoted path of the program and
 /// `{{icon}}` for the name of the icon.
 const TEMPLATE: &str = include_str!("../linux/atrium.desktop");
 const EXEC_PLACEHOLDER: &str = "{{exec}}";
@@ -24,6 +25,16 @@ const ICON_NAME: &str = "org.fuchss.atrium";
 /// The icons inside the `AppImage`, below its folder, named after the program.
 const BUNDLED_ICONS: &str = "usr/share/icons/hicolor";
 const BUNDLED_ICON_FILE: &str = "atrium.png";
+/// The icons built into the release binary, as (size folder, PNG); macOS has no desktop entry.
+#[cfg(target_os = "linux")]
+const EMBEDDED_ICONS: [(&str, &[u8]); 4] = [
+    ("32x32", include_bytes!("../icons/32x32.png")),
+    ("64x64", include_bytes!("../icons/64x64.png")),
+    ("128x128", include_bytes!("../icons/128x128.png")),
+    ("256x256", include_bytes!("../icons/128x128@2x.png")),
+];
+#[cfg(not(target_os = "linux"))]
+const EMBEDDED_ICONS: [(&str, &[u8]); 0] = [];
 const TRY_EXEC_KEY: &str = "TryExec=";
 const FILE_MODE: u32 = 0o644;
 
@@ -92,17 +103,12 @@ fn unescape_value(value: &str) -> String {
     value.replace("\\\\", "\\")
 }
 
-/// The entry that starts `appimage`.
-fn render(appimage: &Path) -> Result<String, String> {
-    let program = appimage
+/// The entry that starts `file`.
+fn render(file: &Path) -> Result<String, String> {
+    let program = file
         .to_str()
         .filter(|program| !program.chars().any(char::is_control))
-        .ok_or_else(|| {
-            format!(
-                "the path of the AppImage cannot be used: {}",
-                appimage.display()
-            )
-        })?;
+        .ok_or_else(|| format!("the path of Atrium cannot be used: {}", file.display()))?;
     let mut entry = TEMPLATE
         .replace(EXEC_PLACEHOLDER, &quote_program(program))
         .replace(ICON_PLACEHOLDER, ICON_NAME);
@@ -115,8 +121,8 @@ fn render(appimage: &Path) -> Result<String, String> {
     Ok(entry)
 }
 
-/// Whether the entry exists and starts `appimage`, as its `TryExec` says.
-pub(crate) fn state(dirs: &DesktopDirs, appimage: &Path) -> Result<DesktopEntryState, String> {
+/// Whether the entry exists and starts `file`, as its `TryExec` says.
+pub(crate) fn state(dirs: &DesktopDirs, file: &Path) -> Result<DesktopEntryState, String> {
     let text = match std::fs::read_to_string(dirs.entry_path()) {
         Ok(text) => text,
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
@@ -129,7 +135,7 @@ pub(crate) fn state(dirs: &DesktopDirs, appimage: &Path) -> Result<DesktopEntryS
         .find_map(|line| line.strip_prefix(TRY_EXEC_KEY))
         .map(unescape_value);
     Ok(match program {
-        Some(program) if Path::new(&program) == appimage => DesktopEntryState::Installed,
+        Some(program) if Path::new(&program) == file => DesktopEntryState::Installed,
         program => DesktopEntryState::OtherPath {
             path: program.unwrap_or_else(|| "unknown".into()),
         },
@@ -155,20 +161,42 @@ fn icons_in(root: &Path, file: &str) -> io::Result<Vec<(OsString, PathBuf)>> {
     Ok(icons)
 }
 
-/// Installs or rewrites the entry for `running` and its icons of every size the `AppImage`
-/// has.
-pub(crate) fn install(dirs: &DesktopDirs, running: &RunningAppImage) -> Result<(), String> {
+/// The icons of every size the running `AppImage` has, as (size folder, PNG).
+pub(crate) fn appimage_icons(
+    running: &RunningAppImage,
+) -> Result<Vec<(OsString, Vec<u8>)>, String> {
     let bundled = icons_in(&running.dir.join(BUNDLED_ICONS), BUNDLED_ICON_FILE)
         .map_err(|error| format!("cannot read the icons of the AppImage: {error}"))?;
     if bundled.is_empty() {
         return Err("the AppImage contains no icon".into());
     }
-    for (size, icon) in bundled {
-        let bytes = std::fs::read(&icon)
-            .map_err(|error| format!("cannot read {}: {error}", icon.display()))?;
-        write_file(&dirs.icon_path(&size), &bytes)?;
+    bundled
+        .into_iter()
+        .map(|(size, icon)| match std::fs::read(&icon) {
+            Ok(bytes) => Ok((size, bytes)),
+            Err(error) => Err(format!("cannot read {}: {error}", icon.display())),
+        })
+        .collect()
+}
+
+/// The icons built into the release binary, as (size folder, PNG).
+pub(crate) fn embedded_icons() -> Vec<(OsString, Vec<u8>)> {
+    EMBEDDED_ICONS
+        .iter()
+        .map(|(size, png)| (OsString::from(size), png.to_vec()))
+        .collect()
+}
+
+/// Installs or rewrites the entry that starts `file` and the `icons` (size folder, PNG).
+pub(crate) fn install(
+    dirs: &DesktopDirs,
+    file: &Path,
+    icons: &[(OsString, Vec<u8>)],
+) -> Result<(), String> {
+    for (size, png) in icons {
+        write_file(&dirs.icon_path(size), png)?;
     }
-    write_file(&dirs.entry_path(), render(&running.file)?.as_bytes())
+    write_file(&dirs.entry_path(), render(file)?.as_bytes())
 }
 
 fn write_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -225,6 +253,11 @@ mod tests {
         RunningAppImage { file, dir }
     }
 
+    /// Installs the entry and the icons of the `AppImage`, as Settings does.
+    fn install_appimage(dirs: &DesktopDirs, running: &RunningAppImage) -> Result<(), String> {
+        install(dirs, &running.file, &appimage_icons(running)?)
+    }
+
     #[test]
     fn entry_quotes_the_program() {
         let entry = render(Path::new("/home/u/My Apps/Atrium.AppImage")).unwrap();
@@ -273,7 +306,7 @@ mod tests {
             state(&dirs, &running.file).unwrap(),
             DesktopEntryState::NotInstalled
         );
-        install(&dirs, &running).unwrap();
+        install_appimage(&dirs, &running).unwrap();
         assert_eq!(
             state(&dirs, &running.file).unwrap(),
             DesktopEntryState::Installed
@@ -292,7 +325,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let dirs = dirs_in(root.path());
         let running = running_in(root.path(), "Atrium.AppImage");
-        install(&dirs, &running).unwrap();
+        install_appimage(&dirs, &running).unwrap();
         for name in ["32x32", "128x128"] {
             let icon = dirs.icon_path(&size(name));
             assert_eq!(std::fs::read_to_string(icon).unwrap(), name);
@@ -310,7 +343,7 @@ mod tests {
         assert_eq!(leftovers, 1);
 
         let moved = running_in(root.path(), "Renamed.AppImage");
-        install(&dirs, &moved).unwrap();
+        install_appimage(&dirs, &moved).unwrap();
         assert_eq!(
             state(&dirs, &moved.file).unwrap(),
             DesktopEntryState::Installed
@@ -325,7 +358,7 @@ mod tests {
         let icon = dirs.icon_path(&size("32x32"));
         std::fs::create_dir_all(icon.parent().unwrap()).unwrap();
         std::fs::write(&icon, "old").unwrap();
-        install(&dirs, &running).unwrap();
+        install_appimage(&dirs, &running).unwrap();
         assert_eq!(std::fs::read_to_string(icon).unwrap(), "32x32");
     }
 
@@ -333,7 +366,7 @@ mod tests {
     fn uninstall_removes_the_entry_and_the_icon_of_every_size() {
         let root = tempfile::tempdir().unwrap();
         let dirs = dirs_in(root.path());
-        install(&dirs, &running_in(root.path(), "Atrium.AppImage")).unwrap();
+        install_appimage(&dirs, &running_in(root.path(), "Atrium.AppImage")).unwrap();
         let older = dirs.icon_path(&size("256x256@2"));
         std::fs::create_dir_all(older.parent().unwrap()).unwrap();
         std::fs::write(&older, "older").unwrap();
@@ -374,7 +407,30 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let dirs = dirs_in(root.path());
         let running = running_with_icons(root.path(), "Atrium.AppImage", &[]);
-        assert!(install(&dirs, &running).is_err());
+        assert!(install_appimage(&dirs, &running).is_err());
         assert!(!dirs.entry_path().exists());
+    }
+
+    #[test]
+    fn embedded_icons_have_the_size_of_their_folder() {
+        for (size, png) in embedded_icons() {
+            let width = u32::from_be_bytes(png[16..20].try_into().unwrap());
+            let height = u32::from_be_bytes(png[20..24].try_into().unwrap());
+            assert_eq!(size, OsString::from(format!("{width}x{height}")));
+        }
+    }
+
+    #[test]
+    fn install_writes_the_given_icons_for_a_binary() {
+        let root = tempfile::tempdir().unwrap();
+        let dirs = dirs_in(root.path());
+        let binary = root.path().join("bin/atrium");
+        let icons = [(size("48x48"), b"png".to_vec())];
+        install(&dirs, &binary, &icons).unwrap();
+        assert_eq!(
+            std::fs::read(dirs.icon_path(&size("48x48"))).unwrap(),
+            b"png"
+        );
+        assert_eq!(state(&dirs, &binary).unwrap(), DesktopEntryState::Installed);
     }
 }

@@ -23,7 +23,7 @@ It is written in Rust on top of [Tauri v2](https://v2.tauri.app/) and uses the s
 Install, updates, desktop integration, data locations and limitations per platform:
 
 - [macOS](macOS): macOS 14 or later, Apple silicon and Intel.
-- [Linux](Linux): AppImages for x86_64 and aarch64.
+- [Linux](Linux): AppImage and plain binary for x86_64 and aarch64.
 - [Windows](Windows): Windows 10 and 11, x86_64. Windows support is still in progress.
 
 ## Development

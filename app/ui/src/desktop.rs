@@ -1,5 +1,5 @@
 //! The desktop integration section of the General tab: install or remove the launcher entry of
-//! the Linux `AppImage` or the Start menu shortcut on Windows. The backend decides whether there
+//! Atrium on Linux or the Start menu shortcut on Windows. The backend decides whether there
 //! is anything to offer.
 
 use leptos::prelude::*;

@@ -38,10 +38,11 @@ Then build or run:
 
 ```sh
 cargo tauri build                        # → target/release/bundle/appimage/atrium_<version>_<arch>.AppImage
-cargo tauri build --debug --no-bundle    # only the binary: target/debug/atrium
+cargo tauri build --no-bundle            # only the binary: target/release/atrium (the release binary, uses the system's libraries)
+cargo tauri build --debug --no-bundle    # only the debug binary: target/debug/atrium
 ```
 
-To run the AppImage, see [Linux](Linux#install).
+To run the AppImage or the binary, see [Linux](Linux#install).
 
 ### The AppImage
 

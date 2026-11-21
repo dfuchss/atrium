@@ -9,6 +9,18 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+### Added
+
+#### Linux
+
+- A plain release binary, `atrium-linux-x86_64` and `atrium-linux-aarch64`, next to the AppImages: it is much smaller and uses the system's WebKitGTK 4.1, GTK 3, libayatana-appindicator and GStreamer. It updates itself in a folder you can write to and offers *Desktop integration* in the settings like the AppImage; see the [Linux](https://github.com/dfuchss/atrium/wiki/Linux) page for the packages it needs
+
+### Changed
+
+#### All platforms
+
+- Release builds are optimised for size (link-time optimisation, stripped symbols), so the downloads are smaller
+
 ## 0.6.2
 
 On Windows, a click on a notification opens its account also after the notification moved to the notification centre.

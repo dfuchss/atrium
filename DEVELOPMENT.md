@@ -18,7 +18,7 @@ cargo install trunk tauri-cli --locked
 cd app/src-tauri
 cargo tauri dev                          # run with live-reloading UI
 cargo tauri build                        # macOS: Atrium.app, Linux: AppImage
-cargo tauri build --no-bundle            # Windows: target/release/atrium.exe
+cargo tauri build --no-bundle            # Windows: target/release/atrium.exe, Linux: target/release/atrium
 ```
 
 ## Check

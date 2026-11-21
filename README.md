@@ -41,8 +41,8 @@ Download the file for your machine from the [latest release](https://github.com/
 |---|---|---|
 | macOS 14+, Apple silicon | `atrium-macos-arm64.zip` | [macOS](https://github.com/dfuchss/atrium/wiki/macOS) |
 | macOS 14+, Intel | `atrium-macos-x86_64.zip` | [macOS](https://github.com/dfuchss/atrium/wiki/macOS) |
-| Linux, x86_64 | `atrium-linux-x86_64.AppImage` | [Linux](https://github.com/dfuchss/atrium/wiki/Linux) |
-| Linux, aarch64 | `atrium-linux-aarch64.AppImage` | [Linux](https://github.com/dfuchss/atrium/wiki/Linux) |
+| Linux, x86_64 | `atrium-linux-x86_64.AppImage` (bundles its libraries) or `atrium-linux-x86_64` (uses the system's) | [Linux](https://github.com/dfuchss/atrium/wiki/Linux) |
+| Linux, aarch64 | `atrium-linux-aarch64.AppImage` or `atrium-linux-aarch64` | [Linux](https://github.com/dfuchss/atrium/wiki/Linux) |
 | Windows 10 and 11, x86_64 | `atrium-windows-x86_64.exe` | [Windows](https://github.com/dfuchss/atrium/wiki/Windows) |
 
 Atrium updates itself from Settings → About. The changes of every version are in the [changelog](CHANGELOG.md).

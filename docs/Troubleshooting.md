@@ -3,7 +3,7 @@
 | Problem | Where to look |
 |---|---|
 | macOS blocks the first start, or says Atrium is "damaged" | [macOS: Install](macOS#install) |
-| The AppImage does not start (FUSE) | [Linux: Install](Linux#install) |
+| The AppImage does not start (FUSE), or the binary lacks a library | [Linux: Install](Linux#install) |
 | No launcher entry or window icon on Linux | [Linux: Desktop integration](Linux#desktop-integration) |
 | SmartScreen warns on Windows | [Windows: Install](Windows#install) |
 | Notifications show PowerShell's name on Windows | [Windows: Known limitations](Windows#known-limitations) |

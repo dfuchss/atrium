@@ -1,5 +1,6 @@
-//! What the platforms that update a single file (the `AppImage` on Linux, the executable on
-//! Windows) share: the file is its own helper, nothing else runs from it and nobody relaunches.
+//! What the platforms that update a single file (the `AppImage` or the release binary on Linux,
+//! the executable on Windows) share: the file is its own helper, nothing else runs from it and
+//! nobody relaunches.
 
 use std::path::{Path, PathBuf};
 
@@ -8,6 +9,21 @@ use crate::version::Version;
 
 /// Why a release without the file for this machine is only announced.
 pub(crate) const NO_DOWNLOAD_REASON: &str = "the release has no download for this computer";
+
+/// Only a release build outside Cargo's target folder updates itself, in place, and only when
+/// `can_replace(executable)` says the user may rename and remove it.
+pub(crate) fn resolve_executable(
+    executable: &Path,
+    can_replace: &dyn Fn(&Path) -> bool,
+) -> Result<PathBuf, String> {
+    if fs_util::in_cargo_target(executable) {
+        Err("it runs from the build folder".into())
+    } else if !can_replace(executable) {
+        Err("the folder of Atrium is not writable for you".into())
+    } else {
+        Ok(executable.to_path_buf())
+    }
+}
 
 /// Moves the verified download next to the install (`<install>.new-update`, executable on
 /// Unix), which it returns. Identity and version come from `SHA256SUMS` and the tag.
@@ -59,6 +75,14 @@ pub(crate) mod fakes {
     /// The release asset of Atrium in `version`: a file holding the version.
     pub(crate) fn fake_asset(_dir: &Path, version: &str) -> Vec<u8> {
         version.as_bytes().to_vec()
+    }
+
+    /// A build in a Cargo target folder below `dir`; returns the path of its executable.
+    pub(crate) fn fake_cargo_build(dir: &Path) -> PathBuf {
+        let target = dir.join("target");
+        std::fs::create_dir_all(target.join("release")).unwrap();
+        std::fs::write(target.join("CACHEDIR.TAG"), "Signature").unwrap();
+        target.join("release/atrium")
     }
 
     /// Stages the single file of `version` next to `install`.

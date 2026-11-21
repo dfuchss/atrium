@@ -146,8 +146,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # The Linux debug build of every push to main and every pull request, as an AppImage. It never
-  # updates itself.
+  # The Linux debug build of every push to main and every pull request, as an AppImage and as the
+  # plain binary (stripped, uses the system's WebKitGTK and GTK). It never updates itself.
   debug-build-linux:
     name: Debug build Linux ${{ matrix.arch }}
     needs: [check-macos, check-linux, check-windows]
@@ -183,16 +183,23 @@ jobs:
       - name: Build the debug AppImage
         working-directory: app/src-tauri
         run: cargo tauri build --debug --bundles appimage
-      - name: Check and rename the AppImage
+      - name: Check and rename the AppImage and the binary
         run: |
           built_images=(target/debug/bundle/appimage/atrium_*.AppImage)
           scripts/check-appimage.sh "${built_images[@]}"
           mkdir dist
           mv "${built_images[0]}" dist/atrium-linux-${{ matrix.arch }}-debug.AppImage
+          install -s -m 755 target/debug/atrium dist/atrium-linux-${{ matrix.arch }}-debug
       - uses: actions/upload-artifact@v7
         with:
           name: atrium-linux-${{ matrix.arch }}-debug-${{ github.sha }}
           path: dist/atrium-linux-${{ matrix.arch }}-debug.AppImage
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        with:
+          name: atrium-linux-${{ matrix.arch }}-debug-binary-${{ github.sha }}
+          path: dist/atrium-linux-${{ matrix.arch }}-debug
           if-no-files-found: error
           retention-days: 14
 

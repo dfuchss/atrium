@@ -11,4 +11,4 @@ On Linux, `scripts/linux-check.sh` runs the checks in a container and can check 
 
 ## Debug builds from CI
 
-Every push to `main` and every pull request also gets unsigned debug builds among the run's artifacts, kept for two weeks: macOS zips for arm64 and x86_64, Linux AppImages for x86_64 and aarch64, and a Windows x86_64 executable. A debug build never updates itself, and the macOS one shares its data with an installed Atrium.
+Every push to `main` and every pull request also gets unsigned debug builds among the run's artifacts, kept for two weeks: macOS zips for arm64 and x86_64, Linux AppImages and plain binaries (stripped) for x86_64 and aarch64, and a Windows x86_64 executable. A debug build never updates itself, and the macOS one shares its data with an installed Atrium.

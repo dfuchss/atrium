@@ -4,8 +4,8 @@
 |---|---|
 | Mac with Apple silicon (macOS 14 or later) | [`atrium-macos-arm64.zip`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-macos-arm64.zip) |
 | Mac with Intel (macOS 14 or later) | [`atrium-macos-x86_64.zip`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-macos-x86_64.zip) |
-| Linux, 64-bit Intel/AMD (glibc 2.39 or later) | [`atrium-linux-x86_64.AppImage`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-linux-x86_64.AppImage) |
-| Linux, 64-bit ARM (glibc 2.39 or later) | [`atrium-linux-aarch64.AppImage`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-linux-aarch64.AppImage) |
+| Linux, 64-bit Intel/AMD (glibc 2.39 or later) | [`atrium-linux-x86_64.AppImage`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-linux-x86_64.AppImage), or the small [`atrium-linux-x86_64`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-linux-x86_64) that uses your system's libraries |
+| Linux, 64-bit ARM (glibc 2.39 or later) | [`atrium-linux-aarch64.AppImage`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-linux-aarch64.AppImage), or the small [`atrium-linux-aarch64`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-linux-aarch64) that uses your system's libraries |
 | Windows 10 and 11, 64-bit Intel/AMD | [`atrium-windows-x86_64.exe`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/atrium-windows-x86_64.exe) |
 
 [`SHA256SUMS`](https://github.com/dfuchss/atrium/releases/download/{{tag}}/SHA256SUMS) holds the checksums of all files; the commands to check them are in the steps below. An installed Atrium updates itself to this version from Settings > About. More in the [wiki](https://github.com/dfuchss/atrium/wiki).
@@ -55,6 +55,21 @@ Gear Lever. Checksums: `sha256sum -c SHA256SUMS --ignore-missing`.
 
 The AppImage updates itself when it lies in a folder you can write to (e.g. `~/Applications`): **Quit and update**
 swaps in the new AppImage; open Atrium again afterwards.
+
+<details>
+<summary>The plain binary instead of the AppImage</summary>
+
+The binary (`atrium-linux-x86_64` or `atrium-linux-aarch64`) is much smaller but needs WebKitGTK 4.1, GTK 3, libayatana-appindicator and GStreamer from your distribution; the package names are in the
+[wiki](https://github.com/dfuchss/atrium/wiki/Linux#binary). Make it executable and start it, for example from `~/.local/bin`:
+
+```bash
+install -Dm755 atrium-linux-x86_64 ~/.local/bin/atrium
+atrium
+```
+
+Desktop integration and self-updating in a folder you can write to work as for the AppImage.
+
+</details>
 
 ### Windows
 

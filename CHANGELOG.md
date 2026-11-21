@@ -9,6 +9,10 @@ platform (see [Releasing](https://github.com/dfuchss/atrium/wiki/Releasing#chang
 
 ## [Unreleased]
 
+## 0.6.3
+
+No new features: Linux gets a small plain binary, `atrium-linux-x86_64` and `atrium-linux-aarch64`, next to the AppImages, and all downloads are smaller.
+
 ### Added
 
 #### Linux

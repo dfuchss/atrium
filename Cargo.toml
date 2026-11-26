@@ -46,7 +46,7 @@ toml = "1"
 regex = "1"
 url = "2"
 uuid = { version = "1", features = ["serde"] }
-tauri = { version = "=2.12.6", features = ["unstable"] }
+tauri = { version = "=2.12.7", features = ["unstable"] }
 tauri-build = "2.7"
 tauri-plugin-dialog = "2.8.4"
 tauri-plugin-notification = "2.8.1"
